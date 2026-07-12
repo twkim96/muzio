@@ -1,0 +1,12 @@
+# Public repository allowlist. Local plans, tooling, evidence, and machine
+# configuration stay in the workspace but are not part of the Git surface.
+*
+
+!.gitignore
+!README.MD
+
+!backend/
+!backend/**
+
+!web_app/
+!web_app/**

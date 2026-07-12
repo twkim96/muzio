@@ -1,0 +1,120 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Theme tokens. Light values are the default; the .dark class flips them.
+   Tailwind reads these via rgb(var(--accent) / <alpha-value>) so opacity
+   utilities still work. */
+:root {
+  --accent: 250 45 72;     /* Apple Music inspired red */
+  --surface: 255 255 255;
+  --foreground: 9 9 11;    /* zinc-950 */
+  --muted: 113 113 122;    /* zinc-500 */
+  --color-bg: #0A0A0B;
+  --color-fg: #F4F4F5;
+  --color-muted: #A1A1AA;
+  --color-control: #18181B;
+  --color-popover: #111113;
+  --color-control-hover: #27272A;
+  --color-accent: #FF3B5F;
+  --color-accent-surface: rgba(255, 59, 95, 0.14);
+  --color-border: rgba(255, 255, 255, 0.12);
+  --video-watch-max-width: 96rem;
+  --video-watch-sidebar-width: 24rem;
+  --video-watch-gutter: 1.5rem;
+  --video-watch-thumb-width: 9rem;
+  --video-watch-thumb-height: 5.0625rem;
+  --video-watch-radius: 0.75rem;
+  --video-watch-row-radius: 0.5rem;
+  --video-watch-list-desktop-top: 4rem;
+  --video-watch-list-desktop-max-height: calc(100vh - 7rem);
+  color-scheme: light;
+}
+
+.dark {
+  --surface: 31 31 31;
+  --foreground: 237 237 237;
+  --muted: 174 174 174;
+  color-scheme: dark;
+}
+
+/* Reduced-effects path. Adding the .no-glass class on <html> disables
+   expensive backdrop blurs without ripping them out of every component. */
+.no-glass [data-glass] {
+  background: rgb(var(--surface));
+  backdrop-filter: none;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.app-top-fade {
+  position: sticky;
+  isolation: isolate;
+}
+
+.app-top-fade::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 -1.25rem;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgb(var(--surface) / 0.46) 0%,
+    rgb(var(--surface) / 0.18) 48%,
+    rgb(var(--surface) / 0) 100%
+  );
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 48%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 0%, black 48%, transparent 100%);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  html {
+    overscroll-behavior: none;
+    scrollbar-gutter: stable;
+    scrollbar-width: none;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
+    display: none;
+  }
+
+  body {
+    margin: 0;
+    background: rgb(var(--surface));
+    color: rgb(var(--foreground));
+    overscroll-behavior: none;
+    font-family:
+      "Apple SD Gothic Neo", "Pretendard Variable", Pretendard, -apple-system,
+      BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "AppleGothic",
+      "Helvetica Neue", "Segoe UI", Roboto, "Noto Sans KR", "Malgun Gothic",
+      Arial, sans-serif;
+  }
+
+  #root {
+    overscroll-behavior: none;
+  }
+
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+}

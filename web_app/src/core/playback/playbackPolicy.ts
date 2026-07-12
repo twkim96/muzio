@@ -1,0 +1,1 @@
+export const PLAYBACK_PROGRESS_THROTTLE_MS = 10_000;

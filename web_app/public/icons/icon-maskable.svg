@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Muzio">
+  <rect width="512" height="512" fill="#1f1f1f"/>
+  <circle cx="256" cy="256" r="170" fill="#2c2c2c"/>
+  <path d="M198 154v250" stroke="#ededed" stroke-width="40" stroke-linecap="round"/>
+  <path d="M198 154l182 105-182 105z" fill="#ff2d55"/>
+  <circle cx="190" cy="386" r="46" fill="#ededed"/>
+</svg>
