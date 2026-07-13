@@ -45,7 +45,10 @@ func discardLogger() *slog.Logger {
 }
 
 func bufferLogger(buf *bytes.Buffer) *slog.Logger {
-	return slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{AddSource: false}))
+	return slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{
+		AddSource: false,
+		Level:     slog.LevelDebug,
+	}))
 }
 
 func newFixture(t *testing.T, body string, name string) (*mediapath.Roots, library.Media) {

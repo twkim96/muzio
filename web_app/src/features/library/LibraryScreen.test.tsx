@@ -170,6 +170,7 @@ describe('LibraryScreen', () => {
           read: () => ({
             revision: 9,
             etag: 'W/"library-9-audio"',
+            complete: true,
             items: [
               {
                 id: 'cached-audio',

@@ -1,14 +1,17 @@
 import type { LibraryItem } from '../../core/api/libraryClient';
 import type { LibrarySnapshot, LibrarySnapshotCache } from './libraryStore';
 
-const SCHEMA_VERSION = 1;
-const STORAGE_KEY = 'library.snapshot.audio.v1';
+const SCHEMA_VERSION = 2;
+const STORAGE_KEY = 'library.snapshot.audio.v2';
+const LEGACY_STORAGE_KEY = 'library.snapshot.audio.v1';
 const MAX_ITEMS = 20_000;
 
 interface StoredSnapshot {
   version: number;
   revision: number;
   etag?: string;
+  complete: boolean;
+  totalItems: number;
   items: LibraryItem[];
 }
 
@@ -44,11 +47,26 @@ function parseSnapshot(raw: string | null): LibrarySnapshot | null {
     ) {
       return null;
     }
-    const items = parsed.items.filter(isLibraryItem).slice(0, MAX_ITEMS);
+    if (
+      typeof parsed.complete !== 'boolean' ||
+      typeof parsed.totalItems !== 'number' ||
+      !Number.isSafeInteger(parsed.totalItems) ||
+      parsed.totalItems < 0
+    ) {
+      return null;
+    }
+    const validItems = parsed.items.filter(isLibraryItem);
+    const complete =
+      parsed.complete &&
+      validItems.length === parsed.items.length &&
+      parsed.totalItems === parsed.items.length &&
+      parsed.items.length <= MAX_ITEMS;
     return {
       revision: parsed.revision,
-      etag: typeof parsed.etag === 'string' ? parsed.etag : undefined,
-      items,
+      etag:
+        complete && typeof parsed.etag === 'string' ? parsed.etag : undefined,
+      complete,
+      items: validItems.slice(0, MAX_ITEMS),
     };
   } catch {
     return null;
@@ -86,6 +104,7 @@ export function createLocalStorageAudioLibrarySnapshotCache(
     read() {
       if (targetStorage === null) return null;
       try {
+        targetStorage.removeItem(LEGACY_STORAGE_KEY);
         return parseSnapshot(targetStorage.getItem(STORAGE_KEY));
       } catch {
         return null;
@@ -93,16 +112,18 @@ export function createLocalStorageAudioLibrarySnapshotCache(
     },
     write(snapshot) {
       if (targetStorage === null) return;
+      const items = snapshot.items.filter((item) => item.type === 'audio');
+      const complete = snapshot.complete && items.length <= MAX_ITEMS;
       const stored: StoredSnapshot = {
         version: SCHEMA_VERSION,
         revision: snapshot.revision,
-        etag: snapshot.etag,
-        items: snapshot.items
-          .filter((item) => item.type === 'audio')
-          .slice(0, MAX_ITEMS)
-          .map(stripForSnapshot),
+        etag: complete ? snapshot.etag : undefined,
+        complete,
+        totalItems: items.length,
+        items: items.slice(0, MAX_ITEMS).map(stripForSnapshot),
       };
       try {
+        targetStorage.removeItem(LEGACY_STORAGE_KEY);
         targetStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
       } catch {
         // Best effort only. If quota is full, playback and live fetches still
@@ -113,6 +134,7 @@ export function createLocalStorageAudioLibrarySnapshotCache(
       if (targetStorage === null) return;
       try {
         targetStorage.removeItem(STORAGE_KEY);
+        targetStorage.removeItem(LEGACY_STORAGE_KEY);
       } catch {
         // ignore
       }

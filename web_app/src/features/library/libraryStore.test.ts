@@ -93,6 +93,7 @@ describe('createLibraryStore', () => {
     const cache = memorySnapshotCache({
       revision: 9,
       etag: 'W/"library-9-audio"',
+      complete: true,
       items: [sampleAudioItem],
     });
     const useStore = createLibraryStore({
@@ -115,6 +116,7 @@ describe('createLibraryStore', () => {
     const cache = memorySnapshotCache({
       revision: 9,
       etag: 'W/"library-9-audio"',
+      complete: true,
       items: [sampleAudioItem],
     });
     const useStore = createLibraryStore({
@@ -155,7 +157,61 @@ describe('createLibraryStore', () => {
     expect(cache.snapshot).toEqual({
       revision: 10,
       etag: 'W/"library-10-audio"',
+      complete: true,
       items: [sampleAudioItem],
+    });
+  });
+
+  test('preserving reload from an incomplete cache omits its ETag', async () => {
+    const seen: Array<string | undefined> = [];
+    const cache = memorySnapshotCache({
+      revision: 9,
+      etag: undefined,
+      complete: false,
+      items: [sampleAudioItem],
+    });
+    const useStore = createLibraryStore({
+      type: 'audio',
+      snapshotCache: cache,
+      fetcher: async (_type, options) => {
+        seen.push(options?.ifNoneMatch);
+        return {
+          kind: 'ok',
+          revision: 10,
+          etag: 'W/"library-10-audio"',
+          items: [sampleAudioItem],
+        };
+      },
+    });
+
+    await useStore.getState().load({ preserveResult: true });
+
+    expect(seen).toEqual([undefined]);
+    expect(cache.snapshot?.complete).toBe(true);
+  });
+
+  test('does not accept 304 as a complete result for an incomplete cache', async () => {
+    const cache = memorySnapshotCache({
+      revision: 9,
+      etag: undefined,
+      complete: false,
+      items: [sampleAudioItem],
+    });
+    const useStore = createLibraryStore({
+      type: 'audio',
+      snapshotCache: cache,
+      fetcher: async () => ({
+        kind: 'notModified',
+        etag: 'W/"library-9-audio"',
+      }),
+    });
+
+    await useStore.getState().load({ preserveResult: true });
+
+    expect(useStore.getState()).toMatchObject({
+      status: 'error',
+      stale: true,
+      etag: undefined,
     });
   });
 

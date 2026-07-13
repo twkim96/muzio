@@ -120,17 +120,29 @@ func TestThumbnailCompletionBurstDoesNotRepeatFullReconciliation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	hourly := make(chan time.Time)
-	var reconciliations atomic.Int32
+	var fullReconciliations atomic.Int32
+	var incrementalSyncs atomic.Int32
 	done := make(chan struct{})
 	go func() {
-		runVideoThumbnailScheduler(ctx, events, hourly, func() {
-			reconciliations.Add(1)
-		})
+		runVideoThumbnailScheduler(
+			ctx,
+			events,
+			hourly,
+			time.Millisecond,
+			func() thumbnailSchedulerState {
+				fullReconciliations.Add(1)
+				return thumbnailSchedulerState{}
+			},
+			func(*thumbnailSchedulerState) bool {
+				incrementalSyncs.Add(1)
+				return true
+			},
+		)
 		close(done)
 	}()
 
 	deadline := time.Now().Add(time.Second)
-	for reconciliations.Load() != 2 && time.Now().Before(deadline) {
+	for incrementalSyncs.Load() != 1 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
 	cancel()
@@ -139,8 +151,30 @@ func TestThumbnailCompletionBurstDoesNotRepeatFullReconciliation(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("thumbnail scheduler did not stop")
 	}
-	if got := reconciliations.Load(); got != 2 {
-		t.Fatalf("reconciliations = %d, want initial + mixed event", got)
+	if got := fullReconciliations.Load(); got != 1 {
+		t.Fatalf("full reconciliations = %d, want startup only", got)
+	}
+	if got := incrementalSyncs.Load(); got != 1 {
+		t.Fatalf("incremental syncs = %d, want one coalesced sync", got)
+	}
+}
+
+func TestThumbnailWorkerCountDefaultsToOneAndBoundsOverride(t *testing.T) {
+	t.Setenv("VMA_THUMBNAIL_WORKERS", "")
+	if got := thumbnailWorkerCount(); got != 1 {
+		t.Fatalf("default workers = %d, want 1", got)
+	}
+	t.Setenv("VMA_THUMBNAIL_WORKERS", "3")
+	if got := thumbnailWorkerCount(); got != 3 {
+		t.Fatalf("override workers = %d, want 3", got)
+	}
+	t.Setenv("VMA_THUMBNAIL_WORKERS", "99")
+	if got := thumbnailWorkerCount(); got != 4 {
+		t.Fatalf("bounded workers = %d, want 4", got)
+	}
+	t.Setenv("VMA_THUMBNAIL_WORKERS", "invalid")
+	if got := thumbnailWorkerCount(); got != 1 {
+		t.Fatalf("invalid override workers = %d, want 1", got)
 	}
 }
 

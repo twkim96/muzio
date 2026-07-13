@@ -19,7 +19,8 @@ import (
 const (
 	defaultQueueSize    = 256
 	defaultJobTimeout   = 45 * time.Second
-	defaultIdleTimeout  = 45 * time.Second
+	defaultIdleTimeout  = 90 * time.Second
+	defaultIdleGrace    = 45 * time.Second
 	defaultMaxAttempts  = 3
 	defaultRetryBase    = time.Second
 	defaultRetryMaximum = 30 * time.Second
@@ -34,6 +35,14 @@ type Resolver interface {
 
 type IdleWaiter interface {
 	WaitForMediaIdle(context.Context) error
+}
+
+type quietIdleWaiter interface {
+	WaitForMediaQuiet(context.Context, time.Duration) error
+}
+
+type backgroundWorkGate interface {
+	BackgroundWorkContext(context.Context) (context.Context, context.CancelFunc)
 }
 
 type Extractor interface {
@@ -59,6 +68,7 @@ type Manager struct {
 	logger    *slog.Logger
 	timeout   time.Duration
 	idleTime  time.Duration
+	idleGrace time.Duration
 	maxTries  int
 	retryBase time.Duration
 	retryMax  time.Duration
@@ -149,6 +159,7 @@ type Options struct {
 	Logger       *slog.Logger
 	Timeout      time.Duration
 	IdleTimeout  time.Duration
+	IdleGrace    time.Duration
 	QueueSize    int
 	MaxAttempts  int
 	RetryBase    time.Duration
@@ -186,6 +197,10 @@ func NewManager(options Options) (*Manager, error) {
 	if idleTimeout <= 0 {
 		idleTimeout = defaultIdleTimeout
 	}
+	idleGrace := options.IdleGrace
+	if idleGrace <= 0 {
+		idleGrace = defaultIdleGrace
+	}
 	maxAttempts := options.MaxAttempts
 	if maxAttempts <= 0 {
 		maxAttempts = defaultMaxAttempts
@@ -221,6 +236,7 @@ func NewManager(options Options) (*Manager, error) {
 		logger:      logger,
 		timeout:     timeout,
 		idleTime:    idleTimeout,
+		idleGrace:   idleGrace,
 		maxTries:    maxAttempts,
 		retryBase:   retryBase,
 		retryMax:    retryMax,
@@ -259,7 +275,9 @@ func (m *Manager) Enqueue(item library.Media) bool {
 	}
 	if m.Ready(item) {
 		m.clearState(item.Thumbnail.CacheKey)
-		m.notifyReady(item)
+		if item.Thumbnail.Status != library.ThumbnailStatusReady {
+			m.notifyReady(item)
+		}
 		return false
 	}
 	key := item.Thumbnail.CacheKey
@@ -281,6 +299,42 @@ func (m *Manager) Enqueue(item library.Media) bool {
 	m.mu.Unlock()
 	m.signalWake()
 	return true
+}
+
+// Upsert adds one item to the managed desired set without replacing the
+// complete set established by Sync.
+func (m *Manager) Upsert(item library.Media) bool {
+	if !m.supports(item) || item.Thumbnail.CacheKey == "" {
+		return false
+	}
+	m.mu.Lock()
+	m.desiredManaged = true
+	m.desired[item.Thumbnail.CacheKey] = struct{}{}
+	m.mu.Unlock()
+	return m.Enqueue(item)
+}
+
+// Remove stops queued work for one cache key. Its generated file is retained
+// for the next periodic Reconcile pass so watcher bursts do not perform cache
+// directory I/O.
+func (m *Manager) Remove(cacheKey string) {
+	if cacheKey == "" {
+		return
+	}
+	changed := false
+	m.mu.Lock()
+	if _, exists := m.desired[cacheKey]; exists {
+		delete(m.desired, cacheKey)
+		changed = true
+	}
+	if job := m.states[cacheKey]; job != nil {
+		m.removeJobLocked(job)
+		changed = true
+	}
+	m.mu.Unlock()
+	if changed {
+		m.signalWake()
+	}
 }
 
 func (m *Manager) Sync(items []library.Media) {
@@ -547,7 +601,12 @@ func (m *Manager) generate(job *scheduledJob) jobResult {
 
 	if m.idle != nil {
 		idleCtx, cancelIdle := context.WithTimeout(m.ctx, m.idleTime)
-		err := m.idle.WaitForMediaIdle(idleCtx)
+		var err error
+		if waiter, ok := m.idle.(quietIdleWaiter); ok {
+			err = waiter.WaitForMediaQuiet(idleCtx, m.idleGrace)
+		} else {
+			err = m.idle.WaitForMediaIdle(idleCtx)
+		}
 		idleDeadline := errors.Is(err, context.DeadlineExceeded) &&
 			errors.Is(idleCtx.Err(), context.DeadlineExceeded)
 		cancelIdle()
@@ -562,8 +621,14 @@ func (m *Manager) generate(job *scheduledJob) jobResult {
 	if err != nil {
 		return jobResult{job: job, err: err}
 	}
-	ctx, cancel := context.WithTimeout(m.ctx, m.timeout)
-	defer cancel()
+	timeoutCtx, cancelTimeout := context.WithTimeout(m.ctx, m.timeout)
+	defer cancelTimeout()
+	ctx := timeoutCtx
+	cancelWork := func() {}
+	if gate, ok := m.idle.(backgroundWorkGate); ok {
+		ctx, cancelWork = gate.BackgroundWorkContext(timeoutCtx)
+	}
+	defer cancelWork()
 	key := item.Thumbnail.CacheKey
 	temp, err := os.CreateTemp(m.cacheDir, key+".*.tmp.jpg")
 	if err != nil {
@@ -581,7 +646,9 @@ func (m *Manager) generate(job *scheduledJob) jobResult {
 		return jobResult{job: job, err: errors.New("thumbnail extractor unavailable")}
 	}
 	if err := extractor.Extract(ctx, source, tempPath); err != nil {
-		return jobResult{job: job, err: err}
+		interruptedByPlayback := errors.Is(err, context.Canceled) &&
+			m.ctx.Err() == nil && timeoutCtx.Err() == nil
+		return jobResult{job: job, err: err, deferred: interruptedByPlayback}
 	}
 	info, err := os.Stat(tempPath)
 	if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
@@ -691,12 +758,16 @@ func (m *Manager) notifyReady(item library.Media) {
 }
 
 func (m *Manager) clearState(key string) {
+	changed := false
 	m.mu.Lock()
 	if job := m.states[key]; job != nil {
 		m.removeJobLocked(job)
+		changed = true
 	}
 	m.mu.Unlock()
-	m.signalWake()
+	if changed {
+		m.signalWake()
+	}
 }
 
 func (m *Manager) removeJobLocked(job *scheduledJob) {

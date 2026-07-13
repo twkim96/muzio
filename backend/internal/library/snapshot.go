@@ -571,6 +571,16 @@ func (s *Snapshot) ListAtRevision(revision uint64) ([]Media, bool) {
 func (s *Snapshot) ListTypes(filters ...MediaType) []Media {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.listTypesLocked(filters...)
+}
+
+func (s *Snapshot) ListTypesWithRevision(filters ...MediaType) ([]Media, uint64) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.listTypesLocked(filters...), s.revision
+}
+
+func (s *Snapshot) listTypesLocked(filters ...MediaType) []Media {
 	if len(filters) == 0 {
 		return s.listLocked("")
 	}

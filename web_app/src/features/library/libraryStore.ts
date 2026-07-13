@@ -51,6 +51,7 @@ export interface LibraryStoreOptions {
 export interface LibrarySnapshot {
   revision: number;
   etag?: string;
+  complete: boolean;
   items: LibraryItem[];
 }
 
@@ -68,6 +69,7 @@ export function createLibraryStore({
 }: LibraryStoreOptions) {
   let loadGeneration = 0;
   const cachedSnapshot = snapshotCache?.read() ?? null;
+  let snapshotComplete = cachedSnapshot?.complete ?? false;
   const cachedResult =
     cachedSnapshot === null
       ? null
@@ -103,11 +105,24 @@ export function createLibraryStore({
       }));
       const result = await fetcher(type, {
         ...fetchOptions,
-        ifNoneMatch: options.preserveResult ? previous.etag : undefined,
+        ifNoneMatch:
+          options.preserveResult && snapshotComplete
+            ? previous.etag
+            : undefined,
       });
       if (generation !== loadGeneration) return;
       const current = get();
       if (result.kind === 'notModified') {
+        if (!snapshotComplete) {
+          set({
+            status: 'error',
+            result: previous.result,
+            revision: previous.revision,
+            etag: undefined,
+            stale: true,
+          });
+          return;
+        }
         if (current.revision !== previous.revision) return;
         const revision = result.revision ?? previous.revision;
         set({
@@ -144,11 +159,13 @@ export function createLibraryStore({
           ? normalizeLatestResult(result)
           : result;
       if (normalizedResult.kind === 'ok') {
+        snapshotComplete = true;
         itemIndex = indexItems(normalizedResult.items);
         presentation = indexPresentation(normalizedResult.items);
         snapshotCache?.write({
           revision,
           etag: normalizedResult.etag,
+          complete: true,
           items: normalizedResult.items,
         });
       }
@@ -214,6 +231,7 @@ export function createLibraryStore({
         snapshotCache?.write({
           revision: changes.revision,
           etag: changes.etag ?? current.etag,
+          complete: snapshotComplete,
           items: nextResult.items,
         });
         return {
@@ -242,6 +260,7 @@ export function createLibraryStore({
 
     reset() {
       loadGeneration += 1;
+      snapshotComplete = false;
       itemIndex = new Map();
       presentation = new Map();
       snapshotCache?.clear();

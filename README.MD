@@ -1,4 +1,4 @@
-# Muzio 1.3.12
+# Muzio 1.3.13
 
 Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 브라우저에서 탐색하고 재생하는 경량 self-hosted 미디어 앱입니다.
@@ -8,7 +8,7 @@ Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 | Item | Current contract |
 | --- | --- |
 | Product/service name | `Muzio` |
-| Version | `1.3.12` |
+| Version | `1.3.13` |
 | Primary client | React + TypeScript web app |
 | Backend | Go `1.22`, CGO-free |
 | Normal runtime | Go server가 API, media, `web_app/dist`를 한 origin에서 제공 |
@@ -21,9 +21,9 @@ Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 > 공용 인터넷에 직접 노출하지 마십시오. localhost, 신뢰된 LAN 또는 Tailscale
 > 내부에서만 사용합니다.
 
-`1.3.12`는 대형 라이브러리와 재생 경로의 반복 작업을 줄이는 릴리스입니다.
-해시 정적 자산 캐시, thumbnail worker 격리, 재생 이벤트 중복 제거, watcher
-삭제 burst 병합을 포함합니다.
+`1.3.13`은 대형 오디오 캐시의 완전성 오류를 막고 background thumbnail
+작업이 시작 검증이나 재생과 경쟁하지 않도록 조정하는 릴리스입니다. 썸네일
+watcher 반영은 증분화되며 전체 cache GC는 시작 시와 매시간에만 실행됩니다.
 
 ## Source Of Truth
 
@@ -177,7 +177,7 @@ If `VMA_CONFIG` is omitted, the config path is:
 ```
 
 The `videio_music_app` directory name is a legacy compatibility identifier.
-It remains unchanged in `1.3.12` so existing config, library index, and playback
+It remains unchanged in `1.3.13` so existing config, library index, and playback
 progress are reused without migration risk. The workspace directory path and
 `VMA_*` environment variables are also compatibility surfaces; new public
 names, package names, binaries, health identifiers, and control-server entries
@@ -208,6 +208,7 @@ Environment variables:
 | Variable | Purpose |
 | --- | --- |
 | `VMA_CONFIG` | Explicit config JSON path |
+| `VMA_THUMBNAIL_WORKERS` | Video thumbnail workers (`1` default, bounded to `4`) |
 | `VMA_HOST` | Bind host override |
 | `VMA_PORT` | Bind port override |
 | `VMA_MEDIA_ROOTS` | OS path-list separated seed roots |

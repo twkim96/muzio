@@ -108,6 +108,13 @@ var quietPaths = map[string]struct{}{
 	"/healthz": {},
 }
 
+func quietRequest(requestPath string, status int) bool {
+	if _, quiet := quietPaths[requestPath]; quiet {
+		return true
+	}
+	return strings.HasPrefix(requestPath, "/api/media/") && status < 400
+}
+
 func loggingMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -118,7 +125,7 @@ func loggingMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
 
 		next.ServeHTTP(rec, r)
 
-		if _, quiet := quietPaths[r.URL.Path]; quiet {
+		if quietRequest(r.URL.Path, rec.status) {
 			return
 		}
 

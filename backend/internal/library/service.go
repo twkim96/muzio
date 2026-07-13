@@ -532,6 +532,25 @@ func (s *Service) WaitForMediaIdle(ctx context.Context) error {
 	return s.streams.waitUntilIdle(ctx, true)
 }
 
+// WaitForMediaQuiet keeps expensive background work behind a quiet window.
+// Root scanning continues to use WaitForMediaIdle so watcher reconciliation
+// resumes promptly once an active transfer finishes.
+func (s *Service) WaitForMediaQuiet(
+	ctx context.Context,
+	quietWindow time.Duration,
+) error {
+	return s.streams.waitUntilQuiet(ctx, quietWindow)
+}
+
+// BackgroundWorkContext is canceled when a new media response begins. The
+// thumbnail manager uses it to stop ffmpeg/image work that would otherwise
+// continue competing with resumed playback.
+func (s *Service) BackgroundWorkContext(
+	parent context.Context,
+) (context.Context, context.CancelFunc) {
+	return s.streams.backgroundWorkContext(parent)
+}
+
 func (s *Service) List(filter MediaType) []Media {
 	s.mu.RLock()
 	snapshot := s.snapshot
@@ -586,6 +605,18 @@ func (s *Service) ListStoredTypes(filters ...MediaType) []Media {
 		return nil
 	}
 	return snapshot.ListTypes(filters...)
+}
+
+func (s *Service) ListStoredTypesWithRevision(
+	filters ...MediaType,
+) ([]Media, uint64) {
+	s.mu.RLock()
+	snapshot := s.snapshot
+	s.mu.RUnlock()
+	if snapshot == nil {
+		return nil, 0
+	}
+	return snapshot.ListTypesWithRevision(filters...)
 }
 
 func (s *Service) Get(id string) (Media, error) {

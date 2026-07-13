@@ -140,6 +140,59 @@ func TestServiceWaitsBetweenRootsWhileStreaming(t *testing.T) {
 	}
 }
 
+func TestServiceMediaQuietWindowRestartsForNewStream(t *testing.T) {
+	service, err := NewService(MediaRootSettings{}, newTestLogger(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+
+	quiet := 30 * time.Millisecond
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- service.WaitForMediaQuiet(context.Background(), quiet)
+	}()
+	time.Sleep(15 * time.Millisecond)
+	endStream := service.BeginMediaStream()
+	time.Sleep(10 * time.Millisecond)
+	endStream()
+
+	select {
+	case err := <-waitDone:
+		t.Fatalf("quiet wait returned before restarted window: %v", err)
+	case <-time.After(15 * time.Millisecond):
+	}
+	select {
+	case err := <-waitDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("quiet wait did not finish")
+	}
+}
+
+func TestServiceBackgroundWorkContextCancelsOnNewStream(t *testing.T) {
+	service, err := NewService(MediaRootSettings{}, newTestLogger(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+
+	ctx, cancel := service.BackgroundWorkContext(context.Background())
+	defer cancel()
+	endStream := service.BeginMediaStream()
+	defer endStream()
+	select {
+	case <-ctx.Done():
+		if !errors.Is(ctx.Err(), context.Canceled) {
+			t.Fatalf("background context error = %v", ctx.Err())
+		}
+	case <-time.After(time.Second):
+		t.Fatal("background work was not canceled by a stream")
+	}
+}
+
 func TestPersistentServiceCloseCancelsScanWaitingForStream(t *testing.T) {
 	dir := t.TempDir()
 	service, err := NewPersistentService(

@@ -39,6 +39,50 @@ type fakeIdleWaiter struct {
 	calls   atomic.Int32
 }
 
+type interruptibleIdleGate struct {
+	mu      sync.Mutex
+	started chan struct{}
+}
+
+func newInterruptibleIdleGate() *interruptibleIdleGate {
+	return &interruptibleIdleGate{started: make(chan struct{})}
+}
+
+func (*interruptibleIdleGate) WaitForMediaIdle(context.Context) error {
+	return nil
+}
+
+func (*interruptibleIdleGate) WaitForMediaQuiet(
+	context.Context,
+	time.Duration,
+) error {
+	return nil
+}
+
+func (g *interruptibleIdleGate) BackgroundWorkContext(
+	parent context.Context,
+) (context.Context, context.CancelFunc) {
+	g.mu.Lock()
+	started := g.started
+	g.mu.Unlock()
+	ctx, cancel := context.WithCancel(parent)
+	go func() {
+		select {
+		case <-started:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel
+}
+
+func (g *interruptibleIdleGate) beginStream() {
+	g.mu.Lock()
+	close(g.started)
+	g.started = make(chan struct{})
+	g.mu.Unlock()
+}
+
 func (w *fakeIdleWaiter) WaitForMediaIdle(ctx context.Context) error {
 	w.calls.Add(1)
 	w.once.Do(func() { close(w.started) })
@@ -105,6 +149,99 @@ func imageItem(id, cacheKey string) library.Media {
 			CacheKey: cacheKey,
 			Status:   library.ThumbnailStatusPending,
 		},
+	}
+}
+
+func TestEnqueueReadyItemSkipsRedundantReadyCallback(t *testing.T) {
+	item := video("ready", "ready-key")
+	item.Thumbnail.Status = library.ThumbnailStatusReady
+	var readyCalls atomic.Int32
+	manager, err := NewManager(Options{
+		CacheDir: t.TempDir(),
+		Resolver: fakeResolver{},
+		Extract:  &fakeExtractor{},
+		OnReady: func(library.Media) {
+			readyCalls.Add(1)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	if err := os.WriteFile(manager.Path(item), []byte("jpeg"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if manager.Enqueue(item) {
+		t.Fatal("ready item was queued")
+	}
+	if got := readyCalls.Load(); got != 0 {
+		t.Fatalf("ready callbacks = %d, want 0", got)
+	}
+}
+
+func TestEnqueueReadyPendingItemPublishesReadyOnce(t *testing.T) {
+	item := video("pending", "pending-key")
+	var readyCalls atomic.Int32
+	manager, err := NewManager(Options{
+		CacheDir: t.TempDir(),
+		Resolver: fakeResolver{},
+		Extract:  &fakeExtractor{},
+		OnReady: func(library.Media) {
+			readyCalls.Add(1)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	if err := os.WriteFile(manager.Path(item), []byte("jpeg"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	manager.Enqueue(item)
+	if got := readyCalls.Load(); got != 1 {
+		t.Fatalf("ready callbacks = %d, want 1", got)
+	}
+}
+
+func TestPlaybackInterruptionRequeuesWithoutFailure(t *testing.T) {
+	dir := t.TempDir()
+	source := filepath.Join(dir, "source.mp4")
+	if err := os.WriteFile(source, []byte("video"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	release := make(chan struct{})
+	extractor := &fakeExtractor{release: release}
+	gate := newInterruptibleIdleGate()
+	var failures atomic.Int32
+	manager, err := NewManager(Options{
+		CacheDir:    filepath.Join(dir, "cache"),
+		Resolver:    fakeResolver{path: source},
+		Idle:        gate,
+		Extract:     extractor,
+		RetryBase:   time.Millisecond,
+		RetryMax:    time.Millisecond,
+		MaxAttempts: 1,
+		OnFailure: func(library.Media) {
+			failures.Add(1)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	item := video("interrupt", "interrupt-key")
+	manager.Enqueue(item)
+	waitFor(t, func() bool { return extractor.calls.Load() == 1 })
+
+	gate.beginStream()
+	waitFor(t, func() bool { return extractor.calls.Load() >= 2 })
+	close(release)
+	waitFor(t, func() bool { return manager.Ready(item) })
+
+	if got := failures.Load(); got != 0 {
+		t.Fatalf("failure callbacks = %d, want 0", got)
 	}
 }
 

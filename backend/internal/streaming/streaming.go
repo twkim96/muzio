@@ -187,7 +187,7 @@ func Handler(roots PathResolver, lookup Lookup, logger *slog.Logger) http.Handle
 		started := time.Now()
 		rec := &mediaResponseRecorder{ResponseWriter: w}
 		http.ServeContent(rec, r, media.Name, info.ModTime(), file)
-		logger.Info(
+		logger.Debug(
 			"media stream",
 			"id", media.ID,
 			"type", media.Type,

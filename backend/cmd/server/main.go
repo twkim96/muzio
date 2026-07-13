@@ -9,7 +9,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -105,6 +106,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	startupVerificationDone := make(chan struct{})
 	if thumbnailManager != nil {
 		go scheduleVideoThumbnails(
 			ctx,
@@ -112,6 +114,7 @@ func main() {
 			thumbnailManager,
 			ffmpegInfo.Available,
 			logger,
+			startupVerificationDone,
 		)
 	}
 
@@ -160,6 +163,7 @@ func main() {
 		"error", watcherStatus.LastError,
 	)
 	go func() {
+		defer close(startupVerificationDone)
 		result, err := libraryService.RescanMediaRoots()
 		if err != nil {
 			logger.Warn("startup library verification failed", "error", err)
@@ -340,16 +344,17 @@ func configureThumbnailManager(
 	return manager, ffmpegInfo
 }
 
-// thumbnailWorkerCount picks how many thumbnails may be generated in parallel.
-// Each worker waits for media-idle before extracting, so this only adds
-// parallelism while nothing is playing. It is kept well below the core count
-// so a burst of ffmpeg processes during a first large-library index does not
-// saturate the machine.
+// thumbnailWorkerCount defaults conservatively for a personal MacBook server.
+// Operators with measured headroom can opt into bounded parallel extraction.
 func thumbnailWorkerCount() int {
 	const maxWorkers = 4
-	workers := runtime.NumCPU() / 2
-	if workers < 1 {
-		workers = 1
+	value := strings.TrimSpace(os.Getenv("VMA_THUMBNAIL_WORKERS"))
+	if value == "" {
+		return 1
+	}
+	workers, err := strconv.Atoi(value)
+	if err != nil || workers < 1 {
+		return 1
 	}
 	if workers > maxWorkers {
 		workers = maxWorkers
@@ -363,32 +368,97 @@ func scheduleVideoThumbnails(
 	manager *thumbnail.Manager,
 	generationEnabled bool,
 	logger *slog.Logger,
+	startupVerificationDone <-chan struct{},
 ) {
 	events, unsubscribe := service.SubscribeLibraryEvents()
 	defer unsubscribe()
+	select {
+	case <-ctx.Done():
+		return
+	case <-startupVerificationDone:
+	}
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
-	runVideoThumbnailScheduler(ctx, events, ticker.C, func() {
-		reconcileVideoThumbnails(service, manager, generationEnabled, logger)
-	})
+	runVideoThumbnailScheduler(
+		ctx,
+		events,
+		ticker.C,
+		750*time.Millisecond,
+		func() thumbnailSchedulerState {
+			return reconcileVideoThumbnails(
+				service,
+				manager,
+				generationEnabled,
+				logger,
+			)
+		},
+		func(state *thumbnailSchedulerState) bool {
+			return syncChangedVideoThumbnails(
+				service,
+				manager,
+				generationEnabled,
+				state,
+			)
+		},
+	)
+}
+
+type thumbnailSchedulerState struct {
+	revision uint64
+	items    map[string]library.Media
 }
 
 func runVideoThumbnailScheduler(
 	ctx context.Context,
 	events <-chan library.LibraryEvent,
 	hourly <-chan time.Time,
-	reconcile func(),
+	debounce time.Duration,
+	fullReconcile func() thumbnailSchedulerState,
+	incrementalSync func(*thumbnailSchedulerState) bool,
 ) {
-	reconcile()
+	state := fullReconcile()
+	var timer *time.Timer
+	var timerC <-chan time.Time
+	pending := false
+	stopTimer := func() {
+		if timer != nil && !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		timerC = nil
+	}
+	resetTimer := func() {
+		if timer == nil {
+			timer = time.NewTimer(debounce)
+		} else {
+			stopTimer()
+			timer.Reset(debounce)
+		}
+		timerC = timer.C
+	}
+	defer stopTimer()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-hourly:
-			reconcile()
+			stopTimer()
+			pending = false
+			state = fullReconcile()
 		case event := <-events:
 			if shouldReconcileVideoThumbnails(event) {
-				reconcile()
+				pending = true
+				resetTimer()
+			} else if !pending && event.Revision > state.revision {
+				state.revision = event.Revision
+			}
+		case <-timerC:
+			timerC = nil
+			pending = false
+			if !incrementalSync(&state) {
+				state = fullReconcile()
 			}
 		}
 	}
@@ -405,11 +475,18 @@ func reconcileVideoThumbnails(
 	manager *thumbnail.Manager,
 	generationEnabled bool,
 	logger *slog.Logger,
-) {
-	storedItems := service.ListStoredTypes(
+) thumbnailSchedulerState {
+	storedItems, revision := service.ListStoredTypesWithRevision(
 		library.MediaTypeVideo,
 		library.MediaTypeImage,
 	)
+	state := thumbnailSchedulerState{
+		revision: revision,
+		items:    make(map[string]library.Media, len(storedItems)),
+	}
+	for _, item := range storedItems {
+		state.items[item.ID] = item
+	}
 	result, err := manager.Reconcile(storedItems, time.Now())
 	if err != nil {
 		logger.Warn("media thumbnail cache cleanup failed", "error", err)
@@ -445,6 +522,57 @@ func reconcileVideoThumbnails(
 		}
 	}
 	manager.Sync(items)
+	return state
+}
+
+func syncChangedVideoThumbnails(
+	service *library.Service,
+	manager *thumbnail.Manager,
+	generationEnabled bool,
+	state *thumbnailSchedulerState,
+) bool {
+	changes := service.ChangesSince(state.revision, "")
+	if changes.ResetRequired {
+		return false
+	}
+	for _, id := range changes.DeletedIDs {
+		if previous, exists := state.items[id]; exists {
+			manager.Remove(previous.Thumbnail.CacheKey)
+			delete(state.items, id)
+		}
+	}
+	for _, item := range changes.Upserts {
+		previous, wasManaged := state.items[item.ID]
+		managed := item.Type == library.MediaTypeVideo ||
+			item.Type == library.MediaTypeImage
+		if wasManaged && (!managed || previous.Thumbnail.CacheKey != item.Thumbnail.CacheKey) {
+			manager.Remove(previous.Thumbnail.CacheKey)
+			delete(state.items, item.ID)
+		}
+		if !managed {
+			continue
+		}
+		state.items[item.ID] = item
+		if item.Offline {
+			manager.Remove(item.Thumbnail.CacheKey)
+			continue
+		}
+		if !generationEnabled && item.Type == library.MediaTypeVideo {
+			if !manager.Ready(item) {
+				setThumbnailStatus(service, item, library.ThumbnailStatusFallback)
+			}
+			manager.Remove(item.Thumbnail.CacheKey)
+			continue
+		}
+		if item.Thumbnail.Status == library.ThumbnailStatusReady && !manager.Ready(item) {
+			setThumbnailStatus(service, item, library.ThumbnailStatusPending)
+			item.Thumbnail.Status = library.ThumbnailStatusPending
+			state.items[item.ID] = item
+		}
+		manager.Upsert(item)
+	}
+	state.revision = changes.Revision
+	return true
 }
 
 func containsMediaType(values []library.MediaType, target library.MediaType) bool {
