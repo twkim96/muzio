@@ -1146,6 +1146,64 @@ describe('playback activity', () => {
   });
 });
 
+describe('audio resume cache', () => {
+  test('requests preparation only after an audio track reaches 30 seconds', async () => {
+    const session = makeFakeSession();
+    const prepare = vi.fn();
+    const resolve = vi.fn((source: PlaybackSource) => source);
+    const store = createPlayerStore({
+      createSession: () => session,
+      createEngine: () => fakeEngine(),
+      audioResumeCache: {
+        initialize: async () => {},
+        prepare,
+        resolve,
+      },
+    });
+    store.getState().attachElement('audio', fakeElement());
+    await store.getState().playSource({ ...audioSource, name: 'long.aac' });
+
+    session.setState({
+      ...session.getState(),
+      status: { kind: 'playing' },
+      positionSec: 29.9,
+      durationSec: 300,
+    });
+    expect(prepare).not.toHaveBeenCalled();
+
+    session.setState({
+      ...session.getState(),
+      status: { kind: 'playing' },
+      positionSec: 30,
+      durationSec: 300,
+    });
+    expect(prepare).toHaveBeenCalledWith('a1');
+  });
+
+  test('does not request remux caching for non-AAC audio', async () => {
+    const session = makeFakeSession();
+    const prepare = vi.fn();
+    const store = createPlayerStore({
+      createSession: () => session,
+      createEngine: () => fakeEngine(),
+      audioResumeCache: {
+        initialize: async () => {},
+        prepare,
+        resolve: (source) => source,
+      },
+    });
+    store.getState().attachElement('audio', fakeElement());
+    await store.getState().playSource(audioSource);
+    session.setState({
+      ...session.getState(),
+      status: { kind: 'playing' },
+      positionSec: 60,
+      durationSec: 300,
+    });
+    expect(prepare).not.toHaveBeenCalled();
+  });
+});
+
 function activitySourceFromTestSource(
   source: PlaybackSource,
 ): PlaybackActivitySource {

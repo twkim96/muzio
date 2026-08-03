@@ -34,6 +34,7 @@ import type {
   ProgressService,
   ProgressServiceAttachment,
 } from '../progress/progressService';
+import type { AudioResumeCacheService } from './audioResumeCacheService';
 import {
   buildMusicQueue,
   clearQueueTracks,
@@ -269,6 +270,8 @@ export interface PlayerStoreOptions {
    *  creation and disposed before its engine is released. Pass null to
    *  disable progress entirely (default). */
   progressService?: ProgressService | null;
+  /** Optional single-slot server cache used to accelerate AAC resume. */
+  audioResumeCache?: AudioResumeCacheService | null;
   /** Test hook for deterministic sleep-timer behavior. */
   now?: () => number;
   setInterval?: (handler: () => void, timeoutMs: number) => unknown;
@@ -379,6 +382,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
   const sessionFactory = options.createSession ?? createSession;
   const engineFactory = options.createEngine ?? createEngine;
   const progressService = options.progressService ?? null;
+  const audioResumeCache = options.audioResumeCache ?? null;
   const likedRepository =
     options.likedRepository === undefined
       ? createLocalStorageLikedTracksRepository()
@@ -587,6 +591,9 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           mediaFragmentStartSec(slot.seededSource) || seedPositionSec,
         );
       }
+      if (targetKind === 'audio' && audioResumeCache !== null) {
+        playbackSource = audioResumeCache.resolve(playbackSource);
+      }
 
       try {
         // Pause the other kind so the two sessions never speak at once.
@@ -773,6 +780,16 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         sync();
         if (!slot.preparedSeed) {
           syncActivityProgress(kind, nextState);
+        }
+        if (
+          kind === 'audio' &&
+          audioResumeCache !== null &&
+          nextState.status.kind === 'playing' &&
+          nextState.source !== null &&
+          nextState.source.name.toLowerCase().endsWith('.aac') &&
+          nextState.positionSec >= 30
+        ) {
+          audioResumeCache.prepare(nextState.source.mediaId);
         }
         if (kind === 'audio') maybeAdvanceAudioQueue();
         if (kind === 'audio') updateAudioGateState(nextState);

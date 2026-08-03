@@ -22,6 +22,7 @@ import { createProgressService } from './features/progress/progressService';
 import { ProgressProvider } from './features/progress/ProgressContext';
 import { mostRecentResumableEntry } from './features/progress/progressPolicy';
 import { buildStreamingUrl } from './core/playback/source/source';
+import { createAudioResumeCacheService } from './features/player/audioResumeCacheService';
 
 const backendStatusStore = createBackendStatusStore();
 const libraryStores = {
@@ -35,7 +36,9 @@ const libraryStores = {
 const localProgressRepository = createLocalStorageProgressRepository();
 const progressRepository = createSyncedProgressRepository(localProgressRepository);
 const progressService = createProgressService(progressRepository);
-const playerStore = createPlayerStore({ progressService });
+const audioResumeCache = createAudioResumeCacheService();
+void audioResumeCache.initialize();
+const playerStore = createPlayerStore({ progressService, audioResumeCache });
 
 applyThemeSettings(readThemeSettings());
 void syncThemeSettingsFromServer().catch(() => {

@@ -365,7 +365,11 @@ func scanTreeContext(
 		}
 		relSlash := filepath.ToSlash(rel)
 		id := mediapath.EncodeID(root.Name, relSlash)
-		metadata := ExtractMetadata(mediaType, relSlash, name)
+		metadata := EnrichMetadataFromFile(
+			path,
+			mediaType,
+			ExtractMetadata(mediaType, relSlash, name),
+		)
 		modifiedAt := info.ModTime().UTC()
 		mimeType, _ := MIMEFor(name)
 
@@ -466,7 +470,11 @@ func scanMediaFile(
 	}
 	relativePath = filepath.ToSlash(relativePath)
 	id := mediapath.EncodeID(root.Name, relativePath)
-	metadata := ExtractMetadata(mediaType, relativePath, name)
+	metadata := EnrichMetadataFromFile(
+		path,
+		mediaType,
+		ExtractMetadata(mediaType, relativePath, name),
+	)
 	modifiedAt := info.ModTime().UTC()
 	mimeType, _ := MIMEFor(name)
 	return Media{

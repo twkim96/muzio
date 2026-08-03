@@ -250,6 +250,18 @@ func TestResolveThumbnailCachePathNextToConfig(t *testing.T) {
 	}
 }
 
+func TestResolveAudioResumeCachePathNextToConfig(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "nested", "config.json")
+	got, err := ResolveAudioResumeCachePath(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(filepath.Dir(configPath), "audio-resume-cache", "v1")
+	if got != want {
+		t.Fatalf("ResolveAudioResumeCachePath = %q, want %q", got, want)
+	}
+}
+
 func writeConfig(t *testing.T, content string) string {
 	t.Helper()
 

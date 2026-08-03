@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"muzio/backend/internal/audioresume"
 	"muzio/backend/internal/config"
 	"muzio/backend/internal/fallback"
 	"muzio/backend/internal/httpserver"
@@ -65,10 +66,15 @@ func main() {
 		libraryService,
 		logger,
 	)
+	audioResumeCache := configureAudioResumeCache(configPath, libraryService, ffmpegInfo, logger)
+	if audioResumeCache != nil {
+		defer audioResumeCache.Close()
+	}
 	appService := appRuntime{
-		Service:    libraryService,
-		appearance: config.NewAppearanceStore(configPath),
-		thumbnails: thumbnailManager,
+		Service:     libraryService,
+		appearance:  config.NewAppearanceStore(configPath),
+		thumbnails:  thumbnailManager,
+		audioResume: audioResumeCache,
 	}
 	for _, root := range rootSettings.EffectiveRoots() {
 		logger.Info("media root configured", "path", root)
@@ -274,8 +280,13 @@ func hasSplitMediaRoots(settings library.MediaRootSettings) bool {
 
 type appRuntime struct {
 	*library.Service
-	appearance config.AppearanceStore
-	thumbnails *thumbnail.Manager
+	appearance  config.AppearanceStore
+	thumbnails  *thumbnail.Manager
+	audioResume *audioresume.Manager
+}
+
+func (a appRuntime) AudioResumeCache() httpserver.AudioResumeCache {
+	return a.audioResume
 }
 
 func (a appRuntime) ThumbnailPath(item library.Media) (string, bool) {
@@ -342,6 +353,35 @@ func configureThumbnailManager(
 		"ffmpegVersion", ffmpegInfo.Version,
 	)
 	return manager, ffmpegInfo
+}
+
+func configureAudioResumeCache(
+	configPath string,
+	service *library.Service,
+	ffmpegInfo fallback.FFmpegInfo,
+	logger *slog.Logger,
+) *audioresume.Manager {
+	if !ffmpegInfo.Available {
+		logger.Info("audio resume cache disabled", "reason", ffmpegInfo.Reason)
+		return nil
+	}
+	cachePath, err := config.ResolveAudioResumeCachePath(configPath)
+	if err != nil {
+		logger.Warn("audio resume cache path unavailable", "error", err)
+		return nil
+	}
+	manager, err := audioresume.NewManager(audioresume.Options{
+		CacheDir: cachePath,
+		Resolver: service,
+		Remuxer:  audioresume.FFmpegRemuxer{Path: ffmpegInfo.Path},
+		Logger:   logger,
+	})
+	if err != nil {
+		logger.Warn("audio resume cache unavailable", "path", cachePath, "error", err)
+		return nil
+	}
+	logger.Info("audio resume cache configured", "cache", cachePath)
+	return manager
 }
 
 // thumbnailWorkerCount defaults conservatively for a personal MacBook server.

@@ -55,6 +55,13 @@ func NewHandlerWithWeb(logger *slog.Logger, lister LibraryLister, streamHandler 
 		mux.Handle("/api/fallback/", fallbackHandler(getter, fallback.Planner{
 			Detector: &fallback.SystemFFmpegDetector{},
 		}))
+		if provider, ok := lister.(AudioResumeCacheProvider); ok {
+			if cache := provider.AudioResumeCache(); cache != nil {
+				mux.Handle("/api/audio-resume-cache", audioResumeCacheStatusHandler(cache))
+				mux.Handle("/api/audio-resume-cache/media/", audioResumeCacheMediaHandler(getter, cache, streamHandler))
+				mux.Handle("/api/audio-resume-cache/", audioResumeCacheRequestHandler(getter, cache))
+			}
+		}
 	}
 	if progressStore != nil {
 		mux.Handle("/api/progress", progressCollectionHandler(progressStore))

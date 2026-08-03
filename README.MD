@@ -1,4 +1,4 @@
-# Muzio 1.3.13
+# Muzio 1.3.15
 
 Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 브라우저에서 탐색하고 재생하는 경량 self-hosted 미디어 앱입니다.
@@ -8,22 +8,23 @@ Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 | Item | Current contract |
 | --- | --- |
 | Product/service name | `Muzio` |
-| Version | `1.3.13` |
+| Version | `1.3.15` |
 | Primary client | React + TypeScript web app |
 | Backend | Go `1.22`, CGO-free |
 | Normal runtime | Go server가 API, media, `web_app/dist`를 한 origin에서 제공 |
 | Intended network | localhost, trusted LAN, Tailscale tailnet |
 | Authentication | 없음 |
-| Transcoding | 상태/계획 API만 제공, 실제 remux/transcode job 실행은 미구현 |
+| Transcoding | 일반 fallback은 계획 API만 제공; 최근 AAC 이어듣기는 단일 M4A remux cache 사용 |
 | Persistence | config, library index, progress는 backend config directory; UI data는 browser storage |
 
 > **Security boundary:** 이 서버는 인증과 사용자 권한 분리가 없습니다.
 > 공용 인터넷에 직접 노출하지 마십시오. localhost, 신뢰된 LAN 또는 Tailscale
 > 내부에서만 사용합니다.
 
-`1.3.13`은 대형 오디오 캐시의 완전성 오류를 막고 background thumbnail
-작업이 시작 검증이나 재생과 경쟁하지 않도록 조정하는 릴리스입니다. 썸네일
-watcher 반영은 증분화되며 전체 cache GC는 시작 시와 매시간에만 실행됩니다.
+`1.3.15`는 M4A의 embedded `artist` 태그를 라이브러리 스캔 중 직접 읽어
+음악 목록, 플레이어, Media Session에 전달합니다. 태그가 없거나 파일이
+손상된 경우에는 기존 파일명 기반 metadata와 root-name fallback을 유지합니다.
+`1.3.14`의 단일 최신-AAC 이어듣기 cache 동작도 그대로 유지됩니다.
 
 ## Source Of Truth
 
@@ -46,6 +47,7 @@ README와 코드가 충돌하면 코드와 통과하는 테스트를 우선하�
 | Range streaming and file response | `backend/internal/streaming/` |
 | path traversal and root safety | `backend/internal/mediapath/` |
 | progress conflict/persistence | `backend/internal/progress/` |
+| latest AAC resume remux cache | `backend/internal/audioresume/` |
 | ffmpeg availability/fallback plan | `backend/internal/fallback/` |
 | app routes and shell composition | `web_app/src/app/` |
 | library state/live sync/virtual list | `web_app/src/features/library/` |
@@ -69,15 +71,17 @@ Go HTTP server
   -> persistent library index + in-memory snapshot
   -> filesystem watcher + SSE/delta updates
   -> HTTP Range media streaming
+  -> single-slot AAC resume remux cache
   -> persistent playback progress
 ```
 
 Important boundaries:
 
 - Direct play over HTTP Range is the primary playback path.
-- ffmpeg is optional. `/api/fallback/{mediaId}` does not launch
-  remux/transcode jobs; video thumbnails use one bounded background frame
-  extraction worker when ffmpeg is available.
+- ffmpeg is optional. `/api/fallback/{mediaId}` does not launch general
+  remux/transcode jobs. When ffmpeg is available, video thumbnails use one
+  bounded background frame worker and raw AAC can use one latest-track M4A
+  resume-cache job.
 - Local filesystem roots use watchers. Network/FUSE roots may require manual
   refresh because reliable low-idle notifications cannot be guaranteed.
 - The PWA service worker caches the app shell only. It does not cache
@@ -96,8 +100,11 @@ Important boundaries:
 - Offline-root hiding with persistent index restoration after reconnection.
 - Immediate confirmed-file removal and delayed offline thumbnail cleanup.
 - Audio/video playback, seek, queue modes, likes, playlists, smart collections.
+- Native M4A `©ART` artist metadata without per-file ffprobe processes.
 - `Recently Watching` from video activity.
 - Local and backend-synced playback resume progress.
+- Single-slot latest AAC M4A cache after 30 seconds of playback; uncached
+  progress records retain the existing temporal-fragment resume fallback.
 - Persistent backend `progress.v1.json` with timestamp conflict resolution.
 - Atomic config/progress writes with backup recovery.
 - Queue virtualization for large music queues.
@@ -108,7 +115,8 @@ Important boundaries:
 Known limitations:
 
 - No authentication, multi-user isolation, or public-internet hardening.
-- No real remux/transcode worker.
+- No general-purpose fallback remux/transcode worker; the only remux job is the
+  bounded latest-AAC resume cache.
 - Video thumbnail extraction requires ffmpeg; SVG fallback artwork remains
   available when ffmpeg is missing or a source cannot be decoded.
 - Browser codec support still determines direct-play success.
@@ -177,7 +185,7 @@ If `VMA_CONFIG` is omitted, the config path is:
 ```
 
 The `videio_music_app` directory name is a legacy compatibility identifier.
-It remains unchanged in `1.3.13` so existing config, library index, and playback
+It remains unchanged in `1.3.15` so existing config, library index, and playback
 progress are reused without migration risk. The workspace directory path and
 `VMA_*` environment variables are also compatibility surfaces; new public
 names, package names, binaries, health identifiers, and control-server entries
@@ -190,6 +198,7 @@ Backend files beside the resolved config:
 | `config.json` | host, port, split media roots, web dist, appearance |
 | `library-index.v1.log` | last-known library and revision journal |
 | `progress.v1.json` | versioned playback progress records |
+| `audio-resume-cache/v1/` | latest raw-AAC M4A resume cache and slot metadata |
 
 `progress.v1.json` writes are coalesced with a `2 s` quiet window and flushed
 on shutdown with a bounded deadline. Corrupt JSON starts with an empty progress
@@ -236,6 +245,9 @@ over seeded `VMA_MEDIA_ROOTS` unless `VMA_MEDIA_ROOTS_OVERRIDE=1`.
 | `HEAD /api/media/{id}` | Media headers |
 | `GET /api/thumbnails/{id}` | Thumbnail response |
 | `GET /api/fallback/{id}` | Direct/remux/transcode plan status |
+| `GET /api/audio-resume-cache` | Latest AAC resume-cache status |
+| `PUT /api/audio-resume-cache/{id}` | Queue the latest AAC cache candidate |
+| `GET/HEAD /api/audio-resume-cache/media/{id}` | Range-friendly cached M4A stream |
 | `GET /api/progress` | Progress list |
 | `GET/PUT/DELETE /api/progress/{id}` | Progress record |
 
