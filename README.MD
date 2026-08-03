@@ -1,4 +1,4 @@
-# Muzio 1.3.15
+# Muzio 1.4.0
 
 Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 브라우저에서 탐색하고 재생하는 경량 self-hosted 미디어 앱입니다.
@@ -8,7 +8,7 @@ Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 | Item | Current contract |
 | --- | --- |
 | Product/service name | `Muzio` |
-| Version | `1.3.15` |
+| Version | `1.4.0` |
 | Primary client | React + TypeScript web app |
 | Backend | Go `1.22`, CGO-free |
 | Normal runtime | Go server가 API, media, `web_app/dist`를 한 origin에서 제공 |
@@ -21,10 +21,12 @@ Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 > 공용 인터넷에 직접 노출하지 마십시오. localhost, 신뢰된 LAN 또는 Tailscale
 > 내부에서만 사용합니다.
 
-`1.3.15`는 M4A의 embedded `artist` 태그를 라이브러리 스캔 중 직접 읽어
-음악 목록, 플레이어, Media Session에 전달합니다. 태그가 없거나 파일이
-손상된 경우에는 기존 파일명 기반 metadata와 root-name fallback을 유지합니다.
-`1.3.14`의 단일 최신-AAC 이어듣기 cache 동작도 그대로 유지됩니다.
+`1.4.0`은 backend HTTPS를 Go 표준 `ServeTLS` 경로로 제공해 HTTP/2 ALPN을
+활성화하고, 영상 선택부터 Vidstack 준비·재생·이어보기와 server Range 응답을
+하나의 임시 diagnostic run으로 연결할 수 있게 합니다. 진단은 기본 비활성이며
+direct Range 재생, `metadata` preload, `can-play` 이후 재생, 기존 AAC resume
+cache 동작을 유지합니다. `1.3.15`의 embedded M4A artist metadata도 그대로
+보존됩니다.
 
 ## Source Of Truth
 
@@ -88,6 +90,8 @@ Important boundaries:
   `/api/*`, `/api/media/*`, or `/healthz`.
 - Global HTTP `WriteTimeout` stays disabled for streaming and SSE.
   `ReadHeaderTimeout` is `5 s`, `IdleTimeout` is `90 s`.
+- Backend HTTPS uses Go's standard `ServeTLS` path so compatible clients can
+  negotiate HTTP/2 while explicit HTTP/1.1 and non-TLS fallback remain valid.
 
 ## Implemented Capabilities
 
@@ -103,6 +107,8 @@ Important boundaries:
 - Native M4A `©ART` artist metadata without per-file ffprobe processes.
 - `Recently Watching` from video activity.
 - Local and backend-synced playback resume progress.
+- Opt-in bounded video startup/resume diagnostics with client/server Range
+  correlation; normal playback does not add diagnostic query parameters.
 - Single-slot latest AAC M4A cache after 30 seconds of playback; uncached
   progress records retain the existing temporal-fragment resume fallback.
 - Persistent backend `progress.v1.json` with timestamp conflict resolution.
@@ -185,7 +191,7 @@ If `VMA_CONFIG` is omitted, the config path is:
 ```
 
 The `videio_music_app` directory name is a legacy compatibility identifier.
-It remains unchanged in `1.3.15` so existing config, library index, and playback
+It remains unchanged in `1.4.0` so existing config, library index, and playback
 progress are reused without migration risk. The workspace directory path and
 `VMA_*` environment variables are also compatibility surfaces; new public
 names, package names, binaries, health identifiers, and control-server entries
@@ -230,6 +236,29 @@ Environment variables:
 
 Saved split roots (`audioRoots`, `videoRoots`, `imageRoots`) take precedence
 over seeded `VMA_MEDIA_ROOTS` unless `VMA_MEDIA_ROOTS_OVERRIDE=1`.
+
+### Opt-in video playback diagnostics
+
+Video startup and resume diagnostics are disabled during normal playback. For
+one controlled Safari/PWA run, use Web Inspector console:
+
+```js
+window.muzioPlaybackDiagnostics.enable()
+window.muzioPlaybackDiagnostics.clear()
+// Select and play one video, then export before starting another run.
+window.muzioPlaybackDiagnostics.export()
+window.muzioPlaybackDiagnostics.disable()
+```
+
+The export is bounded to 400 entries and separates a per-sample `sampleId` from
+a diagnostic-session `transportCorrelationId`. A same-origin cookie carries
+the transport ID and a second path-scoped cookie carries the sample ID to
+`/api/media/`; `clear()` rotates only the sample cookie without changing the
+media URL or its cache identity. In-flight requests retain the sample ID they
+started with. The backend emits matching `media stream` records at Info level.
+Normal requests stay out of Info logs, and diagnostics do not include
+filesystem paths, Tailscale addresses, certificate data, or arbitrary query
+values.
 
 ## HTTP Surface
 

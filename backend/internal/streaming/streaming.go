@@ -19,6 +19,9 @@ import (
 	"muzio/backend/internal/mediapath"
 )
 
+const diagnosticTransportCookieName = "muzioDiagnosticTransportId"
+const diagnosticSampleCookieName = "muzioDiagnosticSampleId"
+
 // Lookup is the read-side dependency the streaming handler needs from the
 // library snapshot. Keeping this narrow lets tests substitute a fake without
 // pulling in scan logic.
@@ -46,8 +49,12 @@ type StreamActivityReporter interface {
 
 type mediaResponseRecorder struct {
 	http.ResponseWriter
-	status int
-	bytes  int64
+	status         int
+	bytes          int64
+	started        time.Time
+	firstBodyWrite time.Duration
+	wroteBody      bool
+	writeErr       bool
 }
 
 func (rec *mediaResponseRecorder) WriteHeader(status int) {
@@ -61,8 +68,12 @@ func (rec *mediaResponseRecorder) Write(data []byte) (int, error) {
 	if rec.status == 0 {
 		rec.status = http.StatusOK
 	}
+	rec.markBodyWrite()
 	n, err := rec.ResponseWriter.Write(data)
 	rec.bytes += int64(n)
+	if err != nil {
+		rec.writeErr = true
+	}
 	return n, err
 }
 
@@ -70,13 +81,20 @@ func (rec *mediaResponseRecorder) ReadFrom(r io.Reader) (int64, error) {
 	if rec.status == 0 {
 		rec.status = http.StatusOK
 	}
+	rec.markBodyWrite()
 	if readerFrom, ok := rec.ResponseWriter.(io.ReaderFrom); ok {
 		n, err := readerFrom.ReadFrom(r)
 		rec.bytes += n
+		if err != nil {
+			rec.writeErr = true
+		}
 		return n, err
 	}
 	n, err := io.Copy(rec.ResponseWriter, r)
 	rec.bytes += n
+	if err != nil {
+		rec.writeErr = true
+	}
 	return n, err
 }
 
@@ -89,6 +107,25 @@ func (rec *mediaResponseRecorder) statusOrOK() int {
 		return http.StatusOK
 	}
 	return rec.status
+}
+
+func (rec *mediaResponseRecorder) markBodyWrite() {
+	if rec.wroteBody {
+		return
+	}
+	rec.wroteBody = true
+	if rec.started.IsZero() {
+		rec.firstBodyWrite = 0
+		return
+	}
+	rec.firstBodyWrite = time.Since(rec.started)
+}
+
+func (rec *mediaResponseRecorder) firstBodyWriteMillis() any {
+	if !rec.wroteBody {
+		return nil
+	}
+	return rec.firstBodyWrite.Milliseconds()
 }
 
 // Handler returns the streaming HTTP handler. It accepts GET and HEAD; every
@@ -185,20 +222,66 @@ func Handler(roots PathResolver, lookup Lookup, logger *slog.Logger) http.Handle
 		w.Header().Set("ETag", mediaWeakETag(media.ID, info.Size(), info.ModTime()))
 
 		started := time.Now()
-		rec := &mediaResponseRecorder{ResponseWriter: w}
+		rec := &mediaResponseRecorder{ResponseWriter: w, started: started}
 		http.ServeContent(rec, r, media.Name, info.ModTime(), file)
-		logger.Debug(
+		diagnosticTransportID := mediaDiagnosticTransportID(r)
+		diagnosticSampleID := ""
+		logLevel := slog.LevelDebug
+		if diagnosticTransportID != "" {
+			diagnosticSampleID = mediaDiagnosticCookieID(r, diagnosticSampleCookieName)
+			// A valid correlation ID is an explicit diagnostic-session opt-in.
+			// Promote only this bounded media record so production's default Info
+			// logger can collect it without enabling unrelated debug output.
+			logLevel = slog.LevelInfo
+		}
+		logger.Log(
+			r.Context(),
+			logLevel,
 			"media stream",
 			"id", media.ID,
 			"type", media.Type,
+			"protocol", r.Proto,
+			"diagnostic_transport_id", diagnosticTransportID,
+			"diagnostic_sample_id", diagnosticSampleID,
 			"method", r.Method,
 			"request_kind", mediaRequestKind(r),
 			"range", r.Header.Get("Range"),
 			"status", rec.statusOrOK(),
 			"bytes", rec.bytes,
+			"started_at_unix_ms", started.UnixMilli(),
+			"first_body_write_ms", rec.firstBodyWriteMillis(),
 			"duration_ms", time.Since(started).Milliseconds(),
+			"request_canceled", r.Context().Err() != nil,
+			"write_error", rec.writeErr,
 		)
 	}
+}
+
+func mediaDiagnosticTransportID(r *http.Request) string {
+	return mediaDiagnosticCookieID(r, diagnosticTransportCookieName)
+}
+
+func mediaDiagnosticCookieID(r *http.Request, cookieName string) string {
+	value := ""
+	count := 0
+	for _, cookie := range r.Cookies() {
+		if cookie.Name != cookieName {
+			continue
+		}
+		count++
+		value = cookie.Value
+	}
+	if count != 1 || len(value) != 32 {
+		return ""
+	}
+	for _, char := range value {
+		if !((char >= '0' && char <= '9') ||
+			(char >= 'a' && char <= 'f') ||
+			(char >= 'A' && char <= 'F')) {
+			return ""
+		}
+	}
+	return strings.ToLower(value)
 }
 
 func mediaRequestKind(r *http.Request) string {

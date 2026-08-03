@@ -20,6 +20,9 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
+import {
+  recordPlaybackDiagnosticMilestone,
+} from '../../core/playback/diagnostics/playbackDiagnostics';
 import type { PlaybackSource } from '../../core/playback/source/source';
 import { TheaterGlyph } from '../../core/ui/AppIcons';
 import { usePlayerStore } from './PlayerContext';
@@ -79,6 +82,10 @@ export function PersistentVidstackPlayer({
   useLayoutEffect(() => {
     if (player === null) return;
 
+    recordPlaybackDiagnosticMilestone(
+      'video_player_mount_ready',
+      store.getState().video.source,
+    );
     const engine = createVidstackEngine(player, commitSource);
     const target = {
       get isConnected() {

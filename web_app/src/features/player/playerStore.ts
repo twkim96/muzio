@@ -12,6 +12,9 @@ import {
   type PlaybackEngine,
 } from '../../core/playback/engine/engine';
 import {
+  recordPlaybackDiagnosticMilestone,
+} from '../../core/playback/diagnostics/playbackDiagnostics';
+import {
   playbackNetworkGate,
   type PlaybackNetworkGate,
 } from '../../core/playback/networkGate/playbackNetworkGate';
@@ -593,6 +596,13 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       }
       if (targetKind === 'audio' && audioResumeCache !== null) {
         playbackSource = audioResumeCache.resolve(playbackSource);
+      }
+      if (targetKind === 'video') {
+        recordPlaybackDiagnosticMilestone(
+          'video_selection',
+          playbackSource,
+          mediaFragmentStartSec(playbackSource) || null,
+        );
       }
 
       try {

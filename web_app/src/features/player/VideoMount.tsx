@@ -10,6 +10,9 @@ import {
   type ReactNode,
 } from 'react';
 
+import {
+  recordPlaybackDiagnosticMilestone,
+} from '../../core/playback/diagnostics/playbackDiagnostics';
 import { usePlayerStore } from './PlayerContext';
 
 interface VideoSurfaceContextValue {
@@ -19,11 +22,15 @@ interface VideoSurfaceContextValue {
 }
 
 const VideoSurfaceContext = createContext<VideoSurfaceContextValue | null>(null);
-const PersistentVidstackPlayer = lazy(() =>
-  import('./PersistentVidstackPlayer').then((module) => ({
-    default: module.PersistentVidstackPlayer,
-  })),
-);
+const PersistentVidstackPlayer = lazy(() => {
+  recordPlaybackDiagnosticMilestone('video_module_import_start');
+  return import('./PersistentVidstackPlayer').then((module) => {
+    recordPlaybackDiagnosticMilestone('video_module_import_complete');
+    return {
+      default: module.PersistentVidstackPlayer,
+    };
+  });
+});
 
 /**
  * Loads Vidstack only when video becomes the active playback kind. Once

@@ -51,6 +51,10 @@ func bufferLogger(buf *bytes.Buffer) *slog.Logger {
 	}))
 }
 
+func infoBufferLogger(buf *bytes.Buffer) *slog.Logger {
+	return slog.New(slog.NewTextHandler(buf, nil))
+}
+
 func newFixture(t *testing.T, body string, name string) (*mediapath.Roots, library.Media) {
 	t.Helper()
 	dir := t.TempDir()
@@ -165,7 +169,15 @@ func TestHandlerLogsRangeDiagnosticsWithoutLeakingPaths(t *testing.T) {
 	var logs bytes.Buffer
 	h := Handler(roots, fakeLookup{media: media}, bufferLogger(&logs))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/media/"+media.ID, nil)
+	const transportID = "0123456789abcdef0123456789abcdef"
+	const sampleID = "abcdef0123456789abcdef0123456789"
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/media/"+media.ID+"?ignored=secret-value",
+		nil,
+	)
+	req.AddCookie(&http.Cookie{Name: diagnosticTransportCookieName, Value: transportID})
+	req.AddCookie(&http.Cookie{Name: diagnosticSampleCookieName, Value: sampleID})
 	req.Header.Set("Range", "bytes=4-9")
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -175,12 +187,19 @@ func TestHandlerLogsRangeDiagnosticsWithoutLeakingPaths(t *testing.T) {
 		`msg="media stream"`,
 		`id=fixture-id`,
 		`type=audio`,
+		`protocol=HTTP/1.1`,
+		`diagnostic_transport_id=` + transportID,
+		`diagnostic_sample_id=` + sampleID,
 		`method=GET`,
 		`request_kind=partial_get`,
 		`range="bytes=4-9"`,
 		`status=206`,
 		`bytes=6`,
+		`started_at_unix_ms=`,
+		`first_body_write_ms=`,
 		`duration_ms=`,
+		`request_canceled=false`,
+		`write_error=false`,
 	} {
 		if !strings.Contains(logText, want) {
 			t.Fatalf("log missing %q in %s", want, logText)
@@ -193,6 +212,44 @@ func TestHandlerLogsRangeDiagnosticsWithoutLeakingPaths(t *testing.T) {
 	}
 	if strings.Contains(logText, media.RelativePath) {
 		t.Fatalf("log leaked relative path %q in %s", media.RelativePath, logText)
+	}
+	if strings.Contains(logText, "secret-value") {
+		t.Fatalf("log leaked a non-allowlisted query value in %s", logText)
+	}
+}
+
+func TestHandlerLogsOnlyExplicitDiagnosticRunsAtDefaultInfoLevel(t *testing.T) {
+	roots, media := newFixture(t, "0123456789abcdef", "song.mp3")
+	var logs bytes.Buffer
+	h := Handler(roots, fakeLookup{media: media}, infoBufferLogger(&logs))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/media/"+media.ID, nil)
+	h.ServeHTTP(httptest.NewRecorder(), req)
+	if logs.Len() != 0 {
+		t.Fatalf("ordinary successful stream reached Info log: %s", logs.String())
+	}
+
+	const transportID = "0123456789abcdef0123456789abcdef"
+	const sampleID = "abcdef0123456789abcdef0123456789"
+	req = httptest.NewRequest(
+		http.MethodGet,
+		"/api/media/"+media.ID+"?diagnosticRunId="+transportID,
+		nil,
+	)
+	h.ServeHTTP(httptest.NewRecorder(), req)
+	if logs.Len() != 0 {
+		t.Fatalf("query-only diagnostic stream reached Info log: %s", logs.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/media/"+media.ID, nil)
+	req.AddCookie(&http.Cookie{Name: diagnosticTransportCookieName, Value: transportID})
+	req.AddCookie(&http.Cookie{Name: diagnosticSampleCookieName, Value: sampleID})
+	h.ServeHTTP(httptest.NewRecorder(), req)
+	logText := logs.String()
+	if !strings.Contains(logText, "diagnostic_transport_id="+transportID) {
+		t.Fatalf("explicit diagnostic stream was not logged at Info: %s", logText)
+	}
+	if !strings.Contains(logText, "diagnostic_sample_id="+sampleID) {
+		t.Fatalf("diagnostic sample was not logged: %s", logText)
 	}
 }
 
@@ -212,6 +269,9 @@ func TestHandlerLogsHeadDiagnostics(t *testing.T) {
 		`request_kind=head`,
 		`status=200`,
 		`bytes=0`,
+		`first_body_write_ms=<nil>`,
+		`request_canceled=false`,
+		`write_error=false`,
 	} {
 		if !strings.Contains(logText, want) {
 			t.Fatalf("log missing %q in %s", want, logText)
@@ -219,6 +279,36 @@ func TestHandlerLogsHeadDiagnostics(t *testing.T) {
 	}
 	if rec.Body.Len() != 0 {
 		t.Fatalf("HEAD returned body of len %d", rec.Body.Len())
+	}
+}
+
+func TestMediaDiagnosticTransportIDAllowsOnlyOneHexCookie(t *testing.T) {
+	tests := []struct {
+		name    string
+		query   string
+		cookies []string
+		want    string
+	}{
+		{
+			name:    "valid normalized",
+			cookies: []string{"ABCDEF0123456789ABCDEF0123456789"},
+			want:    "abcdef0123456789abcdef0123456789",
+		},
+		{name: "wrong length", cookies: []string{"abc"}, want: ""},
+		{name: "non hex", cookies: []string{"zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"}, want: ""},
+		{name: "duplicate", cookies: []string{"0123456789abcdef0123456789abcdef", "0123456789abcdef0123456789abcdef"}, want: ""},
+		{name: "query ignored", query: "?diagnosticRunId=0123456789abcdef0123456789abcdef", want: ""},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/api/media/id"+test.query, nil)
+			for _, value := range test.cookies {
+				req.AddCookie(&http.Cookie{Name: diagnosticTransportCookieName, Value: value})
+			}
+			if got := mediaDiagnosticTransportID(req); got != test.want {
+				t.Fatalf("mediaDiagnosticTransportID() = %q, want %q", got, test.want)
+			}
+		})
 	}
 }
 

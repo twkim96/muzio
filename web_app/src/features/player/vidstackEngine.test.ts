@@ -1,5 +1,12 @@
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
+import {
+  clearPlaybackDiagnostics,
+  getPlaybackDiagnosticSampleId,
+  getPlaybackDiagnosticTransportCorrelationId,
+  getPlaybackDiagnostics,
+  setPlaybackDiagnosticsEnabled,
+} from '../../core/playback/diagnostics/playbackDiagnostics';
 import { createSession } from '../../core/playback/session/session';
 import type { PlaybackSource } from '../../core/playback/source/source';
 import type {
@@ -20,7 +27,10 @@ class FakeVidstackPlayer extends EventTarget implements VidstackPlayerLike {
   currentTime = 0;
   volume = 1;
   muted = false;
-  state: { error?: { code?: number; message?: string } | null } = {
+  state: {
+    error?: { code?: number; message?: string } | null;
+    buffered?: TimeRanges;
+  } = {
     error: null,
   };
   play = vi.fn(async () => {
@@ -78,6 +88,11 @@ function memoryProgressRepository(): ProgressRepository {
     mostRecent: () => null,
   };
 }
+
+afterEach(() => {
+  setPlaybackDiagnosticsEnabled(false);
+  clearPlaybackDiagnostics();
+});
 
 describe('createVidstackEngine', () => {
   test('waits for the React source commit before loading and playing', async () => {
@@ -148,6 +163,8 @@ describe('createVidstackEngine', () => {
     }).attach(session);
 
     session.load(source);
+    player.currentSrc = source.url;
+    dispatchSourceChange(player, source);
     player.dispatchEvent(
       new CustomEvent('duration-change', {
         detail: { duration: 120 },
@@ -181,6 +198,8 @@ describe('createVidstackEngine', () => {
     }).attach(session);
 
     session.load(source);
+    player.currentSrc = source.url;
+    dispatchSourceChange(player, source);
     player.dispatchEvent(
       new CustomEvent('duration-change', {
         detail: 120,
@@ -233,6 +252,8 @@ describe('createVidstackEngine', () => {
     }).attach(session);
 
     session.load(source);
+    player.currentSrc = source.url;
+    dispatchSourceChange(player, source);
     player.dispatchEvent(new Event('playing'));
     player.dispatchEvent(
       new CustomEvent('time-change', {
@@ -317,6 +338,60 @@ describe('createVidstackEngine', () => {
     player.dispatchEvent(new Event('can-play'));
     await Promise.all([firstPlay, secondPlay]);
     expect(player.play).toHaveBeenCalledOnce();
+  });
+
+  test('ignores stale playback and seek events until the new source is confirmed', async () => {
+    setPlaybackDiagnosticsEnabled(true);
+    clearPlaybackDiagnostics();
+    const resumedSecondSource: PlaybackSource = {
+      ...secondSource,
+      url: `${secondSource.url}#t=45`,
+      durationSec: 120,
+    };
+    const player = new FakeVidstackPlayer();
+    const engine = createVidstackEngine(player, async () => {});
+
+    engine.load(source);
+    const firstPlay = engine.play();
+    await Promise.resolve();
+    player.currentSrc = source.url;
+    dispatchSourceChange(player, source);
+    player.dispatchEvent(new Event('can-play'));
+    await firstPlay;
+
+    engine.load(resumedSecondSource);
+    const secondPlay = engine.play();
+    await Promise.resolve();
+
+    player.currentSrc = source.url;
+    player.currentTime = 7_200;
+    player.dispatchEvent(
+      new CustomEvent('time-update', {
+        detail: { currentTime: 7_200 },
+      }),
+    );
+    player.dispatchEvent(new Event('seeking'));
+    player.dispatchEvent(new Event('playing'));
+    player.dispatchEvent(new Event('pause'));
+    player.dispatchEvent(new Event('ended'));
+
+    player.currentSrc = secondSource.url;
+    player.currentTime = 0;
+    dispatchSourceChange(player, resumedSecondSource);
+    player.dispatchEvent(new Event('can-play'));
+    await secondPlay;
+
+    expect(player.currentTime).toBe(45);
+    expect(getPlaybackDiagnostics().map((entry) => entry.kind)).toEqual(
+      expect.arrayContaining([
+        'stale_time-update_ignored',
+        'stale_seeking_ignored',
+        'stale_playing_ignored',
+        'stale_pause_ignored',
+        'stale_ended_ignored',
+        'resume_target_apply_before_play',
+      ]),
+    );
   });
 
   test('accepts an absolute current URL for the active relative source', async () => {
@@ -452,5 +527,226 @@ describe('createVidstackEngine', () => {
 
     expect(player.play).toHaveBeenCalledOnce();
     expect(player.currentTime).toBe(7_200);
+  });
+
+  test('consumes the resume target after playback progresses and never rewinds on replay', async () => {
+    const resumedSource: PlaybackSource = {
+      ...source,
+      url: `${source.url}#t=7200`,
+      durationSec: 10_000,
+    };
+    const player = new FakeVidstackPlayer();
+    const engine = createVidstackEngine(player, async () => {});
+
+    engine.load(resumedSource);
+    const firstPlay = engine.play();
+    await Promise.resolve();
+    player.currentSrc = source.url;
+    dispatchSourceChange(player, source);
+    player.dispatchEvent(new Event('can-play'));
+    await firstPlay;
+
+    player.currentTime = 7_210;
+    player.dispatchEvent(
+      new CustomEvent('time-update', {
+        detail: { currentTime: 7_210 },
+      }),
+    );
+    engine.pause();
+    await engine.play();
+
+    expect(player.currentTime).toBe(7_210);
+    expect(player.play).toHaveBeenCalledTimes(2);
+  });
+
+  test('does not rewind normal progress made before the play promise resolves', async () => {
+    const resumedSource: PlaybackSource = {
+      ...source,
+      url: `${source.url}#t=7200`,
+      durationSec: 10_000,
+    };
+    const player = new FakeVidstackPlayer();
+    player.play = vi.fn(async () => {
+      player.currentTime += 0.6;
+      player.paused = false;
+    });
+    const engine = createVidstackEngine(player, async () => {});
+
+    engine.load(resumedSource);
+    const play = engine.play();
+    await Promise.resolve();
+    player.currentSrc = source.url;
+    dispatchSourceChange(player, source);
+    player.dispatchEvent(new Event('can-play'));
+    await play;
+
+    expect(player.currentTime).toBe(7_200.6);
+  });
+
+  test('native Vidstack seeking cancels the pending resume fallback', async () => {
+    setPlaybackDiagnosticsEnabled(true);
+    clearPlaybackDiagnostics();
+    const resumedSource: PlaybackSource = {
+      ...source,
+      url: `${source.url}#t=7200`,
+      durationSec: 10_000,
+    };
+    const player = new FakeVidstackPlayer();
+    const engine = createVidstackEngine(player, async () => {});
+
+    engine.load(resumedSource);
+    const firstPlay = engine.play();
+    await Promise.resolve();
+    player.currentSrc = source.url;
+    dispatchSourceChange(player, source);
+    player.dispatchEvent(new Event('can-play'));
+    await firstPlay;
+
+    player.currentTime = 120;
+    player.dispatchEvent(new Event('seeking'));
+    engine.pause();
+    await engine.play();
+
+    expect(player.currentTime).toBe(120);
+    expect(getPlaybackDiagnostics().map((entry) => entry.kind)).toContain(
+      'resume_target_canceled_native_seek',
+    );
+  });
+
+  test('does not mistake the internal resume seek for a native manual seek', async () => {
+    setPlaybackDiagnosticsEnabled(true);
+    clearPlaybackDiagnostics();
+    const resumedSource: PlaybackSource = {
+      ...source,
+      url: `${source.url}#t=7200`,
+      durationSec: 10_000,
+    };
+    const player = new FakeVidstackPlayer();
+    const engine = createVidstackEngine(player, async () => {});
+
+    engine.load(resumedSource);
+    const play = engine.play();
+    await Promise.resolve();
+    player.currentSrc = source.url;
+    dispatchSourceChange(player, source);
+    player.dispatchEvent(new Event('can-play'));
+    await play;
+    player.dispatchEvent(new Event('seeking'));
+    player.dispatchEvent(new Event('playing'));
+
+    const kinds = getPlaybackDiagnostics().map((entry) => entry.kind);
+    expect(kinds).toContain('resume_target_internal_seeking');
+    expect(kinds).not.toContain('resume_target_canceled_native_seek');
+  });
+
+  test('does not overwrite a manual seek with the previous resume fallback', async () => {
+    setPlaybackDiagnosticsEnabled(true);
+    clearPlaybackDiagnostics();
+    const resumedSource: PlaybackSource = {
+      ...source,
+      url: `${source.url}#t=7200`,
+      durationSec: 10_000,
+    };
+    const player = new FakeVidstackPlayer();
+    let committedSource: PlaybackSource | null = null;
+    const engine = createVidstackEngine(player, async (nextSource) => {
+      committedSource = nextSource;
+    });
+
+    engine.load(resumedSource);
+    engine.seek(120);
+    const play = engine.play();
+    await Promise.resolve();
+    player.currentSrc = committedSource!.url;
+    dispatchSourceChange(player, committedSource!);
+    player.dispatchEvent(new Event('can-play'));
+    await play;
+
+    expect(player.currentTime).toBe(120);
+    expect(getPlaybackDiagnostics().map((entry) => entry.kind)).toContain(
+      'resume_target_canceled_manual_seek',
+    );
+    expect(getPlaybackDiagnostics().map((entry) => entry.kind)).not.toContain(
+      'resume_target_apply_before_play',
+    );
+  });
+
+  test('correlates diagnostic samples without changing media URL cache identity', async () => {
+    setPlaybackDiagnosticsEnabled(true);
+    clearPlaybackDiagnostics();
+    const resumedSource: PlaybackSource = {
+      ...source,
+      url: `${source.url}?existing=1#t=45`,
+      durationSec: 120,
+    };
+    let committedSource: PlaybackSource | null = null;
+    const player = new FakeVidstackPlayer();
+    const engine = createVidstackEngine(player, async (nextSource) => {
+      committedSource = nextSource;
+    });
+
+    engine.load(resumedSource);
+    const play = engine.play();
+    await Promise.resolve();
+
+    expect(committedSource).not.toBeNull();
+    expect(committedSource).toEqual(resumedSource);
+    const transportCorrelationId =
+      getPlaybackDiagnosticTransportCorrelationId();
+    const firstSampleId = getPlaybackDiagnosticSampleId();
+    clearPlaybackDiagnostics();
+    const secondSampleId = getPlaybackDiagnosticSampleId();
+    expect(getPlaybackDiagnosticTransportCorrelationId()).toBe(
+      transportCorrelationId,
+    );
+    expect(secondSampleId).not.toBe(firstSampleId);
+    expect(committedSource!.url).toBe(`${source.url}?existing=1#t=45`);
+
+    player.currentSrc = committedSource!.url;
+    dispatchSourceChange(player, committedSource!);
+    player.dispatchEvent(new Event('can-play'));
+    await play;
+    player.dispatchEvent(new Event('progress'));
+    engine.seek(60);
+    player.dispatchEvent(new Event('seeking'));
+    player.dispatchEvent(new Event('seeked'));
+    player.dispatchEvent(new Event('playing'));
+
+    const entries = getPlaybackDiagnostics();
+    expect(entries.map((entry) => entry.kind)).toEqual(
+      expect.arrayContaining([
+        'canplay',
+        'resume_target_apply_before_play',
+        'progress',
+        'seek_request',
+        'seeking',
+        'seeked',
+        'playing',
+      ]),
+    );
+    expect(entries.every((entry) => entry.mediaId === source.mediaId)).toBe(
+      true,
+    );
+    expect(entries.every((entry) => entry.sourceGeneration === 1)).toBe(true);
+    expect(entries.at(-1)).toMatchObject({
+      transportCorrelationId,
+      sampleId: secondSampleId,
+      seekGeneration: 2,
+    });
+    expect(engine.currentSource).toEqual(resumedSource);
+  });
+
+  test('does not inspect buffered ranges while diagnostics are disabled', () => {
+    const start = vi.fn(() => 0);
+    const end = vi.fn(() => 1);
+    const player = new FakeVidstackPlayer();
+    player.state.buffered = { length: 1, start, end };
+    const engine = createVidstackEngine(player, async () => {});
+
+    engine.load(source);
+    player.dispatchEvent(new Event('progress'));
+
+    expect(start).not.toHaveBeenCalled();
+    expect(end).not.toHaveBeenCalled();
   });
 });

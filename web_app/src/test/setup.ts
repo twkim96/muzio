@@ -1,5 +1,54 @@
 import '@testing-library/jest-dom/vitest';
 
+// Node 25+ exposes an experimental global localStorage getter that resolves to
+// undefined unless --localstorage-file is provided. Vitest's jsdom globals do
+// not replace that pre-existing property, so install a test-only Storage before
+// application modules (and Vidstack) read it. Real browsers are unaffected.
+if (
+  typeof process !== 'undefined' &&
+  Number.parseInt(process.versions.node.split('.')[0] ?? '0', 10) >= 25
+) {
+  class TestStorage implements Storage {
+    private readonly values = new Map<string, string>();
+
+    get length() {
+      return this.values.size;
+    }
+
+    clear() {
+      this.values.clear();
+    }
+
+    getItem(key: string) {
+      return this.values.get(key) ?? null;
+    }
+
+    key(index: number) {
+      return Array.from(this.values.keys())[index] ?? null;
+    }
+
+    removeItem(key: string) {
+      this.values.delete(key);
+    }
+
+    setItem(key: string, value: string) {
+      this.values.set(key, String(value));
+    }
+  }
+
+  const storage = new TestStorage();
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: storage,
+  });
+  if (window !== globalThis) {
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: storage,
+    });
+  }
+}
+
 if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   window.matchMedia = (query: string): MediaQueryList => ({
     matches: false,

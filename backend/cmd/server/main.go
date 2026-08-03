@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -131,34 +132,23 @@ func main() {
 		_ = libraryService.Close()
 		os.Exit(1)
 	}
-	if tlsEnabled() {
+	useTLS := tlsEnabled()
+	if useTLS {
 		certFile := os.Getenv("VMA_TLS_CERT")
 		keyFile := os.Getenv("VMA_TLS_KEY")
-		if certFile == "" || keyFile == "" {
+		if err := configureServerTLS(server, certFile, keyFile); err != nil {
 			listener.Close()
 			_ = progressStore.Close()
 			_ = libraryService.Close()
-			logger.Error("server TLS configuration failed", "error", "VMA_HTTPS is enabled but VMA_TLS_CERT or VMA_TLS_KEY is empty")
+			logger.Error("server TLS configuration failed", "error", err)
 			os.Exit(1)
 		}
-		certificate, err := tls.LoadX509KeyPair(certFile, keyFile)
-		if err != nil {
-			listener.Close()
-			_ = progressStore.Close()
-			_ = libraryService.Close()
-			logger.Error("server TLS certificate failed", "error", err)
-			os.Exit(1)
-		}
-		listener = tls.NewListener(listener, &tls.Config{
-			Certificates: []tls.Certificate{certificate},
-			MinVersion:   tls.VersionTLS12,
-		})
 	}
 
 	errCh := make(chan error, 1)
 	go func() {
 		logger.Info("server starting", "addr", cfg.Address())
-		errCh <- server.Serve(listener)
+		errCh <- serveHTTPServer(server, listener, useTLS)
 	}()
 	watcherStatus := libraryService.StartWatcher()
 	logger.Info(
@@ -239,6 +229,35 @@ func main() {
 			os.Exit(1)
 		}
 	}
+}
+
+func configureServerTLS(server *http.Server, certFile, keyFile string) error {
+	if certFile == "" || keyFile == "" {
+		return errors.New("VMA_HTTPS is enabled but VMA_TLS_CERT or VMA_TLS_KEY is empty")
+	}
+	certificate, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return fmt.Errorf("load TLS certificate: %w", err)
+	}
+	tlsConfig := &tls.Config{}
+	if server.TLSConfig != nil {
+		tlsConfig = server.TLSConfig.Clone()
+	}
+	tlsConfig.Certificates = []tls.Certificate{certificate}
+	if tlsConfig.MinVersion < tls.VersionTLS12 {
+		tlsConfig.MinVersion = tls.VersionTLS12
+	}
+	server.TLSConfig = tlsConfig
+	return nil
+}
+
+func serveHTTPServer(server *http.Server, listener net.Listener, useTLS bool) error {
+	if useTLS {
+		// ServeTLS performs net/http's HTTP/2 setup, including advertising h2
+		// through ALPN. The certificate is preloaded by configureServerTLS.
+		return server.ServeTLS(listener, "", "")
+	}
+	return server.Serve(listener)
 }
 
 func attachServerContext(server *http.Server) context.CancelFunc {
