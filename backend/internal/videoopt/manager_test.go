@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -38,6 +40,39 @@ func (s *mutableSpace) AvailableBytes(string) (int64, error) {
 type controlledBuilder struct {
 	started  chan string
 	releases map[string]chan struct{}
+}
+
+type fakeHLSBuilder struct {
+	plan  HLSPlan
+	err   error
+	calls int
+}
+
+func (b *fakeHLSBuilder) Plan(context.Context, string) (HLSPlan, error) {
+	b.calls++
+	if b.err != nil {
+		return HLSPlan{}, b.err
+	}
+	return b.plan, nil
+}
+
+func (b *fakeHLSBuilder) Build(_ context.Context, _ string, outputDir string, plan HLSPlan, onProgress func(float64)) (HLSPackageResult, error) {
+	if onProgress != nil {
+		onProgress(0.5)
+	}
+	manifest := "#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-TARGETDURATION:6\n#EXT-X-MAP:URI=\"init.mp4\"\n#EXTINF:6.000,\nseg-000000.m4s\n#EXTINF:6.000,\nseg-000001.m4s\n#EXT-X-ENDLIST\n"
+	files := map[string][]byte{
+		hlsManifestName:  []byte(manifest),
+		hlsInitName:      []byte("init"),
+		"seg-000000.m4s": []byte("segment-0"),
+		"seg-000001.m4s": []byte("segment-1"),
+	}
+	for name, data := range files {
+		if err := os.WriteFile(filepath.Join(outputDir, name), data, 0o600); err != nil {
+			return HLSPackageResult{}, err
+		}
+	}
+	return validateHLSPackage(outputDir, plan)
 }
 
 func (b *controlledBuilder) Build(ctx context.Context, source, output string) error {
@@ -124,6 +159,409 @@ func TestRetiredGenerationRemainsAvailableForLaterRangesAndSeek(t *testing.T) {
 	}
 }
 
+func TestManagerTransitionsFileDirectoryFileAndKeepsRetiredAssetsLeased(t *testing.T) {
+	root := t.TempDir()
+	fastFirstPath := writeEndMoovVideo(t, root, "first.mp4")
+	hlsPath := filepath.Join(root, "long.mp4")
+	if err := os.WriteFile(hlsPath, frontMoovFixture(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fastLastPath := writeEndMoovVideo(t, root, "last.mp4")
+	hlsBuilder := &fakeHLSBuilder{plan: HLSPlan{
+		Eligible: true, CacheKind: HLSCacheKind, DurationSeconds: 12,
+		EstimatedOutputBytes: 1024, RequiredFreeBytes: 1024, PeakCacheBytes: 1024,
+		TargetSegmentSeconds: 6, GOP: DurationStats{Count: 2, Min: 6, Median: 6, P95: 6, Max: 6},
+	}}
+	manager, err := NewManager(Options{
+		CacheDir: filepath.Join(root, "cache"),
+		Resolver: testResolver{"first.mp4": fastFirstPath, "long.mp4": hlsPath, "last.mp4": fastLastPath},
+		Builder:  &controlledBuilder{releases: map[string]chan struct{}{}}, HLS: hlsBuilder,
+		HLSOptions: HLSPlanOptions{MinimumMovieIndexBytes: 1, MaximumGOPSeconds: 8, TargetSegmentSeconds: 6},
+		Space:      fixedSpace(1 << 40), RetireGrace: 10 * time.Millisecond, LeaseDuration: 100 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	first := videoItem(t, "first", "first.mp4", fastFirstPath)
+	long := videoItem(t, "long", "long.mp4", hlsPath)
+	last := videoItem(t, "last", "last.mp4", fastLastPath)
+	if _, err := manager.Request(first); err != nil {
+		t.Fatal(err)
+	}
+	waitForVideoStatus(t, manager, first, "ready")
+	firstKey := manager.Status(first).CacheKey
+	if _, err := manager.RequestKind(long, HLSCacheKind); err != nil {
+		t.Fatal(err)
+	}
+	waitForVideoStatusKind(t, manager, long, HLSCacheKind, "ready")
+	hlsStatus := manager.StatusKind(long, HLSCacheKind)
+	if hlsStatus.SegmentCount != 2 || hlsStatus.URL == "" {
+		t.Fatalf("HLS status=%#v", hlsStatus)
+	}
+	if hlsStatus.CacheUsedBytes <= 0 {
+		t.Fatalf("HLS cache usage=%d, want packaged output bytes", hlsStatus.CacheUsedBytes)
+	}
+	if err := os.WriteFile(filepath.Join(manager.cacheDir, "untracked-root-file"), make([]byte, 4096), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := manager.StatusKind(long, HLSCacheKind).CacheUsedBytes; got != hlsStatus.CacheUsedBytes {
+		t.Fatalf("cache usage counted untracked filesystem data: got=%d want=%d", got, hlsStatus.CacheUsedBytes)
+	}
+	if fastStatus := manager.Status(long); fastStatus.State != "ineligible" {
+		t.Fatalf("faststart status=%#v", fastStatus)
+	}
+	if stillReady := manager.StatusKind(long, HLSCacheKind); stillReady.State != "ready" || stillReady.CacheKey != hlsStatus.CacheKey {
+		t.Fatalf("cross-kind status retired HLS slot: %#v", stillReady)
+	}
+	oldFaststart, ok := manager.Acquire(first, firstKey)
+	if !ok {
+		t.Fatal("retired faststart unavailable after HLS publish")
+	}
+	oldFaststart.Release()
+	manifest, ok := manager.AcquireHLSAsset(long, hlsStatus.CacheKey, hlsManifestName)
+	if !ok || manifest.Asset.Kind != "manifest" {
+		t.Fatal("HLS manifest unavailable")
+	}
+	manifest.Release()
+	if _, err := manager.Request(last); err != nil {
+		t.Fatal(err)
+	}
+	waitForVideoStatus(t, manager, last, "ready")
+	for _, asset := range []string{hlsManifestName, hlsInitName, "seg-000000.m4s", "seg-000001.m4s"} {
+		ready, ok := manager.AcquireHLSAsset(long, hlsStatus.CacheKey, asset)
+		if !ok {
+			t.Fatalf("retired HLS asset %s unavailable", asset)
+		}
+		ready.Release()
+	}
+	retiredSegment, ok := manager.AcquireHLSAsset(long, hlsStatus.CacheKey, "seg-000001.m4s")
+	if !ok {
+		t.Fatal("retired segment unavailable before corruption")
+	}
+	retiredSegment.Release()
+	if err := os.WriteFile(retiredSegment.Path, []byte("changed-size"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := manager.AcquireHLSAsset(long, hlsStatus.CacheKey, "seg-000001.m4s"); ok {
+		t.Fatal("changed retired segment remained available")
+	}
+	if _, ok := manager.AcquireHLSAsset(long, hlsStatus.CacheKey, hlsManifestName); ok {
+		t.Fatal("invalid retired generation continued serving assets")
+	}
+}
+
+func TestManagerInvalidatesCurrentHLSWhenRegisteredSegmentChanges(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "long.mp4")
+	if err := os.WriteFile(source, frontMoovFixture(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewManager(Options{
+		CacheDir: filepath.Join(root, "cache"), Resolver: testResolver{"long.mp4": source},
+		Builder: &controlledBuilder{releases: map[string]chan struct{}{}}, HLS: &fakeHLSBuilder{plan: HLSPlan{
+			Eligible: true, CacheKind: HLSCacheKind, DurationSeconds: 12,
+			EstimatedOutputBytes: 1024, RequiredFreeBytes: 1024, TargetSegmentSeconds: 6,
+		}},
+		HLSOptions: HLSPlanOptions{MinimumMovieIndexBytes: 1, MaximumGOPSeconds: 8, TargetSegmentSeconds: 6},
+		Space:      fixedSpace(1 << 40), RetireGrace: time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	item := videoItem(t, "long", "long.mp4", source)
+	if _, err := manager.RequestKind(item, HLSCacheKind); err != nil {
+		t.Fatal(err)
+	}
+	waitForVideoStatusKind(t, manager, item, HLSCacheKind, "ready")
+	status := manager.StatusKind(item, HLSCacheKind)
+	segment, ok := manager.AcquireHLSAsset(item, status.CacheKey, "seg-000001.m4s")
+	if !ok {
+		t.Fatal("segment unavailable before corruption")
+	}
+	segment.Release()
+	if err := os.WriteFile(segment.Path, []byte("changed-size"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := manager.AcquireHLSAsset(item, status.CacheKey, "seg-000001.m4s"); ok {
+		t.Fatal("changed segment remained available")
+	}
+	if got := manager.StatusKind(item, HLSCacheKind); got.State == "ready" || got.CacheKey != "" {
+		t.Fatalf("corrupt package remained ready: %#v", got)
+	}
+	if _, ok := manager.AcquireHLSAsset(item, status.CacheKey, hlsManifestName); ok {
+		t.Fatal("invalidated generation continued serving registered assets")
+	}
+}
+
+func TestManagerRejectsStartupMetadataMissingPackagedAsset(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "long.mp4")
+	if err := os.WriteFile(source, frontMoovFixture(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cacheDir := filepath.Join(root, "cache")
+	options := Options{
+		CacheDir: cacheDir, Resolver: testResolver{"long.mp4": source},
+		Builder: &controlledBuilder{releases: map[string]chan struct{}{}}, HLS: &fakeHLSBuilder{plan: HLSPlan{
+			Eligible: true, CacheKind: HLSCacheKind, DurationSeconds: 12,
+			EstimatedOutputBytes: 1024, RequiredFreeBytes: 1024, TargetSegmentSeconds: 6,
+		}},
+		HLSOptions: HLSPlanOptions{MinimumMovieIndexBytes: 1, MaximumGOPSeconds: 8, TargetSegmentSeconds: 6},
+		Space:      fixedSpace(1 << 40),
+	}
+	manager, err := NewManager(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := videoItem(t, "long", "long.mp4", source)
+	if _, err := manager.RequestKind(item, HLSCacheKind); err != nil {
+		t.Fatal(err)
+	}
+	waitForVideoStatusKind(t, manager, item, HLSCacheKind, "ready")
+	manager.Close()
+	entry := loadEntry(cacheDir)
+	if entry == nil {
+		t.Fatal("ready metadata unavailable")
+	}
+	delete(entry.Assets, "seg-000001.m4s")
+	if err := writeEntry(cacheDir, entry); err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := NewManager(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restarted.Close()
+	if got := restarted.StatusKind(item, HLSCacheKind); got.State == "ready" || got.CacheKey != "" {
+		t.Fatalf("incomplete metadata remained ready: %#v", got)
+	}
+}
+
+func TestManagerDeletesRetiredHLSOutsideMutex(t *testing.T) {
+	root := t.TempDir()
+	firstPath := filepath.Join(root, "first.mp4")
+	secondPath := filepath.Join(root, "second.mp4")
+	for _, path := range []string{firstPath, secondPath} {
+		if err := os.WriteFile(path, frontMoovFixture(), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	deleteStarted := make(chan struct{}, 1)
+	allowDelete := make(chan struct{})
+	var blockedPath atomic.Value
+	blockedPath.Store("")
+	manager, err := NewManager(Options{
+		CacheDir: filepath.Join(root, "cache"), Resolver: testResolver{"first.mp4": firstPath, "second.mp4": secondPath},
+		Builder: &controlledBuilder{releases: map[string]chan struct{}{}}, HLS: &fakeHLSBuilder{plan: HLSPlan{
+			Eligible: true, CacheKind: HLSCacheKind, DurationSeconds: 12,
+			EstimatedOutputBytes: 1024, RequiredFreeBytes: 1024, TargetSegmentSeconds: 6,
+		}},
+		HLSOptions: HLSPlanOptions{MinimumMovieIndexBytes: 1, MaximumGOPSeconds: 8, TargetSegmentSeconds: 6},
+		Space:      fixedSpace(1 << 40), LeaseDuration: 10 * time.Millisecond, RetireGrace: 10 * time.Millisecond,
+		RemoveAll: func(path string) error {
+			if path == blockedPath.Load().(string) {
+				select {
+				case deleteStarted <- struct{}{}:
+				default:
+				}
+				<-allowDelete
+			}
+			return os.RemoveAll(path)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	first := videoItem(t, "first", "first.mp4", firstPath)
+	second := videoItem(t, "second", "second.mp4", secondPath)
+	if _, err := manager.RequestKind(first, HLSCacheKind); err != nil {
+		t.Fatal(err)
+	}
+	waitForVideoStatusKind(t, manager, first, HLSCacheKind, "ready")
+	firstStatus := manager.StatusKind(first, HLSCacheKind)
+	firstManifest, ok := manager.AcquireHLSAsset(first, firstStatus.CacheKey, hlsManifestName)
+	if !ok {
+		t.Fatal("first manifest unavailable")
+	}
+	blockedPath.Store(filepath.Dir(firstManifest.Path))
+	firstManifest.Release()
+	if _, err := manager.RequestKind(second, HLSCacheKind); err != nil {
+		t.Fatal(err)
+	}
+	waitForVideoStatusKind(t, manager, second, HLSCacheKind, "ready")
+	secondStatus := manager.StatusKind(second, HLSCacheKind)
+	select {
+	case <-deleteStarted:
+	case <-time.After(time.Second):
+		t.Fatal("retired HLS deletion did not start")
+	}
+	acquired := make(chan bool, 1)
+	go func() {
+		asset, ok := manager.AcquireHLSAsset(second, secondStatus.CacheKey, hlsManifestName)
+		if ok {
+			asset.Release()
+		}
+		acquired <- ok
+	}()
+	select {
+	case ok := <-acquired:
+		if !ok {
+			t.Fatal("current HLS asset unavailable during retired deletion")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("current HLS acquisition blocked on retired directory deletion")
+	}
+	close(allowDelete)
+	waitForPathMissing(t, blockedPath.Load().(string))
+}
+
+func TestManagerRecoversHLSPackageAndRemovesOrphanDirectories(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "long.mp4")
+	if err := os.WriteFile(source, frontMoovFixture(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cacheDir := filepath.Join(root, "cache")
+	options := Options{
+		CacheDir: cacheDir, Resolver: testResolver{"long.mp4": source},
+		Builder:    &controlledBuilder{releases: map[string]chan struct{}{}},
+		HLS:        &fakeHLSBuilder{plan: HLSPlan{Eligible: true, CacheKind: HLSCacheKind, DurationSeconds: 12, EstimatedOutputBytes: 1024, RequiredFreeBytes: 1024, TargetSegmentSeconds: 6}},
+		HLSOptions: HLSPlanOptions{MinimumMovieIndexBytes: 1, MaximumGOPSeconds: 8, TargetSegmentSeconds: 6},
+		Space:      fixedSpace(1 << 40), RetireGrace: 10 * time.Millisecond,
+	}
+	manager, err := NewManager(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := videoItem(t, "long", "long.mp4", source)
+	if _, err := manager.RequestKind(item, HLSCacheKind); err != nil {
+		t.Fatal(err)
+	}
+	waitForVideoStatusKind(t, manager, item, HLSCacheKind, "ready")
+	key := manager.StatusKind(item, HLSCacheKind).CacheKey
+	manager.Close()
+	orphan := filepath.Join(cacheDir, ".hls-orphan.tmp")
+	if err := os.MkdirAll(orphan, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	restarted, err := NewManager(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restarted.Close()
+	if got := restarted.StatusKind(item, HLSCacheKind); got.State != "ready" || got.CacheKey != key {
+		t.Fatalf("restarted status=%#v", got)
+	}
+	if _, err := os.Stat(orphan); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("orphan directory remains: %v", err)
+	}
+	manifest, ok := restarted.AcquireHLSAsset(item, key, hlsManifestName)
+	if !ok {
+		t.Fatal("restarted manifest unavailable")
+	}
+	manifest.Release()
+	if err := os.WriteFile(manifest.Path, []byte("not a manifest"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := restarted.StatusKind(item, HLSCacheKind); got.State == "ready" || got.CacheKey != "" {
+		t.Fatalf("corrupt package remained ready: %#v", got)
+	}
+}
+
+func TestManagerRetriesRetiredHLSDirectoryDeletion(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "long.mp4")
+	if err := os.WriteFile(source, frontMoovFixture(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var removeCalls atomic.Int32
+	manager, err := NewManager(Options{
+		CacheDir: filepath.Join(root, "cache"), Resolver: testResolver{"long.mp4": source},
+		Builder:    &controlledBuilder{releases: map[string]chan struct{}{}},
+		HLS:        &fakeHLSBuilder{plan: HLSPlan{Eligible: true, CacheKind: HLSCacheKind, DurationSeconds: 12, EstimatedOutputBytes: 1024, RequiredFreeBytes: 1024, TargetSegmentSeconds: 6}},
+		HLSOptions: HLSPlanOptions{MinimumMovieIndexBytes: 1, MaximumGOPSeconds: 8, TargetSegmentSeconds: 6},
+		Space:      fixedSpace(1 << 40), LeaseDuration: 20 * time.Millisecond, RetireGrace: 10 * time.Millisecond,
+		RemoveAll: func(path string) error {
+			if removeCalls.Add(1) == 1 {
+				return errors.New("simulated directory sharing violation")
+			}
+			return os.RemoveAll(path)
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	item := videoItem(t, "long", "long.mp4", source)
+	if _, err := manager.RequestKind(item, HLSCacheKind); err != nil {
+		t.Fatal(err)
+	}
+	waitForVideoStatusKind(t, manager, item, HLSCacheKind, "ready")
+	status := manager.StatusKind(item, HLSCacheKind)
+	manifest, ok := manager.AcquireHLSAsset(item, status.CacheKey, hlsManifestName)
+	if !ok {
+		t.Fatal("manifest unavailable")
+	}
+	manifest.Release()
+	packageDir := filepath.Dir(manifest.Path)
+	if !manager.Clear(item.ID, status.CacheKey) {
+		t.Fatal("clear failed")
+	}
+	waitForPathMissing(t, packageDir)
+	if removeCalls.Load() < 2 {
+		t.Fatalf("directory delete calls=%d, want retry", removeCalls.Load())
+	}
+}
+
+func TestManagerRetiresHLSWhenSourceFingerprintChanges(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "long.mp4")
+	if err := os.WriteFile(source, frontMoovFixture(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewManager(Options{
+		CacheDir: filepath.Join(root, "cache"), Resolver: testResolver{"long.mp4": source},
+		Builder:    &controlledBuilder{releases: map[string]chan struct{}{}},
+		HLS:        &fakeHLSBuilder{plan: HLSPlan{Eligible: true, CacheKind: HLSCacheKind, DurationSeconds: 12, EstimatedOutputBytes: 1024, RequiredFreeBytes: 1024, TargetSegmentSeconds: 6}},
+		HLSOptions: HLSPlanOptions{MinimumMovieIndexBytes: 1, MaximumGOPSeconds: 8, TargetSegmentSeconds: 6},
+		Space:      fixedSpace(1 << 40), RetireGrace: 10 * time.Millisecond, LeaseDuration: 20 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	item := videoItem(t, "long", "long.mp4", source)
+	if _, err := manager.RequestKind(item, HLSCacheKind); err != nil {
+		t.Fatal(err)
+	}
+	waitForVideoStatusKind(t, manager, item, HLSCacheKind, "ready")
+	status := manager.StatusKind(item, HLSCacheKind)
+	manifest, ok := manager.AcquireHLSAsset(item, status.CacheKey, hlsManifestName)
+	if !ok {
+		t.Fatal("manifest unavailable")
+	}
+	manifest.Release()
+	file, err := os.OpenFile(source, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.Write(atom32("free", nil)); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	changed := videoItem(t, "long", "long.mp4", source)
+	if got := manager.StatusKind(changed, HLSCacheKind); got.State == "ready" || got.CacheKey != "" {
+		t.Fatalf("changed source kept HLS ready: %#v", got)
+	}
+	waitForPathMissing(t, filepath.Dir(manifest.Path))
+}
+
 type ineligibleBuilder struct{ calls int }
 
 func (b *ineligibleBuilder) Build(context.Context, string, string) error {
@@ -167,6 +605,42 @@ func TestManagerCachesIneligibleProbeResultBySourceFingerprint(t *testing.T) {
 	waitForVideoStatus(t, manager, changed, "ineligible")
 	if builder.calls != 2 {
 		t.Fatalf("changed fingerprint builder calls=%d", builder.calls)
+	}
+}
+
+func TestManagerCachesHLSIneligibleReasonBySourceFingerprint(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "long.mp4")
+	if err := os.WriteFile(path, frontMoovFixture(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	hls := &fakeHLSBuilder{plan: HLSPlan{
+		CacheKind: HLSCacheKind, Reason: "embedded subtitles are not supported by the HLS sidecar",
+		EstimatedOutputBytes: 1024, RequiredFreeBytes: 1024, TargetSegmentSeconds: 6,
+	}}
+	manager, err := NewManager(Options{
+		CacheDir: filepath.Join(root, "cache"), Resolver: testResolver{"long.mp4": path},
+		Builder: &controlledBuilder{releases: map[string]chan struct{}{}}, HLS: hls,
+		HLSOptions: HLSPlanOptions{MinimumMovieIndexBytes: 1, MaximumGOPSeconds: 8, TargetSegmentSeconds: 6},
+		Space:      fixedSpace(1 << 40),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	item := videoItem(t, "long", "long.mp4", path)
+	if _, err := manager.RequestKind(item, HLSCacheKind); err != nil {
+		t.Fatal(err)
+	}
+	waitForVideoStatusKind(t, manager, item, HLSCacheKind, "ineligible")
+	if status := manager.StatusKind(item, HLSCacheKind); !strings.Contains(status.Reason, "subtitles") {
+		t.Fatalf("status=%#v", status)
+	}
+	if _, err := manager.RequestKind(item, HLSCacheKind); !errors.Is(err, ErrNotEligible) {
+		t.Fatalf("second request error=%v", err)
+	}
+	if hls.calls != 1 {
+		t.Fatalf("HLS planner calls=%d", hls.calls)
 	}
 }
 
@@ -463,6 +937,62 @@ func TestManagerBackgroundBuildStopsWhenMediaStreamBegins(t *testing.T) {
 	t.Fatalf("build remained active: %#v", manager.Status(item))
 }
 
+func TestManagerTreatsCanceledHLSFFmpegAsNormalBackgroundCancellation(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "long.mp4")
+	if err := os.WriteFile(path, frontMoovFixture(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(root, "hls-ffmpeg-started")
+	command := func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		joined := strings.Join(args, " ")
+		switch {
+		case name == "ffmpeg":
+			return longRunningTestCommand(ctx, marker)
+		case strings.Contains(joined, "frame=best_effort_timestamp_time"):
+			return exec.CommandContext(ctx, "sh", "-c", `printf '%s' '{"frames":[{"best_effort_timestamp_time":"0"},{"best_effort_timestamp_time":"5"},{"best_effort_timestamp_time":"10"},{"best_effort_timestamp_time":"15"}]}'`)
+		default:
+			return exec.CommandContext(ctx, "sh", "-c", `printf '%s' '{"streams":[{"codec_type":"video","codec_name":"h264","profile":"High","level":40,"pix_fmt":"yuv420p","codec_tag_string":"avc1","field_order":"progressive","avg_frame_rate":"30/1","r_frame_rate":"30/1"}],"format":{"duration":"20"}}'`)
+		}
+	}
+	probe := FFmpegBuilder{Path: "ffmpeg", ProbePath: "ffprobe", Command: command}
+	gate := &cancelGate{}
+	manager, err := NewManager(Options{
+		CacheDir: filepath.Join(root, "cache"), Resolver: testResolver{"long.mp4": path},
+		Builder: &controlledBuilder{releases: map[string]chan struct{}{}},
+		HLS: FFmpegHLSPackager{Planner: HLSPlanner{
+			Probe: probe,
+			Options: HLSPlanOptions{
+				MinimumMovieIndexBytes: 1, MaximumGOPSeconds: 8, TargetSegmentSeconds: 6,
+			},
+		}, Command: command},
+		HLSOptions: HLSPlanOptions{MinimumMovieIndexBytes: 1, MaximumGOPSeconds: 8, TargetSegmentSeconds: 6},
+		Idle:       gate, Space: fixedSpace(1 << 40), QuietGrace: time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	item := videoItem(t, "long", "long.mp4", path)
+	if _, err := manager.RequestKind(item, HLSCacheKind); err != nil {
+		t.Fatal(err)
+	}
+	waitForCommandMarker(t, marker)
+	gate.beginMediaStream()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		status := manager.StatusKind(item, HLSCacheKind)
+		if status.BuildingMediaID == "" {
+			if status.State != "eligible" {
+				t.Fatalf("canceled HLS build became failure: %#v", status)
+			}
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("canceled HLS build remained active: %#v", manager.StatusKind(item, HLSCacheKind))
+}
+
 type builderFunc func(context.Context, string, string) error
 
 func (fn builderFunc) Build(ctx context.Context, source, output string) error {
@@ -720,6 +1250,18 @@ func waitForVideoStatus(t *testing.T, manager *Manager, item library.Media, stat
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatalf("status did not become %s: %#v", state, manager.Status(item))
+}
+
+func waitForVideoStatusKind(t *testing.T, manager *Manager, item library.Media, kind, state string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if status := manager.StatusKind(item, kind); status.State == state {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("status did not become %s: %#v", state, manager.StatusKind(item, kind))
 }
 
 func waitForPathMissing(t *testing.T, path string) {

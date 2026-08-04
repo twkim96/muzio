@@ -38,6 +38,7 @@ export interface RemotePlaybackSource {
   /** Direct source retained while an immutable optimization sidecar is used. */
   optimizationOriginalUrl?: string;
   optimizationOriginalMimeType?: string;
+  optimizationKind?: 'faststart-mp4' | 'hls-fmp4';
 }
 
 const STREAM_BASE_PATH = '/api/media/';

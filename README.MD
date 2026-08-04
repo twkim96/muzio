@@ -1,4 +1,4 @@
-# Muzio 1.4.1
+# Muzio 1.4.2
 
 Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 브라우저에서 탐색하고 재생하는 경량 self-hosted 미디어 앱입니다.
@@ -8,23 +8,24 @@ Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 | Item | Current contract |
 | --- | --- |
 | Product/service name | `Muzio` |
-| Version | `1.4.1` |
+| Version | `1.4.2` |
 | Primary client | React + TypeScript web app |
 | Backend | Go `1.22`, CGO-free |
 | Normal runtime | Go server가 API, media, `web_app/dist`를 한 origin에서 제공 |
 | Intended network | localhost, trusted LAN, Tailscale tailnet |
 | Authentication | 없음 |
-| Transcoding | 일반 fallback은 계획 API만 제공; AAC resume 및 명시적 video faststart에 stream-copy cache 사용 |
+| Transcoding | 재인코딩 없음; AAC resume, video faststart, HLS/fMP4에 명시적 stream-copy cache 사용 |
 | Persistence | config, library index, progress는 backend config directory; UI data는 browser storage |
 
 > **Security boundary:** 이 서버는 인증과 사용자 권한 분리가 없습니다.
 > 공용 인터넷에 직접 노출하지 마십시오. localhost, 신뢰된 LAN 또는 Tailscale
 > 내부에서만 사용합니다.
 
-`1.4.1`은 end-`moov` MP4/MOV를 사용자가 명시적으로 요청했을 때만 FFmpeg
-stream-copy `+faststart` sidecar로 준비합니다. 원본 파일은 수정하지 않으며,
-검증된 단일 ready slot과 불변 `cacheKey` URL만 재생에 사용합니다. HTTP/2,
-진단, direct Range 재생과 기존 AAC resume cache 계약은 그대로 유지됩니다.
+`1.4.2`는 end-`moov` MP4/MOV의 `+faststart`와 함께, 큰 front-`moov`를 가진
+H.264/AAC 영상의 HLS/fMP4 package를 사용자가 명시적으로 요청했을 때만
+stream-copy sidecar로 준비합니다. 원본 파일은 수정하지 않으며, 검증된 단일
+ready slot과 불변 `cacheKey` URL만 재생에 사용합니다. HTTP/2, 진단, direct
+Range 재생과 기존 AAC resume cache 계약은 그대로 유지됩니다.
 Ready 선택은 브라우저에 한 slot만 지속되어 앱 재시작 뒤 첫 재생에도 사용할 수
 있고, library row focus/pointer 진입 시 상태를 사전 갱신합니다.
 
@@ -75,7 +76,7 @@ Go HTTP server
   -> filesystem watcher + SSE/delta updates
   -> HTTP Range media streaming
   -> single-slot AAC resume remux cache
-  -> explicit single-slot video faststart sidecar
+  -> explicit single-slot video faststart file or HLS/fMP4 directory sidecar
   -> persistent playback progress
 ```
 
@@ -121,8 +122,28 @@ Important boundaries:
   for a renewable 30-minute playback lease. A sidecar load failure retries the
   original media once at the same resume position without changing media identity,
   then invalidates that browser's stale ready hint.
-- Direct and faststart Range endpoints use the same opt-in diagnostic cookies and
-  bounded request/byte/timing record, so A/B samples remain comparable.
+- Direct, faststart, and HLS asset endpoints use the same opt-in diagnostic
+  cookies and bounded request/byte/timing record. HLS records add only fixed
+  manifest/init identity or a numeric segment index, so resume request order is
+  measurable without logging paths or arbitrary request values.
+- Explicit HLS/fMP4 packaging for a large front movie index, limited to exactly
+  one progressive, at-most-60fps, 8-bit 4:2:0 H.264 Baseline/Main/High `avc1`
+  track at level 5.1 or below and at most one mono/stereo LC/HE-AAC track.
+  Profile, pixel format, field order, average/nominal frame rate, codec tag,
+  sample rate, and channel count are probed before packaging. Bounded keyframe
+  probing records GOP min/median/p95/max, rejects unsuitable long GOPs, and
+  verifies every generated segment boundary against a packaged random-access
+  point. The initial release deliberately omits the independent-segments tag
+  until Safari device validation; an unverified tag is rejected.
+- A missing or size-mismatched registered HLS asset invalidates that generation
+  instead of exposing it as ready again. Startup recovery compares the complete
+  validated package asset map with persisted metadata.
+- Retired file/directory deletion is detached under the lifecycle mutex and
+  performed after unlocking, so removal of a package with thousands of segments
+  cannot block requests for the current generation.
+- Safari/native-HLS clients select the immutable manifest while other browsers
+  remain on direct MP4. HLS failure retries direct playback once at the same
+  media ID and resume position.
 - Persistent backend `progress.v1.json` with timestamp conflict resolution.
 - Atomic config/progress writes with backup recovery.
 - Queue virtualization for large music queues.
@@ -134,7 +155,17 @@ Known limitations:
 
 - No authentication, multi-user isolation, or public-internet hardening.
 - No general-purpose fallback remux/transcode worker. Remux is limited to the
-  bounded AAC resume cache and a user-requested single video faststart copy.
+  bounded AAC resume cache and one user-requested video faststart or HLS copy.
+- Initial HLS packaging excludes HEVC, multiple video/audio tracks, embedded
+  subtitles, data/attachment tracks, and chapters rather than silently dropping
+  them. Interlaced, over-60fps, `avc3`, H.264 High 10/non-4:2:0, and multichannel
+  AAC combinations are also excluded until real-device evidence supports
+  widening the allowlist. HE-AACv2 is stereo-only. It does not create
+  adaptive-bitrate variants or re-encode long GOPs.
+- On a new browser/PWA with no persisted ready hint, a first immediate video tap
+  can still begin direct playback while the sidecar status request is in flight.
+  The real-device gate will determine whether bounded visible-row prefetch is
+  worth its request cost; playback does not wait and risk losing user activation.
 - Video thumbnail extraction requires ffmpeg; SVG fallback artwork remains
   available when ffmpeg is missing or a source cannot be decoded.
 - Browser codec support still determines direct-play success.
@@ -203,7 +234,7 @@ If `VMA_CONFIG` is omitted, the config path is:
 ```
 
 The `videio_music_app` directory name is a legacy compatibility identifier.
-It remains unchanged in `1.4.1` so existing config, library index, and playback
+It remains unchanged in `1.4.2` so existing config, library index, and playback
 progress are reused without migration risk. The workspace directory path and
 `VMA_*` environment variables are also compatibility surfaces; new public
 names, package names, binaries, health identifiers, and control-server entries
@@ -217,7 +248,7 @@ Backend files beside the resolved config:
 | `library-index.v1.log` | last-known library and revision journal |
 | `progress.v1.json` | versioned playback progress records |
 | `audio-resume-cache/v1/` | latest raw-AAC M4A resume cache and slot metadata |
-| `video-optimization/v1/` | one validated faststart sidecar, metadata, and temporary build files |
+| `video-optimization/v1/` | one validated faststart file or HLS/fMP4 directory, metadata, and temporary build output |
 
 Video optimization estimates the output at the source size and requires that
 much additional free space plus `max(5%, 512 MiB)`. During replacement, the
@@ -233,6 +264,13 @@ defer deletion, later Range requests renew the playback lease, and sharing-
 violation deletion failures remain retired for a bounded retry.
 If the original disappears, changes fingerprint, or becomes ineligible, its
 current sidecar is removed from metadata and retired for bounded cleanup.
+
+HLS defaults are a `16 MiB` minimum front movie index, `12 s` maximum GOP, and
+`6 s` target segment duration. They are conservative pre-device-review gates,
+not a claim that stream-copy creates exact six-second segments. Operators can
+adjust the measured eligibility gates with `VMA_HLS_MIN_MOOV_MIB` (1–4096) and
+`VMA_HLS_MAX_GOP_SECONDS` (>0–120). Actual segment min/median/p95/max remains part
+of the package metadata and real-device acceptance evidence.
 
 `progress.v1.json` writes are coalesced with a `2 s` quiet window and flushed
 on shutdown with a bounded deadline. Corrupt JSON starts with an empty progress
@@ -260,6 +298,8 @@ Environment variables:
 | `VMA_HTTPS` | Enable backend TLS with `1` or `true` |
 | `VMA_TLS_CERT` | TLS certificate path |
 | `VMA_TLS_KEY` | TLS private key path |
+| `VMA_HLS_MIN_MOOV_MIB` | HLS eligibility minimum front movie-index size in MiB (`16` default, 1–4096) |
+| `VMA_HLS_MAX_GOP_SECONDS` | HLS eligibility maximum measured GOP in seconds (`12` default, >0–120) |
 | `VMA_DEV_BACKEND` | Vite proxy target |
 
 Saved split roots (`audioRoots`, `videoRoots`, `imageRoots`) take precedence
@@ -281,7 +321,7 @@ window.muzioPlaybackDiagnostics.disable()
 The export is bounded to 400 entries and separates a per-sample `sampleId` from
 a diagnostic-session `transportCorrelationId`. A same-origin cookie carries
 the transport ID and a second path-scoped cookie carries the sample ID to
-`/api/media/`; `clear()` rotates only the sample cookie without changing the
+direct media and HLS asset paths; `clear()` rotates only the sample cookie without changing the
 media URL or its cache identity. In-flight requests retain the sample ID they
 started with. The backend emits matching `media stream` records at Info level.
 Normal requests stay out of Info logs, and diagnostics do not include
@@ -305,11 +345,14 @@ values.
 | `GET /api/audio-resume-cache` | Latest AAC resume-cache status |
 | `PUT /api/audio-resume-cache/{id}` | Queue the latest AAC cache candidate |
 | `GET/HEAD /api/audio-resume-cache/media/{id}` | Range-friendly cached M4A stream |
-| `GET /api/video-optimization/{id}` | Eligibility, space, build, and ready status |
+| `GET /api/video-optimization/{id}` | Faststart eligibility, space, build, and ready status |
+| `GET /api/video-optimization/{id}?kind=hls-fmp4` | HLS eligibility, GOP, package, and ready status |
 | `PUT /api/video-optimization/{id}` | Explicitly prepare one faststart sidecar |
+| `PUT /api/video-optimization/{id}?kind=hls-fmp4` | Explicitly prepare one HLS/fMP4 sidecar |
 | `DELETE /api/video-optimization/{id}/build` | Cancel that media's active build |
 | `DELETE /api/video-optimization/{id}/cache?v={cacheKey}` | Retire that immutable ready generation |
 | `GET/HEAD /api/video-optimization/media/{id}?v={cacheKey}` | Immutable Range-friendly MP4 sidecar |
+| `GET/HEAD /api/video-optimization/hls/{id}/{cacheKey}/{asset}` | Immutable manifest, init, or fMP4 segment |
 | `GET /api/progress` | Progress list |
 | `GET/PUT/DELETE /api/progress/{id}` | Progress record |
 
@@ -334,7 +377,7 @@ Backend:
 cd backend
 go test -count=1 ./...
 go test -race -count=1 \
-  ./internal/fallback ./internal/httpserver ./internal/library ./internal/progress
+  ./internal/config ./internal/httpserver ./internal/streaming ./internal/videoopt
 go vet ./...
 ```
 

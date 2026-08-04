@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import type { PlaybackSource } from '../source/source';
 import {
@@ -37,6 +37,40 @@ describe('playback diagnostic runs', () => {
       /^[a-f0-9]{32}$/,
     );
     expect(getPlaybackDiagnosticSampleId()).toMatch(/^[a-f0-9]{32}$/);
+  });
+
+  test('writes and clears correlation cookies for direct, faststart, and HLS paths', () => {
+    const cookieSetter = vi.spyOn(document, 'cookie', 'set');
+
+    setPlaybackDiagnosticsEnabled(true);
+    clearPlaybackDiagnostics();
+    recordPlaybackDiagnosticMilestone('video_selection', videoSource, 45);
+
+    for (const path of [
+      '/api/media/',
+      '/api/video-optimization/media/',
+      '/api/video-optimization/hls/',
+    ]) {
+      expect(cookieSetter.mock.calls.some(([value]) =>
+        value.includes('muzioDiagnosticTransportId=') && value.includes(`Path=${path}`),
+      )).toBe(true);
+      expect(cookieSetter.mock.calls.some(([value]) =>
+        value.includes('muzioDiagnosticSampleId=') && value.includes(`Path=${path}`),
+      )).toBe(true);
+    }
+
+    cookieSetter.mockClear();
+    setPlaybackDiagnosticsEnabled(false);
+    expect(cookieSetter.mock.calls.some(([value]) =>
+      value.includes('muzioDiagnosticTransportId=;') &&
+      value.includes('Path=/api/video-optimization/hls/') &&
+      value.includes('Max-Age=0'),
+    )).toBe(true);
+    expect(cookieSetter.mock.calls.some(([value]) =>
+      value.includes('muzioDiagnosticSampleId=;') &&
+      value.includes('Path=/api/video-optimization/hls/') &&
+      value.includes('Max-Age=0'),
+    )).toBe(true);
   });
 
   test('does not create diagnostic identifiers while diagnostics are disabled', () => {

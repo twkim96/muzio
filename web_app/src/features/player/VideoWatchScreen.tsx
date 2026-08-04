@@ -231,8 +231,14 @@ function VideoOptimizationPanel({
     let cancelled = false;
     let timer: number | null = null;
     const refresh = async () => {
-      const next = await videoOptimizationService.status(mediaId, true);
+      const [faststart, hls] = await Promise.all([
+        videoOptimizationService.status(mediaId, true, 'faststart-mp4'),
+        videoOptimizationService.supportsNativeHLS()
+          ? videoOptimizationService.status(mediaId, true, 'hls-fmp4')
+          : Promise.resolve(null),
+      ]);
       if (cancelled) return;
+      const next = preferredOptimizationStatus(faststart, hls);
       setStatus(next);
       if (next?.state === 'building') {
         timer = window.setTimeout(refresh, 1000);
@@ -255,6 +261,7 @@ function VideoOptimizationPanel({
     } finally { setBusy(false); }
   };
   const usingReady = status.url !== undefined && source.url.startsWith(status.url);
+  const kind = status.cacheKind;
 
   return (
     <section
@@ -264,7 +271,9 @@ function VideoOptimizationPanel({
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-[var(--color-fg)]">Faster playback copy</p>
+          <p className="text-sm font-medium text-[var(--color-fg)]">
+            {kind === 'hls-fmp4' ? 'Segmented playback copy' : 'Faster playback copy'}
+          </p>
           <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">
             {optimizationMessage(status, usingReady, playability)}
           </p>
@@ -273,15 +282,25 @@ function VideoOptimizationPanel({
               Estimated {formatSize(status.estimatedOutputBytes)} · free {formatSize(status.availableBytes)} · peak cache {formatSize(status.peakCacheBytes)}
             </p>
           )}
+          {kind === 'hls-fmp4' && status.gop !== undefined && (
+            <p className="text-xs leading-5 text-[var(--color-muted)]">
+              GOP median {status.gop.median.toFixed(1)}s · p95 {status.gop.p95.toFixed(1)}s · max {status.gop.max.toFixed(1)}s
+            </p>
+          )}
+          {status.state === 'building' && status.buildProgress !== undefined && (
+            <p className="text-xs leading-5 text-[var(--color-muted)]">
+              Packaging {Math.round(status.buildProgress * 100)}%
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {(status.state === 'eligible' || status.state === 'failed') && playability !== 'no' && (
-            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.prepare(mediaId))} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
-              {status.state === 'failed' ? 'Retry preparation' : 'Prepare faster playback'}
+            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.prepare(mediaId, kind))} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+              {status.state === 'failed' ? 'Retry preparation' : kind === 'hls-fmp4' ? 'Prepare segmented playback' : 'Prepare faster playback'}
             </button>
           )}
           {status.state === 'building' && (
-            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.cancel(mediaId))} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.cancel(mediaId, kind))} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
               Cancel build
             </button>
           )}
@@ -302,7 +321,7 @@ function VideoOptimizationPanel({
             </button>
           )}
           {status.state === 'ready' && !usingReady && status.cacheKey !== undefined && (
-            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.clear(mediaId, status.cacheKey!))} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.clear(mediaId, status.cacheKey!, kind))} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
               Clear copy
             </button>
           )}
@@ -313,16 +332,35 @@ function VideoOptimizationPanel({
 }
 
 function optimizationMessage(status: VideoOptimizationStatus, usingReady: boolean, playability: Playability): string {
-  if (status.state === 'ready') return usingReady ? 'Playing the immutable faststart copy.' : 'The copy is ready. It will be selected for later playback.';
+  if (status.state === 'ready') {
+    const copy = status.cacheKind === 'hls-fmp4' ? 'segmented HLS copy' : 'faststart copy';
+    return usingReady ? `Playing the immutable ${copy}.` : `The ${copy} is ready. It will be selected for later playback.`;
+  }
   if (status.state === 'building') return 'Preparing in the background. Existing playback stays on the original file.';
   if (status.state === 'insufficient-space') return 'Not enough free space to build the copy safely.';
   if (status.state === 'failed') return status.reason ?? 'Preparation failed. Direct playback remains available.';
   if (status.state === 'eligible' && playability === 'no') return 'The browser reports this codec as unsupported, so a container-only copy would not help. Direct playback remains available.';
+  if (status.state === 'eligible' && status.cacheKind === 'hls-fmp4') return 'This large front index can be packaged as HLS/fMP4 without re-encoding. The original is never modified.';
   if (status.state === 'eligible') return 'This end-moov file can be copied without re-encoding. The original is never modified.';
+  if (status.cacheKind === 'hls-fmp4' && status.reason !== undefined) return `${status.reason} Direct playback remains available.`;
   if (status.layout === 'front-moov' && (status.movieIndexBytes ?? 0) >= 16 * 1024 * 1024) return 'The index is already at the front, so faststart cannot help. This large index is a segmented-playback candidate for 1.4.2.';
   if (status.layout === 'front-moov') return 'This file already has a front-loaded index; no faster copy is needed.';
   if (status.layout === 'fragmented') return 'Fragmented MP4 is not copied by this faststart cache; direct playback remains available.';
   return status.reason ?? 'This file is not eligible; direct playback remains available.';
+}
+
+function preferredOptimizationStatus(
+  faststart: VideoOptimizationStatus | null,
+  hls: VideoOptimizationStatus | null,
+): VideoOptimizationStatus | null {
+  if (
+    hls !== null &&
+    ['eligible', 'building', 'ready', 'failed', 'insufficient-space'].includes(hls.state)
+  ) {
+    return hls;
+  }
+  if (hls?.layout === 'front-moov') return hls;
+  return faststart ?? hls;
 }
 
 function VideoDescription({

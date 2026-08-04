@@ -47,6 +47,13 @@ type StreamActivityReporter interface {
 	BeginMediaStream() func()
 }
 
+// ContentDiagnosticFields contains only server-derived, bounded media details.
+// It must never carry filesystem paths or arbitrary request values.
+type ContentDiagnosticFields struct {
+	HLSAsset        string
+	HLSSegmentIndex *int
+}
+
 type mediaResponseRecorder struct {
 	http.ResponseWriter
 	status         int
@@ -238,6 +245,7 @@ func ServeContentWithDiagnostics(
 	mediaID string,
 	mediaType string,
 	sourceKind string,
+	diagnosticFields ...ContentDiagnosticFields,
 ) {
 	if logger == nil {
 		logger = slog.Default()
@@ -252,10 +260,7 @@ func ServeContentWithDiagnostics(
 		diagnosticSampleID = mediaDiagnosticCookieID(r, diagnosticSampleCookieName)
 		logLevel = slog.LevelInfo
 	}
-	logger.Log(
-		r.Context(),
-		logLevel,
-		"media stream",
+	attributes := []any{
 		"id", mediaID,
 		"type", mediaType,
 		"source_kind", sourceKind,
@@ -272,7 +277,17 @@ func ServeContentWithDiagnostics(
 		"duration_ms", time.Since(started).Milliseconds(),
 		"request_canceled", r.Context().Err() != nil,
 		"write_error", rec.writeErr,
-	)
+	}
+	if len(diagnosticFields) > 0 {
+		fields := diagnosticFields[0]
+		if fields.HLSAsset != "" {
+			attributes = append(attributes, "hls_asset", fields.HLSAsset)
+		}
+		if fields.HLSSegmentIndex != nil {
+			attributes = append(attributes, "hls_segment_index", *fields.HLSSegmentIndex)
+		}
+	}
+	logger.Log(r.Context(), logLevel, "media stream", attributes...)
 }
 
 func mediaDiagnosticTransportID(r *http.Request) string {

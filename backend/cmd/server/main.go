@@ -451,9 +451,20 @@ func configureVideoOptimizationWithProbeLookup(
 		logger.Info("video optimization disabled", "reason", "ffprobe not found in PATH")
 		return nil
 	}
+	ffmpegBuilder := videoopt.FFmpegBuilder{Path: ffmpegInfo.Path, ProbePath: probePath}
+	hlsOptions, err := videoHLSPlanOptions(os.LookupEnv)
+	var hlsBuilder videoopt.HLSBuilder
+	if err != nil {
+		logger.Warn("video HLS optimization disabled", "error", err)
+		hlsOptions = videoopt.HLSPlanOptions{}
+	} else {
+		hlsPlanner := videoopt.HLSPlanner{Probe: ffmpegBuilder, Options: hlsOptions}
+		hlsBuilder = videoopt.FFmpegHLSPackager{Planner: hlsPlanner}
+	}
 	manager, err := videoopt.NewManager(videoopt.Options{
 		CacheDir: cachePath, Resolver: service, Idle: service,
-		Builder: videoopt.FFmpegBuilder{Path: ffmpegInfo.Path, ProbePath: probePath}, Logger: logger,
+		Builder: ffmpegBuilder, HLS: hlsBuilder,
+		HLSOptions: hlsOptions, Logger: logger,
 	})
 	if err != nil {
 		logger.Warn("video optimization unavailable", "path", cachePath, "error", err)
@@ -461,6 +472,29 @@ func configureVideoOptimizationWithProbeLookup(
 	}
 	logger.Info("video optimization configured", "cache", cachePath)
 	return manager
+}
+
+func videoHLSPlanOptions(lookup func(string) (string, bool)) (videoopt.HLSPlanOptions, error) {
+	options := videoopt.HLSPlanOptions{
+		MinimumMovieIndexBytes: 16 << 20,
+		MaximumGOPSeconds:      12,
+		TargetSegmentSeconds:   6,
+	}
+	if raw, found := lookup("VMA_HLS_MIN_MOOV_MIB"); found {
+		value, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+		if err != nil || value <= 0 || value > 4096 {
+			return options, errors.New("VMA_HLS_MIN_MOOV_MIB must be between 1 and 4096")
+		}
+		options.MinimumMovieIndexBytes = value << 20
+	}
+	if raw, found := lookup("VMA_HLS_MAX_GOP_SECONDS"); found {
+		value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+		if err != nil || value <= 0 || value > 120 {
+			return options, errors.New("VMA_HLS_MAX_GOP_SECONDS must be between 0 and 120")
+		}
+		options.MaximumGOPSeconds = value
+	}
+	return options, nil
 }
 
 // thumbnailWorkerCount defaults conservatively for a personal MacBook server.

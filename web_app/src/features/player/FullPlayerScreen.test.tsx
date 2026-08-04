@@ -29,6 +29,7 @@ import { AUDIO_NETWORK_RETRY_HINT_DELAY_MS } from './playbackNetworkStatus';
 import { VideoSurfaceProvider } from './VideoMount';
 import { createPlayerStore } from './playerStore';
 import { videoOptimizationService } from './videoOptimizationService';
+import { videoMimeTypeForSource } from './PersistentVidstackPlayer';
 
 function fakeElement(): MediaElementLike {
   return {
@@ -928,6 +929,15 @@ describe('FullPlayerScreen', () => {
     expect(screen.queryByTestId('now-playing-art')).not.toBeInTheDocument();
   });
 
+  test('passes an HLS MIME source to Vidstack', async () => {
+    const source = {
+      kind: 'remote', mediaId: 'v1', mediaType: 'video', name: 'movie.mp4',
+      url: '/api/video-optimization/hls/v1/0123456789abcdef01234567/index.m3u8',
+      mimeType: 'application/vnd.apple.mpegurl',
+    } as const;
+    expect(videoMimeTypeForSource(source)).toBe('application/vnd.apple.mpegurl');
+  });
+
   test('offers explicit faststart prepare with storage estimates', async () => {
     const eligible = {
       state: 'eligible' as const,
@@ -956,8 +966,38 @@ describe('FullPlayerScreen', () => {
     renderScreenWithoutVideoSurface(store);
     expect(await screen.findByTestId('video-optimization')).toHaveTextContent('Estimated 1.0 KB');
     fireEvent.click(screen.getByRole('button', { name: 'Prepare faster playback' }));
-    await waitFor(() => expect(prepare).toHaveBeenCalledWith('v1'));
+    await waitFor(() => expect(prepare).toHaveBeenCalledWith('v1', 'faststart-mp4'));
     expect(await screen.findByRole('button', { name: 'Cancel build' })).toBeInTheDocument();
+  });
+
+  test('offers HLS preparation for a native-HLS large front index', async () => {
+    const hlsEligible = {
+      state: 'eligible' as const,
+      mediaId: 'v1', eligible: true, layout: 'front-moov' as const,
+      cacheKind: 'hls-fmp4' as const,
+      estimatedOutputBytes: 2048, requiredFreeBytes: 512 * 1024 * 1024 + 2048,
+      availableBytes: 2 * 1024 * 1024 * 1024, cacheUsedBytes: 0,
+      peakCacheBytes: 2048, movieIndexBytes: 32 * 1024 * 1024,
+      gop: { count: 10, min: 5, median: 6, p95: 7, max: 8 },
+    };
+    vi.spyOn(videoOptimizationService, 'supportsNativeHLS').mockReturnValue(true);
+    vi.spyOn(videoOptimizationService, 'status').mockImplementation(async (_id, _refresh, kind) => (
+      kind === 'hls-fmp4'
+        ? hlsEligible
+        : { ...hlsEligible, state: 'ineligible', eligible: false, cacheKind: 'faststart-mp4' }
+    ));
+    const prepare = vi.spyOn(videoOptimizationService, 'prepare').mockResolvedValue({
+      ...hlsEligible, state: 'building', buildingMediaId: 'v1',
+    });
+    const store = createPlayerStore();
+    store.getState().setSessionForTests('video', fakeSession({
+      status: { kind: 'paused' }, source: videoSource, positionSec: 45, durationSec: 120,
+    }));
+    renderScreenWithoutVideoSurface(store);
+    const button = await screen.findByRole('button', { name: 'Prepare segmented playback' });
+    expect(screen.getByTestId('video-optimization')).toHaveTextContent('GOP median 6.0s');
+    fireEvent.click(button);
+    await waitFor(() => expect(prepare).toHaveBeenCalledWith('v1', 'hls-fmp4'));
   });
 
   test('video external playback actions pass the stream URL without changing playback', async () => {

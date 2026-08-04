@@ -30,6 +30,7 @@ describe('videoOptimizationService', () => {
       ...source,
       mimeType: 'video/mp4',
       url: '/api/video-optimization/media/video?v=key#t=45',
+      optimizationKind: 'faststart-mp4',
       optimizationOriginalUrl: '/api/media/video#t=45',
       optimizationOriginalMimeType: 'video/mp4',
     });
@@ -107,5 +108,43 @@ describe('videoOptimizationService', () => {
     restored.invalidate('video');
     expect(restored.resolve(source)).toEqual(source);
     expect(values.size).toBe(0);
+  });
+
+  it('selects native HLS with the original identity and resume fragment', async () => {
+    const hlsReady: VideoOptimizationStatus = {
+      ...ready,
+      layout: 'front-moov',
+      cacheKind: 'hls-fmp4',
+      cacheKey: 'hls-key',
+      url: '/api/video-optimization/hls/video/hls-key/index.m3u8',
+    };
+    const service = createVideoOptimizationService({
+      fetchStatus: async () => hlsReady,
+      canPlayHLS: () => true,
+      storage: null,
+    });
+    await service.status('video', true, 'hls-fmp4');
+    expect(service.resolve(source)).toEqual({
+      ...source,
+      url: '/api/video-optimization/hls/video/hls-key/index.m3u8#t=45',
+      mimeType: 'application/vnd.apple.mpegurl',
+      optimizationKind: 'hls-fmp4',
+      optimizationOriginalUrl: source.url,
+      optimizationOriginalMimeType: source.mimeType,
+    });
+  });
+
+  it('keeps non-native HLS browsers on the direct source', async () => {
+    const service = createVideoOptimizationService({
+      fetchStatus: async () => ({
+        ...ready,
+        cacheKind: 'hls-fmp4',
+        url: '/api/video-optimization/hls/video/key/index.m3u8',
+      }),
+      canPlayHLS: () => false,
+      storage: null,
+    });
+    await service.status('video', true, 'hls-fmp4');
+    expect(service.resolve(source)).toEqual(source);
   });
 });

@@ -25,12 +25,23 @@ type fakeVideoOptimization struct {
 	clearedID  string
 	clearedKey string
 	releases   int
+	hlsPaths   map[string]string
 }
 
 func (m *fakeVideoOptimization) Status(library.Media) videoopt.Status { return m.status }
+func (m *fakeVideoOptimization) StatusKind(_ library.Media, kind string) videoopt.Status {
+	status := m.status
+	status.CacheKind = kind
+	return status
+}
 func (m *fakeVideoOptimization) Request(item library.Media) (videoopt.Status, error) {
 	m.requested = item.ID
 	return m.status, nil
+}
+func (m *fakeVideoOptimization) RequestKind(item library.Media, kind string) (videoopt.Status, error) {
+	status, err := m.Request(item)
+	status.CacheKind = kind
+	return status, err
 }
 func (m *fakeVideoOptimization) Cancel(id string) bool { m.cancelled = id; return true }
 func (m *fakeVideoOptimization) Clear(id, key string) bool {
@@ -46,6 +57,26 @@ func (m *fakeVideoOptimization) Acquire(_ library.Media, key string) (videoopt.R
 		return videoopt.ReadyFile{}, false
 	}
 	return videoopt.ReadyFile{Path: m.path, CacheKey: key, Size: info.Size(), ModifiedAt: info.ModTime(), Release: func() { m.releases++ }}, true
+}
+func (m *fakeVideoOptimization) AcquireHLSAsset(_ library.Media, key, asset string) (videoopt.ReadyAsset, bool) {
+	path, found := m.hlsPaths[asset]
+	if !found || key != m.readyKey {
+		return videoopt.ReadyAsset{}, false
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return videoopt.ReadyAsset{}, false
+	}
+	kind := "segment"
+	if asset == "index.m3u8" {
+		kind = "manifest"
+	} else if asset == "init.mp4" {
+		kind = "init"
+	}
+	return videoopt.ReadyAsset{
+		Path: path, CacheKey: key, Asset: videoopt.HLSAsset{Name: asset, Size: info.Size(), Kind: kind},
+		ModifiedAt: info.ModTime(), Release: func() { m.releases++ },
+	}, true
 }
 
 type videoOptimizationLister struct {
@@ -105,6 +136,147 @@ func TestVideoOptimizationStatusPrepareCancelAndClearRoutes(t *testing.T) {
 	var status videoopt.Status
 	if err := json.NewDecoder(recorder.Body).Decode(&status); err != nil || status.MediaID != item.ID {
 		t.Fatalf("status=%#v error=%v", status, err)
+	}
+}
+
+func TestVideoOptimizationHLSKindStatusAndPrepare(t *testing.T) {
+	item := library.Media{ID: "video", Type: library.MediaTypeVideo, Name: "movie.mp4"}
+	manager := &fakeVideoOptimization{status: videoopt.Status{State: "eligible", MediaID: item.ID, Eligible: true}}
+	lister := &videoOptimizationLister{stubLister: &stubLister{items: []library.Media{item}}, manager: manager}
+	handler := NewHandler(testLogger(), lister, nil)
+	for _, method := range []string{http.MethodGet, http.MethodPut} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(method, "/api/video-optimization/video?kind=hls-fmp4", nil))
+		if recorder.Code != map[string]int{http.MethodGet: http.StatusOK, http.MethodPut: http.StatusAccepted}[method] {
+			t.Fatalf("%s status=%d body=%s", method, recorder.Code, recorder.Body.String())
+		}
+		var status videoopt.Status
+		if err := json.NewDecoder(recorder.Body).Decode(&status); err != nil || status.CacheKind != videoopt.HLSCacheKind {
+			t.Fatalf("status=%#v error=%v", status, err)
+		}
+	}
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/video-optimization/video?kind=unknown", nil))
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("unknown kind status=%d", recorder.Code)
+	}
+}
+
+func TestVideoOptimizationHLSAssetsMIMEGzipRangeAndTraversal(t *testing.T) {
+	dir := t.TempDir()
+	paths := map[string]string{}
+	for name, data := range map[string][]byte{
+		"index.m3u8":     []byte("#EXTM3U\n#EXT-X-ENDLIST\n"),
+		"init.mp4":       []byte("0123456789"),
+		"seg-000000.m4s": []byte("abcdefghij"),
+	} {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		paths[name] = path
+	}
+	item := library.Media{ID: "video", Type: library.MediaTypeVideo, Name: "movie.mp4"}
+	key := "0123456789abcdef01234567"
+	manager := &fakeVideoOptimization{readyKey: key, hlsPaths: paths}
+	lister := &videoOptimizationLister{stubLister: &stubLister{items: []library.Media{item}}, manager: manager}
+	handler := NewHandler(testLogger(), lister, nil)
+
+	manifestRequest := httptest.NewRequest(http.MethodGet, "/api/video-optimization/hls/video/"+key+"/index.m3u8", nil)
+	manifestRequest.Header.Set("Accept-Encoding", "gzip")
+	manifestRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(manifestRecorder, manifestRequest)
+	if manifestRecorder.Code != http.StatusOK || manifestRecorder.Header().Get("Content-Type") != "application/vnd.apple.mpegurl" || manifestRecorder.Header().Get("Content-Encoding") != "gzip" || !strings.Contains(manifestRecorder.Header().Get("Vary"), "Accept-Encoding") {
+		t.Fatalf("manifest status=%d headers=%v", manifestRecorder.Code, manifestRecorder.Header())
+	}
+
+	segmentRequest := httptest.NewRequest(http.MethodGet, "/api/video-optimization/hls/video/"+key+"/seg-000000.m4s", nil)
+	segmentRequest.Header.Set("Range", "bytes=2-5")
+	segmentRequest.Header.Set("Accept-Encoding", "gzip")
+	segmentRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(segmentRecorder, segmentRequest)
+	if segmentRecorder.Code != http.StatusPartialContent || segmentRecorder.Body.String() != "cdef" || segmentRecorder.Header().Get("Content-Encoding") != "" || segmentRecorder.Header().Get("Content-Type") != "video/iso.segment" {
+		t.Fatalf("segment status=%d body=%q headers=%v", segmentRecorder.Code, segmentRecorder.Body.String(), segmentRecorder.Header())
+	}
+	fullSegmentRequest := httptest.NewRequest(http.MethodGet, "/api/video-optimization/hls/video/"+key+"/init.mp4", nil)
+	fullSegmentRequest.Header.Set("Accept-Encoding", "gzip")
+	fullSegmentRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(fullSegmentRecorder, fullSegmentRequest)
+	if fullSegmentRecorder.Code != http.StatusOK || fullSegmentRecorder.Header().Get("Content-Encoding") != "" {
+		t.Fatalf("full segment status=%d headers=%v", fullSegmentRecorder.Code, fullSegmentRecorder.Header())
+	}
+	headRequest := httptest.NewRequest(http.MethodHead, "/api/video-optimization/hls/video/"+key+"/init.mp4", nil)
+	headRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(headRecorder, headRequest)
+	if headRecorder.Code != http.StatusOK || headRecorder.Body.Len() != 0 || headRecorder.Header().Get("Content-Length") != "10" || headRecorder.Header().Get("ETag") == "" {
+		t.Fatalf("HEAD status=%d body=%q headers=%v", headRecorder.Code, headRecorder.Body.String(), headRecorder.Header())
+	}
+
+	for _, path := range []string{
+		"/api/video-optimization/hls/video/stale/index.m3u8",
+		"/api/video-optimization/hls/video/" + key + "/../secret",
+		"/api/video-optimization/hls/video/" + key + "/missing.m4s",
+	} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusNotFound {
+			t.Fatalf("%s status=%d", path, recorder.Code)
+		}
+	}
+}
+
+func TestVideoOptimizationHLSAssetLogsDiagnosticCorrelation(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "seg-000000.m4s")
+	if err := os.WriteFile(path, []byte("abcdefghij"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	item := library.Media{ID: "video", Type: library.MediaTypeVideo, Name: "movie.mp4"}
+	key := "0123456789abcdef01234567"
+	manager := &fakeVideoOptimization{readyKey: key, hlsPaths: map[string]string{"seg-000000.m4s": path}}
+	lister := &videoOptimizationLister{stubLister: &stubLister{items: []library.Media{item}}, manager: manager}
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	handler := NewHandler(logger, lister, nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/video-optimization/hls/video/"+key+"/seg-000000.m4s", nil)
+	request.AddCookie(&http.Cookie{Name: "muzioDiagnosticTransportId", Value: "0123456789abcdef0123456789abcdef"})
+	request.AddCookie(&http.Cookie{Name: "muzioDiagnosticSampleId", Value: "abcdef0123456789abcdef0123456789"})
+	request.Header.Set("Range", "bytes=2-5")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusPartialContent || recorder.Body.String() != "cdef" {
+		t.Fatalf("status=%d body=%q", recorder.Code, recorder.Body.String())
+	}
+	logText := logs.String()
+	for _, want := range []string{
+		`msg="media stream"`,
+		`source_kind=hls-segment`,
+		`hls_segment_index=0`,
+		`diagnostic_transport_id=0123456789abcdef0123456789abcdef`,
+		`diagnostic_sample_id=abcdef0123456789abcdef0123456789`,
+	} {
+		if !strings.Contains(logText, want) {
+			t.Fatalf("HLS diagnostic missing %q: %s", want, logText)
+		}
+	}
+}
+
+func TestHLSContentDiagnosticFieldsExposeOnlyBoundedAssetIdentity(t *testing.T) {
+	manifest := hlsContentDiagnosticFields(videoopt.HLSAsset{Name: "index.m3u8", Kind: "manifest"})
+	if manifest.HLSAsset != "index.m3u8" || manifest.HLSSegmentIndex != nil {
+		t.Fatalf("manifest fields=%#v", manifest)
+	}
+	init := hlsContentDiagnosticFields(videoopt.HLSAsset{Name: "init.mp4", Kind: "init"})
+	if init.HLSAsset != "init.mp4" || init.HLSSegmentIndex != nil {
+		t.Fatalf("init fields=%#v", init)
+	}
+	segment := hlsContentDiagnosticFields(videoopt.HLSAsset{Name: "seg-000742.m4s", Kind: "segment"})
+	if segment.HLSAsset != "" || segment.HLSSegmentIndex == nil || *segment.HLSSegmentIndex != 742 {
+		t.Fatalf("segment fields=%#v", segment)
+	}
+	unknown := hlsContentDiagnosticFields(videoopt.HLSAsset{Name: "user-value", Kind: "segment"})
+	if unknown.HLSAsset != "" || unknown.HLSSegmentIndex != nil {
+		t.Fatalf("unbounded fields=%#v", unknown)
 	}
 }
 

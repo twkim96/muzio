@@ -2,13 +2,31 @@ package videoopt
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
+
+func longRunningTestCommand(ctx context.Context, marker string) *exec.Cmd {
+	return exec.CommandContext(ctx, "sh", "-c", `touch "$1"; exec sleep 30`, "sh", marker)
+}
+
+func waitForCommandMarker(t *testing.T, marker string) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(marker); err == nil {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("command marker %q was not created", marker)
+}
 
 func TestFFmpegBuilderUsesPreservingFaststartCommandAndValidatesProbe(t *testing.T) {
 	dir := t.TempDir()
@@ -59,6 +77,50 @@ func TestFFmpegBuilderRejectsSameSourceAndOutput(t *testing.T) {
 	if err := builder.Build(context.Background(), "same.mp4", "same.mp4"); err == nil {
 		t.Fatal("same path accepted")
 	}
+}
+
+func TestFFmpegBuilderNormalizesCanceledProcesses(t *testing.T) {
+	t.Run("probe", func(t *testing.T) {
+		marker := filepath.Join(t.TempDir(), "probe-started")
+		builder := FFmpegBuilder{Path: "ffmpeg", ProbePath: "ffprobe", Command: func(ctx context.Context, _ string, _ ...string) *exec.Cmd {
+			return longRunningTestCommand(ctx, marker)
+		}}
+		ctx, cancel := context.WithCancel(context.Background())
+		result := make(chan error, 1)
+		go func() {
+			_, err := builder.probe(ctx, "source.mp4")
+			result <- err
+		}()
+		waitForCommandMarker(t, marker)
+		cancel()
+		if err := <-result; !errors.Is(err, context.Canceled) {
+			t.Fatalf("probe error=%v, want context canceled", err)
+		}
+	})
+
+	t.Run("faststart", func(t *testing.T) {
+		dir := t.TempDir()
+		source := filepath.Join(dir, "source.mp4")
+		output := filepath.Join(dir, "output.mp4")
+		marker := filepath.Join(dir, "ffmpeg-started")
+		if err := os.WriteFile(source, endMoovFixture(), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		builder := FFmpegBuilder{Path: "ffmpeg", ProbePath: "ffprobe", Command: func(ctx context.Context, name string, _ ...string) *exec.Cmd {
+			if name == "ffprobe" {
+				return exec.CommandContext(ctx, "sh", "-c", `printf '%s' '{"streams":[{"codec_type":"video","codec_name":"h264"}]}'`)
+			}
+			return longRunningTestCommand(ctx, marker)
+		}}
+		ctx, cancel := context.WithCancel(context.Background())
+		result := make(chan error, 1)
+		go func() { result <- builder.Build(ctx, source, output) }()
+		waitForCommandMarker(t, marker)
+		cancel()
+		if err := <-result; !errors.Is(err, context.Canceled) {
+			t.Fatalf("faststart error=%v, want context canceled", err)
+		}
+	})
 }
 
 func TestTailBufferKeepsBoundedSuffix(t *testing.T) {

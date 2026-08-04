@@ -842,7 +842,10 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           !slot.optimizationFallbackInProgress
         ) {
           slot.optimizationFallbackInProgress = true;
-          videoOptimization.invalidate(nextState.source.mediaId);
+          videoOptimization.invalidate(
+            nextState.source.mediaId,
+            nextState.source.optimizationKind,
+          );
           const fallback = restoreOriginalVideoSource(
             nextState.source,
             nextState.positionSec,
@@ -1220,7 +1223,11 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         }
         const generation = ++slot.seedPreparationGeneration;
         slot.seedPreparationPending = true;
-        void videoOptimization.status(seededSource.mediaId, true).then(() => {
+        const refreshes = [videoOptimization.status(seededSource.mediaId, true, 'faststart-mp4')];
+        if (videoOptimization.supportsNativeHLS()) {
+          refreshes.push(videoOptimization.status(seededSource.mediaId, true, 'hls-fmp4'));
+        }
+        void Promise.all(refreshes).then(() => {
           if (generation !== slot.seedPreparationGeneration) return;
           slot.seedPreparationPending = false;
           loadSeed(videoOptimization.resolve(seededSource));
@@ -1245,7 +1252,11 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
 
       prefetchVideoOptimization(mediaId) {
         if (videoOptimization === null || mediaId.trim() === '') return;
-        void videoOptimization.status(mediaId).catch(() => {
+        const requests = [videoOptimization.status(mediaId, false, 'faststart-mp4')];
+        if (videoOptimization.supportsNativeHLS()) {
+          requests.push(videoOptimization.status(mediaId, false, 'hls-fmp4'));
+        }
+        void Promise.all(requests).catch(() => {
           // Prefetch must never interfere with the direct playback path.
         });
       },

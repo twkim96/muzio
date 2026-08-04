@@ -34,9 +34,18 @@ type probeDocument struct {
 }
 
 type probeStream struct {
-	CodecType string            `json:"codec_type"`
-	CodecName string            `json:"codec_name"`
-	Tags      map[string]string `json:"tags"`
+	CodecType    string            `json:"codec_type"`
+	CodecName    string            `json:"codec_name"`
+	Profile      string            `json:"profile"`
+	Level        int               `json:"level"`
+	PixelFormat  string            `json:"pix_fmt"`
+	CodecTag     string            `json:"codec_tag_string"`
+	FieldOrder   string            `json:"field_order"`
+	AvgFrameRate string            `json:"avg_frame_rate"`
+	RFrameRate   string            `json:"r_frame_rate"`
+	SampleRate   string            `json:"sample_rate"`
+	Channels     int               `json:"channels"`
+	Tags         map[string]string `json:"tags"`
 }
 
 type probeChapter struct {
@@ -96,8 +105,11 @@ func (b FFmpegBuilder) Build(ctx context.Context, source, output string) error {
 	stderr := newTailBuffer(commandTailLimit)
 	cmd.Stdout = io.Discard
 	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("ffmpeg faststart: %w: %s", err, stderr.String())
+	if runErr := cmd.Run(); runErr != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		return fmt.Errorf("ffmpeg faststart: %w: %s", runErr, stderr.String())
 	}
 	after, err := b.probe(ctx, output)
 	if err != nil {
@@ -125,14 +137,17 @@ func (b FFmpegBuilder) probe(ctx context.Context, path string) (probeDocument, e
 		command = exec.CommandContext
 	}
 	cmd := command(ctx, probePath,
-		"-v", "error", "-show_entries", "stream=codec_type,codec_name:stream_tags:format=duration:format_tags:chapter=start_time,end_time:chapter_tags",
+		"-v", "error", "-show_entries", "stream=codec_type,codec_name,profile,level,pix_fmt,codec_tag_string,field_order,avg_frame_rate,r_frame_rate,sample_rate,channels:stream_tags:format=duration:format_tags:chapter=start_time,end_time:chapter_tags",
 		"-of", "json", path,
 	)
 	stdout := &limitedBuffer{limit: probeOutputLimit}
 	stderr := newTailBuffer(commandTailLimit)
 	cmd.Stdout, cmd.Stderr = stdout, stderr
-	if err := cmd.Run(); err != nil {
-		return probeDocument{}, fmt.Errorf("ffprobe: %w: %s", err, stderr.String())
+	if runErr := cmd.Run(); runErr != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return probeDocument{}, ctxErr
+		}
+		return probeDocument{}, fmt.Errorf("ffprobe: %w: %s", runErr, stderr.String())
 	}
 	if stdout.overflow {
 		return probeDocument{}, errors.New("ffprobe output exceeded bounded limit")

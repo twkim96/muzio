@@ -3,78 +3,93 @@ import {
   clearVideoOptimization,
   fetchVideoOptimizationStatus,
   prepareVideoOptimization,
+  type VideoOptimizationKind,
   type VideoOptimizationStatus,
 } from '../../core/api/videoOptimizationClient';
 import type { PlaybackSource } from '../../core/playback/source/source';
 import { buildStreamingUrl } from '../../core/playback/source/source';
 
 export interface VideoOptimizationService {
-  status(mediaId: string, refresh?: boolean): Promise<VideoOptimizationStatus | null>;
-  prepare(mediaId: string): Promise<VideoOptimizationStatus | null>;
-  cancel(mediaId: string): Promise<VideoOptimizationStatus | null>;
-  clear(mediaId: string, cacheKey: string): Promise<VideoOptimizationStatus | null>;
-  invalidate(mediaId: string): void;
+  status(mediaId: string, refresh?: boolean, kind?: VideoOptimizationKind): Promise<VideoOptimizationStatus | null>;
+  prepare(mediaId: string, kind?: VideoOptimizationKind): Promise<VideoOptimizationStatus | null>;
+  cancel(mediaId: string, kind?: VideoOptimizationKind): Promise<VideoOptimizationStatus | null>;
+  clear(mediaId: string, cacheKey: string, kind?: VideoOptimizationKind): Promise<VideoOptimizationStatus | null>;
+  invalidate(mediaId: string, kind?: VideoOptimizationKind): void;
+  supportsNativeHLS(): boolean;
   preferOriginal(mediaId: string): void;
   resolve(source: PlaybackSource): PlaybackSource;
 }
 
 export interface VideoOptimizationServiceOptions {
-  fetchStatus?: (mediaId: string) => Promise<VideoOptimizationStatus | null>;
-  prepare?: (mediaId: string) => Promise<VideoOptimizationStatus | null>;
-  cancel?: (mediaId: string) => Promise<VideoOptimizationStatus | null>;
-  clear?: (mediaId: string, cacheKey: string) => Promise<VideoOptimizationStatus | null>;
+  fetchStatus?: (mediaId: string, kind: VideoOptimizationKind) => Promise<VideoOptimizationStatus | null>;
+  prepare?: (mediaId: string, kind: VideoOptimizationKind) => Promise<VideoOptimizationStatus | null>;
+  cancel?: (mediaId: string, kind: VideoOptimizationKind) => Promise<VideoOptimizationStatus | null>;
+  clear?: (mediaId: string, cacheKey: string, kind: VideoOptimizationKind) => Promise<VideoOptimizationStatus | null>;
   storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null;
+  canPlayHLS?: () => boolean;
 }
 
 const READY_STORAGE_KEY = 'muzio.videoOptimization.ready.v1';
 
 export function createVideoOptimizationService(options: VideoOptimizationServiceOptions = {}): VideoOptimizationService {
-  const fetchStatus = options.fetchStatus ?? ((id) => fetchVideoOptimizationStatus(id));
-  const prepare = options.prepare ?? ((id) => prepareVideoOptimization(id));
-  const cancel = options.cancel ?? ((id) => cancelVideoOptimization(id));
-  const clear = options.clear ?? ((id, key) => clearVideoOptimization(id, key));
+  const fetchStatus = options.fetchStatus ?? ((id, kind) => fetchVideoOptimizationStatus(id, { kind }));
+  const prepare = options.prepare ?? ((id, kind) => prepareVideoOptimization(id, { kind }));
+  const cancel = options.cancel ?? ((id, kind) => cancelVideoOptimization(id, { kind }));
+  const clear = options.clear ?? ((id, key, kind) => clearVideoOptimization(id, key, { kind }));
+  const canPlayHLS = options.canPlayHLS ?? canPlayNativeHLS;
   const storage = options.storage === undefined ? browserStorage() : options.storage;
   const statuses = new Map<string, VideoOptimizationStatus>();
   const preferOriginalOnce = new Set<string>();
   const storedReady = readStoredReady(storage);
-  if (storedReady !== null) statuses.set(storedReady.mediaId, storedReady);
-  const apply = (mediaId: string, status: VideoOptimizationStatus | null) => {
+  if (storedReady !== null) statuses.set(statusKey(storedReady.mediaId, storedReady.cacheKind), storedReady);
+  const apply = (mediaId: string, kind: VideoOptimizationKind, status: VideoOptimizationStatus | null) => {
     if (status?.state === 'ready' && status.url !== undefined && status.cacheKey !== undefined) {
       statuses.clear();
-      statuses.set(status.mediaId, status);
+      statuses.set(statusKey(status.mediaId, status.cacheKind), status);
       persistReady(storage, status);
     } else {
-      statuses.delete(mediaId);
+      statuses.delete(statusKey(mediaId, kind));
       const stored = readStoredReady(storage);
-      if (stored?.mediaId === mediaId) storage?.removeItem(READY_STORAGE_KEY);
+      if (stored?.mediaId === mediaId && stored.cacheKind === kind) storage?.removeItem(READY_STORAGE_KEY);
     }
     return status;
   };
   return {
-    async status(mediaId, refresh = false) {
+    async status(mediaId, refresh = false, kind = 'faststart-mp4') {
       const id = mediaId.trim();
       if (id === '') return null;
-      if (!refresh && statuses.has(id)) return statuses.get(id) ?? null;
-      return apply(id, await fetchStatus(id));
+      const key = statusKey(id, kind);
+      if (!refresh && statuses.has(key)) return statuses.get(key) ?? null;
+      return apply(id, kind, await fetchStatus(id, kind));
     },
-    async prepare(mediaId) { return apply(mediaId, await prepare(mediaId)); },
-    async cancel(mediaId) { return apply(mediaId, await cancel(mediaId)); },
-    async clear(mediaId, cacheKey) { return apply(mediaId, await clear(mediaId, cacheKey)); },
-    invalidate(mediaId) {
-      statuses.delete(mediaId);
+    async prepare(mediaId, kind = 'faststart-mp4') { return apply(mediaId, kind, await prepare(mediaId, kind)); },
+    async cancel(mediaId, kind = 'faststart-mp4') { return apply(mediaId, kind, await cancel(mediaId, kind)); },
+    async clear(mediaId, cacheKey, kind = 'faststart-mp4') { return apply(mediaId, kind, await clear(mediaId, cacheKey, kind)); },
+    invalidate(mediaId, kind) {
+      if (kind === undefined) {
+        statuses.delete(statusKey(mediaId, 'faststart-mp4'));
+        statuses.delete(statusKey(mediaId, 'hls-fmp4'));
+      } else {
+        statuses.delete(statusKey(mediaId, kind));
+      }
       const stored = readStoredReady(storage);
-      if (stored?.mediaId === mediaId) storage?.removeItem(READY_STORAGE_KEY);
+      if (stored?.mediaId === mediaId && (kind === undefined || stored.cacheKind === kind)) storage?.removeItem(READY_STORAGE_KEY);
     },
+    supportsNativeHLS: canPlayHLS,
     preferOriginal(mediaId) { preferOriginalOnce.add(mediaId); },
     resolve(source) {
       if (source.mediaType !== 'video') return source;
       if (preferOriginalOnce.delete(source.mediaId)) return source;
-      const status = statuses.get(source.mediaId);
+      const hlsStatus = canPlayHLS() ? statuses.get(statusKey(source.mediaId, 'hls-fmp4')) : undefined;
+      const status = hlsStatus?.state === 'ready'
+        ? hlsStatus
+        : statuses.get(statusKey(source.mediaId, 'faststart-mp4'));
       if (status?.state !== 'ready' || status.url === undefined || status.cacheKey === undefined) return source;
       return {
         ...source,
         url: `${status.url}${mediaTimeFragment(source.url)}`,
-        mimeType: 'video/mp4',
+        mimeType: status.cacheKind === 'hls-fmp4' ? 'application/vnd.apple.mpegurl' : 'video/mp4',
+        optimizationKind: status.cacheKind,
         optimizationOriginalUrl: source.optimizationOriginalUrl ?? source.url,
         ...(source.optimizationOriginalMimeType !== undefined
           ? { optimizationOriginalMimeType: source.optimizationOriginalMimeType }
@@ -84,6 +99,20 @@ export function createVideoOptimizationService(options: VideoOptimizationService
       };
     },
   };
+}
+
+function statusKey(mediaId: string, kind: VideoOptimizationKind): string {
+  return `${kind}:${mediaId}`;
+}
+
+function canPlayNativeHLS(): boolean {
+  if (typeof document === 'undefined') return false;
+  try {
+    const video = document.createElement('video');
+    return video.canPlayType('application/vnd.apple.mpegurl') !== '' || video.canPlayType('application/x-mpegURL') !== '';
+  } catch {
+    return false;
+  }
 }
 
 function browserStorage(): Storage | null {
@@ -105,7 +134,7 @@ function readStoredReady(
       typeof parsed.mediaId !== 'string' || parsed.mediaId === '' ||
       typeof parsed.cacheKey !== 'string' || parsed.cacheKey === '' ||
       typeof parsed.url !== 'string' || parsed.url === '' ||
-      parsed.cacheKind !== 'faststart-mp4' ||
+      (parsed.cacheKind !== 'faststart-mp4' && parsed.cacheKind !== 'hls-fmp4') ||
       typeof parsed.eligible !== 'boolean' ||
       typeof parsed.estimatedOutputBytes !== 'number' ||
       typeof parsed.requiredFreeBytes !== 'number' ||
@@ -115,6 +144,10 @@ function readStoredReady(
     ) {
       return null;
     }
+    const expectedPrefix = parsed.cacheKind === 'hls-fmp4'
+      ? '/api/video-optimization/hls/'
+      : '/api/video-optimization/media/';
+    if (!parsed.url.startsWith(expectedPrefix)) return null;
     return parsed as VideoOptimizationStatus;
   } catch {
     return null;
@@ -149,8 +182,10 @@ export function restoreOriginalVideoSource(
   const {
     optimizationOriginalUrl,
     optimizationOriginalMimeType,
+    optimizationKind: _optimizationKind,
     ...rest
   } = source;
+  void _optimizationKind;
   const originalUrl = optimizationOriginalUrl ?? buildStreamingUrl(source.mediaId);
   return {
     ...rest,

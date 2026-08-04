@@ -65,6 +65,7 @@ func NewHandlerWithWeb(logger *slog.Logger, lister LibraryLister, streamHandler 
 		if provider, ok := lister.(VideoOptimizationProvider); ok {
 			if optimization := provider.VideoOptimization(); optimization != nil {
 				mux.Handle("/api/video-optimization/media/", videoOptimizationMediaHandler(getter, optimization, logger))
+				mux.Handle("/api/video-optimization/hls/", videoOptimizationHLSHandler(getter, optimization, logger))
 				mux.Handle("/api/video-optimization/", videoOptimizationHandler(getter, optimization))
 			}
 		}
@@ -80,5 +81,5 @@ func NewHandlerWithWeb(logger *slog.Logger, lister LibraryLister, streamHandler 
 		mux.Handle("/", webAppHandler(http.Dir(webDist)))
 	}
 
-	return loggingMiddleware(logger, gzipMiddleware(mux))
+	return loggingMiddleware(logger, gzipMiddleware(rejectHLSPathTraversal(mux)))
 }

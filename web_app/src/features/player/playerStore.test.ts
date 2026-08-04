@@ -1221,6 +1221,7 @@ describe('video optimization', () => {
         cancel: async () => null,
         clear: async () => null,
         invalidate: () => {},
+        supportsNativeHLS: () => false,
         preferOriginal: () => {},
         resolve,
       },
@@ -1241,6 +1242,7 @@ describe('video optimization', () => {
       url: '/api/video-optimization/media/v1?v=key#t=45', mimeType: 'video/mp4',
       optimizationOriginalUrl: '/api/media/v1#t=45',
       optimizationOriginalMimeType: 'video/quicktime',
+      optimizationKind: 'faststart-mp4',
     };
     const invalidate = vi.fn();
     const store = createPlayerStore({
@@ -1249,6 +1251,7 @@ describe('video optimization', () => {
       videoOptimization: {
         status: async () => null, prepare: async () => null,
         cancel: async () => null, clear: async () => null, invalidate,
+        supportsNativeHLS: () => false,
         preferOriginal: () => {}, resolve: () => optimized,
       },
     });
@@ -1267,7 +1270,7 @@ describe('video optimization', () => {
       url: '/api/media/v1#t=80.3',
       mimeType: 'video/quicktime',
     });
-    expect(invalidate).toHaveBeenCalledWith('v1');
+    expect(invalidate).toHaveBeenCalledWith('v1', 'faststart-mp4');
     const loadsAfterFallback = session.calls.load.mock.calls.length;
     session.setState({
       ...session.getState(),
@@ -1275,6 +1278,43 @@ describe('video optimization', () => {
     });
     await Promise.resolve();
     expect(session.calls.load).toHaveBeenCalledTimes(loadsAfterFallback);
+  });
+
+  test('falls back from native HLS to direct MP4 once without changing progress identity', async () => {
+    const session = makeFakeSession();
+    const optimized: PlaybackSource = {
+      kind: 'remote', mediaId: 'v1', mediaType: 'video', name: 'movie.mp4',
+      url: '/api/video-optimization/hls/v1/0123456789abcdef01234567/index.m3u8#t=45',
+      mimeType: 'application/vnd.apple.mpegurl', optimizationKind: 'hls-fmp4',
+      optimizationOriginalUrl: '/api/media/v1#t=45',
+      optimizationOriginalMimeType: 'video/mp4',
+    };
+    const invalidate = vi.fn();
+    const store = createPlayerStore({
+      createSession: () => session,
+      createEngine: () => fakeEngine(),
+      videoOptimization: {
+        status: async () => null, prepare: async () => null, cancel: async () => null,
+        clear: async () => null, invalidate, supportsNativeHLS: () => true,
+        preferOriginal: () => {}, resolve: () => optimized,
+      },
+    });
+    store.getState().attachElement('video', fakeElement());
+    await store.getState().playSource({
+      kind: 'remote', mediaId: 'v1', mediaType: 'video', name: 'movie.mp4',
+      url: '/api/media/v1#t=45', mimeType: 'video/mp4',
+    });
+    session.setState({
+      status: { kind: 'error', message: 'HLS manifest unavailable' },
+      source: optimized, positionSec: 90, durationSec: 120,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(invalidate).toHaveBeenCalledWith('v1', 'hls-fmp4');
+    expect(session.getState().source).toMatchObject({
+      mediaId: 'v1', url: '/api/media/v1#t=90', mimeType: 'video/mp4',
+    });
+    expect(session.getState().source?.optimizationKind).toBeUndefined();
   });
 
   test('resolves a ready sidecar before loading a visible seeded resume', async () => {
@@ -1292,7 +1332,8 @@ describe('video optimization', () => {
       createEngine: () => fakeEngine(),
       videoOptimization: {
         status, resolve, prepare: async () => null, cancel: async () => null,
-        clear: async () => null, invalidate: () => {}, preferOriginal: () => {},
+        clear: async () => null, invalidate: () => {}, supportsNativeHLS: () => false,
+        preferOriginal: () => {},
       },
     });
     const seed: PlaybackSource = {
@@ -1305,7 +1346,7 @@ describe('video optimization', () => {
     expect(session.calls.load).not.toHaveBeenCalled();
     await Promise.resolve();
     await Promise.resolve();
-    expect(status).toHaveBeenCalledWith('v1', true);
+    expect(status).toHaveBeenCalledWith('v1', true, 'faststart-mp4');
     expect(session.calls.load).toHaveBeenCalledWith(expect.objectContaining({
       url: '/api/video-optimization/media/v1?v=key#t=45',
       mimeType: 'video/mp4',

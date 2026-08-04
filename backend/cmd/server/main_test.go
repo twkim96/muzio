@@ -305,6 +305,31 @@ func TestConfigureVideoOptimizationStaysDisabledForMissingDependencies(t *testin
 	}
 }
 
+func TestVideoHLSPlanOptionsAreBoundedAndConfigurable(t *testing.T) {
+	defaults, err := videoHLSPlanOptions(func(string) (string, bool) { return "", false })
+	if err != nil || defaults.MinimumMovieIndexBytes != 16<<20 || defaults.MaximumGOPSeconds != 12 || defaults.TargetSegmentSeconds != 6 {
+		t.Fatalf("defaults=%#v error=%v", defaults, err)
+	}
+	custom, err := videoHLSPlanOptions(func(key string) (string, bool) {
+		values := map[string]string{"VMA_HLS_MIN_MOOV_MIB": "32", "VMA_HLS_MAX_GOP_SECONDS": "9.5"}
+		value, found := values[key]
+		return value, found
+	})
+	if err != nil || custom.MinimumMovieIndexBytes != 32<<20 || custom.MaximumGOPSeconds != 9.5 {
+		t.Fatalf("custom=%#v error=%v", custom, err)
+	}
+	for _, test := range []struct{ key, value string }{
+		{key: "VMA_HLS_MIN_MOOV_MIB", value: "0"},
+		{key: "VMA_HLS_MAX_GOP_SECONDS", value: "121"},
+	} {
+		if _, err := videoHLSPlanOptions(func(key string) (string, bool) {
+			return test.value, key == test.key
+		}); err == nil {
+			t.Fatalf("%s=%q accepted", test.key, test.value)
+		}
+	}
+}
+
 func TestServeHTTPServerKeepsPlainHTTP11(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

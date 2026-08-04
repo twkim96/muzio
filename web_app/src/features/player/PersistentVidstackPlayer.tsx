@@ -3,6 +3,7 @@ import {
   MediaProvider,
   type MediaPlayerInstance,
   type PlayerSrc,
+  type HLSMimeType,
   type VideoMimeType,
 } from '@vidstack/react';
 import {
@@ -144,7 +145,7 @@ export function PersistentVidstackPlayer({
       ? undefined
       : {
           src: source.url,
-          type: videoMimeType(source),
+          type: videoMimeTypeForSource(source),
         };
   const layoutSlots = {
     beforeFullscreenButton: (
@@ -218,8 +219,10 @@ function TheaterModeButton({
   );
 }
 
-function videoMimeType(source: PlaybackSource): VideoMimeType {
+export function videoMimeTypeForSource(source: PlaybackSource): VideoMimeType | HLSMimeType {
   switch (source.mimeType) {
+    case 'application/vnd.apple.mpegurl':
+      return source.mimeType;
     case 'video/mp4':
     case 'video/webm':
     case 'video/3gp':

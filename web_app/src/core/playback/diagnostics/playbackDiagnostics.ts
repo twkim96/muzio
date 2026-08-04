@@ -6,6 +6,7 @@ const SAMPLE_COOKIE_NAME = 'muzioDiagnosticSampleId';
 const TRANSPORT_COOKIE_PATHS = [
   '/api/media/',
   '/api/video-optimization/media/',
+  '/api/video-optimization/hls/',
 ] as const;
 const MAX_ENTRIES = 400;
 
