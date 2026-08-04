@@ -28,6 +28,7 @@ import { PlayerProvider } from './PlayerContext';
 import { AUDIO_NETWORK_RETRY_HINT_DELAY_MS } from './playbackNetworkStatus';
 import { VideoSurfaceProvider } from './VideoMount';
 import { createPlayerStore } from './playerStore';
+import { videoOptimizationService } from './videoOptimizationService';
 
 function fakeElement(): MediaElementLike {
   return {
@@ -188,6 +189,22 @@ function renderScreen(
               <LocationProbe />
             </MemoryRouter>
           </VideoSurfaceProvider>
+        </ProgressProvider>
+      </PlayerProvider>
+    </LibraryProvider>,
+  );
+}
+
+function renderScreenWithoutVideoSurface(
+  store: ReturnType<typeof createPlayerStore>,
+) {
+  return render(
+    <LibraryProvider stores={createTestLibraryStores()}>
+      <PlayerProvider store={store}>
+        <ProgressProvider repository={createLocalStorageProgressRepository()}>
+          <MemoryRouter future={routerFuture} initialEntries={['/player']}>
+            <FullPlayerScreen />
+          </MemoryRouter>
         </ProgressProvider>
       </PlayerProvider>
     </LibraryProvider>,
@@ -883,14 +900,14 @@ describe('FullPlayerScreen', () => {
     expect(screen.getByTestId('video-share-stream')).toHaveTextContent(
       'Share stream',
     );
-    expect(screen.getByTestId('video-theater-toggle')).toHaveAccessibleName(
+    const theaterToggle = await screen.findByTestId('video-theater-toggle');
+    expect(theaterToggle).toHaveAccessibleName(
       'Enter theater mode',
     );
-    expect(screen.getByTestId('video-theater-toggle')).toHaveAttribute(
+    expect(theaterToggle).toHaveAttribute(
       'aria-pressed',
       'false',
     );
-    const theaterToggle = screen.getByTestId('video-theater-toggle');
     const fullscreenToggle = screen
       .getByTestId('video-mount')
       .querySelector('.vds-fullscreen-button');
@@ -909,6 +926,38 @@ describe('FullPlayerScreen', () => {
       'Collapse video player',
     );
     expect(screen.queryByTestId('now-playing-art')).not.toBeInTheDocument();
+  });
+
+  test('offers explicit faststart prepare with storage estimates', async () => {
+    const eligible = {
+      state: 'eligible' as const,
+      mediaId: 'v1',
+      eligible: true,
+      layout: 'end-moov' as const,
+      cacheKind: 'faststart-mp4' as const,
+      estimatedOutputBytes: 1024,
+      requiredFreeBytes: 512 * 1024 * 1024 + 1024,
+      availableBytes: 2 * 1024 * 1024 * 1024,
+      cacheUsedBytes: 0,
+      peakCacheBytes: 1024,
+    };
+    vi.spyOn(videoOptimizationService, 'status')
+      .mockResolvedValueOnce(eligible)
+      .mockResolvedValue({ ...eligible, state: 'building', buildingMediaId: 'v1' });
+    const prepare = vi.spyOn(videoOptimizationService, 'prepare').mockResolvedValue({
+      ...eligible,
+      state: 'building',
+      buildingMediaId: 'v1',
+    });
+    const store = createPlayerStore();
+    store.getState().setSessionForTests('video', fakeSession({
+      status: { kind: 'paused' }, source: videoSource, positionSec: 45, durationSec: 120,
+    }));
+    renderScreenWithoutVideoSurface(store);
+    expect(await screen.findByTestId('video-optimization')).toHaveTextContent('Estimated 1.0 KB');
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare faster playback' }));
+    await waitFor(() => expect(prepare).toHaveBeenCalledWith('v1'));
+    expect(await screen.findByRole('button', { name: 'Cancel build' })).toBeInTheDocument();
   });
 
   test('video external playback actions pass the stream URL without changing playback', async () => {

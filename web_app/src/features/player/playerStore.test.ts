@@ -1204,6 +1204,128 @@ describe('audio resume cache', () => {
   });
 });
 
+describe('video optimization', () => {
+  test('resolves a known ready sidecar before loading the video session', async () => {
+    const session = makeFakeSession();
+    const resolve = vi.fn((source: PlaybackSource) => ({
+      ...source,
+      url: '/api/video-optimization/media/v1?v=key#t=45',
+      mimeType: 'video/mp4',
+    }));
+    const store = createPlayerStore({
+      createSession: () => session,
+      createEngine: () => fakeEngine(),
+      videoOptimization: {
+        status: async () => null,
+        prepare: async () => null,
+        cancel: async () => null,
+        clear: async () => null,
+        invalidate: () => {},
+        preferOriginal: () => {},
+        resolve,
+      },
+    });
+    store.getState().attachElement('video', fakeElement());
+    await store.getState().playSource({
+      kind: 'remote', mediaId: 'v1', mediaType: 'video', name: 'movie.mp4',
+      url: '/api/media/v1#t=45', mimeType: 'video/mp4',
+    });
+    expect(resolve).toHaveBeenCalledTimes(1);
+    expect(session.getState().source?.url).toBe('/api/video-optimization/media/v1?v=key#t=45');
+  });
+
+  test('falls back from a sidecar error to the original once with resume and MOV MIME', async () => {
+    const session = makeFakeSession();
+    const optimized: PlaybackSource = {
+      kind: 'remote', mediaId: 'v1', mediaType: 'video', name: 'movie.mov',
+      url: '/api/video-optimization/media/v1?v=key#t=45', mimeType: 'video/mp4',
+      optimizationOriginalUrl: '/api/media/v1#t=45',
+      optimizationOriginalMimeType: 'video/quicktime',
+    };
+    const invalidate = vi.fn();
+    const store = createPlayerStore({
+      createSession: () => session,
+      createEngine: () => fakeEngine(),
+      videoOptimization: {
+        status: async () => null, prepare: async () => null,
+        cancel: async () => null, clear: async () => null, invalidate,
+        preferOriginal: () => {}, resolve: () => optimized,
+      },
+    });
+    store.getState().attachElement('video', fakeElement());
+    await store.getState().playSource({
+      kind: 'remote', mediaId: 'v1', mediaType: 'video', name: 'movie.mov',
+      url: '/api/media/v1#t=45', mimeType: 'video/quicktime',
+    });
+    session.setState({
+      status: { kind: 'error', message: 'network error' },
+      source: optimized, positionSec: 80.25, durationSec: 120,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(session.getState().source).toMatchObject({
+      url: '/api/media/v1#t=80.3',
+      mimeType: 'video/quicktime',
+    });
+    expect(invalidate).toHaveBeenCalledWith('v1');
+    const loadsAfterFallback = session.calls.load.mock.calls.length;
+    session.setState({
+      ...session.getState(),
+      status: { kind: 'error', message: 'source not supported' },
+    });
+    await Promise.resolve();
+    expect(session.calls.load).toHaveBeenCalledTimes(loadsAfterFallback);
+  });
+
+  test('resolves a ready sidecar before loading a visible seeded resume', async () => {
+    const session = makeFakeSession();
+    const status = vi.fn(async () => null);
+    const resolve = vi.fn((source: PlaybackSource): PlaybackSource => ({
+      ...source,
+      url: '/api/video-optimization/media/v1?v=key#t=45',
+      mimeType: 'video/mp4',
+      optimizationOriginalUrl: source.url,
+      optimizationOriginalMimeType: 'video/quicktime',
+    }));
+    const store = createPlayerStore({
+      createSession: () => session,
+      createEngine: () => fakeEngine(),
+      videoOptimization: {
+        status, resolve, prepare: async () => null, cancel: async () => null,
+        clear: async () => null, invalidate: () => {}, preferOriginal: () => {},
+      },
+    });
+    const seed: PlaybackSource = {
+      kind: 'remote', mediaId: 'v1', mediaType: 'video', name: 'movie.mov',
+      url: '/api/media/v1#t=45', mimeType: 'video/quicktime',
+    };
+    store.getState().seedSource(seed, { positionSec: 45, durationSec: 120 });
+    store.getState().attachElement('video', fakeElement());
+    store.getState().prepareSeededSource('video');
+    expect(session.calls.load).not.toHaveBeenCalled();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(status).toHaveBeenCalledWith('v1', true);
+    expect(session.calls.load).toHaveBeenCalledWith(expect.objectContaining({
+      url: '/api/video-optimization/media/v1?v=key#t=45',
+      mimeType: 'video/mp4',
+    }));
+    expect(session.calls.seek).toHaveBeenCalledWith(45);
+    const optimized = session.calls.load.mock.calls[0]?.[0] as PlaybackSource;
+    session.setState({
+      status: { kind: 'error', message: 'network error' },
+      source: optimized,
+      positionSec: 45,
+      durationSec: 120,
+    });
+    expect(session.calls.load).toHaveBeenLastCalledWith(expect.objectContaining({
+      url: '/api/media/v1#t=45',
+      mimeType: 'video/quicktime',
+    }));
+    expect(session.calls.play).not.toHaveBeenCalled();
+  });
+});
+
 function activitySourceFromTestSource(
   source: PlaybackSource,
 ): PlaybackActivitySource {

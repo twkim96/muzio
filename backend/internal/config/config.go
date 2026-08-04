@@ -12,16 +12,18 @@ import (
 )
 
 const (
-	defaultHost           = "127.0.0.1"
-	defaultPort           = 7777
-	defaultConfigDirName  = "videio_music_app"
-	defaultConfigName     = "config.json"
-	libraryIndexName      = "library-index.v1.log"
-	progressStoreName     = "progress.v1.json"
-	thumbnailCacheDir     = "thumbnails"
-	thumbnailCacheV1Dir   = "v1"
-	audioResumeCacheDir   = "audio-resume-cache"
-	audioResumeCacheV1Dir = "v1"
+	defaultHost            = "127.0.0.1"
+	defaultPort            = 7777
+	defaultConfigDirName   = "videio_music_app"
+	defaultConfigName      = "config.json"
+	libraryIndexName       = "library-index.v1.log"
+	progressStoreName      = "progress.v1.json"
+	thumbnailCacheDir      = "thumbnails"
+	thumbnailCacheV1Dir    = "v1"
+	audioResumeCacheDir    = "audio-resume-cache"
+	audioResumeCacheV1Dir  = "v1"
+	videoOptimizationDir   = "video-optimization"
+	videoOptimizationV1Dir = "v1"
 )
 
 type Config struct {
@@ -148,6 +150,22 @@ func ResolveAudioResumeCachePath(configPath string) (string, error) {
 		filepath.Dir(absolute),
 		audioResumeCacheDir,
 		audioResumeCacheV1Dir,
+	), nil
+}
+
+func ResolveVideoOptimizationPath(configPath string) (string, error) {
+	configPath = strings.TrimSpace(configPath)
+	if configPath == "" {
+		return "", errors.New("config path is required")
+	}
+	absolute, err := filepath.Abs(configPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve config path: %w", err)
+	}
+	return filepath.Join(
+		filepath.Dir(absolute),
+		videoOptimizationDir,
+		videoOptimizationV1Dir,
 	), nil
 }
 

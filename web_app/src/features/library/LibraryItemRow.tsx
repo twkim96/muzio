@@ -83,6 +83,7 @@ function LibraryItemRowComponent({
   const columnMeta = columnMetadata(item);
   const store = usePlayerStore();
   const playSource = store((s) => s.playSource);
+  const prefetchVideoOptimization = store((s) => s.prefetchVideoOptimization);
   const playMusicQueue = store((s) => s.playMusicQueue);
   const insertQueueItemAfterCurrentAndPlay = store(
     (s) => s.insertQueueItemAfterCurrentAndPlay,
@@ -184,6 +185,10 @@ function LibraryItemRowComponent({
     }
   };
 
+  const prefetchVideoSidecar = () => {
+    if (item.type === 'video') prefetchVideoOptimization(item.id);
+  };
+
   const fraction =
     item.type === 'video'
       ? progressFractionFor(progressRecord)
@@ -241,8 +246,13 @@ function LibraryItemRowComponent({
       className={`group relative overflow-hidden border-b border-zinc-200/70 last:border-b-0 hover:bg-zinc-950/[0.035] dark:border-white/10 dark:hover:bg-white/[0.055] xl:h-[54px] ${
         selected ? 'bg-accent/10 dark:bg-accent/18' : ''
       }`}
+      onFocusCapture={prefetchVideoSidecar}
+      onPointerEnter={prefetchVideoSidecar}
       onPointerCancel={clearLongPress}
-      onPointerDown={beginLongPress}
+      onPointerDown={(event) => {
+        prefetchVideoSidecar();
+        beginLongPress(event);
+      }}
       onPointerMove={handlePointerMove}
       onPointerUp={clearLongPress}
       onTouchMove={clearLongPress}

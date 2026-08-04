@@ -35,6 +35,9 @@ export interface RemotePlaybackSource {
   rootName?: string;
   /** Forward-slash relative path inside the root. Optional, see above. */
   relativePath?: string;
+  /** Direct source retained while an immutable optimization sidecar is used. */
+  optimizationOriginalUrl?: string;
+  optimizationOriginalMimeType?: string;
 }
 
 const STREAM_BASE_PATH = '/api/media/';

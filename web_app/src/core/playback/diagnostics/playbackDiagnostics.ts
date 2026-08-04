@@ -3,7 +3,10 @@ import type { PlaybackSource } from '../source/source';
 const STORAGE_KEY = 'muzio.playbackDiagnostics';
 const TRANSPORT_COOKIE_NAME = 'muzioDiagnosticTransportId';
 const SAMPLE_COOKIE_NAME = 'muzioDiagnosticSampleId';
-const TRANSPORT_COOKIE_PATH = '/api/media/';
+const TRANSPORT_COOKIE_PATHS = [
+  '/api/media/',
+  '/api/video-optimization/media/',
+] as const;
 const MAX_ENTRIES = 400;
 
 export interface PlaybackDiagnosticBufferedRange {
@@ -255,13 +258,17 @@ function randomIdentifier(): string {
 
 function writeDiagnosticCookie(name: string, id: string): void {
   if (typeof document === 'undefined') return;
-  document.cookie = `${name}=${id}; Path=${TRANSPORT_COOKIE_PATH}; SameSite=Strict`;
+  for (const path of TRANSPORT_COOKIE_PATHS) {
+    document.cookie = `${name}=${id}; Path=${path}; SameSite=Strict`;
+  }
 }
 
 function clearDiagnosticCookies(): void {
   if (typeof document === 'undefined') return;
-  document.cookie = `${TRANSPORT_COOKIE_NAME}=; Path=${TRANSPORT_COOKIE_PATH}; Max-Age=0; SameSite=Strict`;
-  document.cookie = `${SAMPLE_COOKIE_NAME}=; Path=${TRANSPORT_COOKIE_PATH}; Max-Age=0; SameSite=Strict`;
+  for (const path of TRANSPORT_COOKIE_PATHS) {
+    document.cookie = `${TRANSPORT_COOKIE_NAME}=; Path=${path}; Max-Age=0; SameSite=Strict`;
+    document.cookie = `${SAMPLE_COOKIE_NAME}=; Path=${path}; Max-Age=0; SameSite=Strict`;
+  }
 }
 
 function browserSurface(): PlaybackDiagnosticRun['browserSurface'] {

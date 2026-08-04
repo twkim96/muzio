@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"io"
 	"log/slog"
 	"math/big"
@@ -20,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"muzio/backend/internal/fallback"
 	"muzio/backend/internal/httpserver"
 	"muzio/backend/internal/library"
 	"muzio/backend/internal/thumbnail"
@@ -252,6 +254,54 @@ func TestServeHTTPServerNegotiatesHTTP2AcrossAppEndpoints(t *testing.T) {
 	}
 	if negotiatedProtocol != "http/1.1" {
 		t.Fatalf("fallback ALPN = %q, want http/1.1", negotiatedProtocol)
+	}
+}
+
+func TestAppRuntimeOptionalCachesDoNotExposeTypedNilInterfaces(t *testing.T) {
+	runtime := appRuntime{}
+	if runtime.VideoOptimization() != nil {
+		t.Fatal("nil video optimization manager became a non-nil interface")
+	}
+	if runtime.AudioResumeCache() != nil {
+		t.Fatal("nil audio resume manager became a non-nil interface")
+	}
+}
+
+func TestConfigureVideoOptimizationStaysDisabledForMissingDependencies(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	available := fallback.FFmpegInfo{Available: true, Path: "ffmpeg"}
+	tests := []struct {
+		name       string
+		configPath string
+		ffmpeg     fallback.FFmpegInfo
+		lookup     func(string) (string, error)
+	}{
+		{
+			name:       "ffmpeg unavailable",
+			configPath: "config.json",
+			ffmpeg:     fallback.FFmpegInfo{Reason: "missing"},
+			lookup:     func(string) (string, error) { t.Fatal("ffprobe lookup should not run"); return "", nil },
+		},
+		{
+			name:       "ffprobe unavailable",
+			configPath: "config.json",
+			ffmpeg:     available,
+			lookup:     func(string) (string, error) { return "", errors.New("missing") },
+		},
+		{
+			name:       "cache initialization failure",
+			configPath: "",
+			ffmpeg:     available,
+			lookup:     func(string) (string, error) { return "ffprobe", nil },
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if manager := configureVideoOptimizationWithProbeLookup(test.configPath, nil, test.ffmpeg, logger, test.lookup); manager != nil {
+				manager.Close()
+				t.Fatal("disabled video optimization returned a manager")
+			}
+		})
 	}
 }
 

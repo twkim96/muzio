@@ -113,7 +113,8 @@ func quietRequest(requestPath string, status int) bool {
 		return true
 	}
 	return (strings.HasPrefix(requestPath, "/api/media/") ||
-		strings.HasPrefix(requestPath, "/api/audio-resume-cache/media/")) && status < 400
+		strings.HasPrefix(requestPath, "/api/audio-resume-cache/media/") ||
+		strings.HasPrefix(requestPath, "/api/video-optimization/media/")) && status < 400
 }
 
 func loggingMiddleware(logger *slog.Logger, next http.Handler) http.Handler {
@@ -166,6 +167,7 @@ func shouldGzipRequest(r *http.Request) bool {
 	switch {
 	case strings.HasPrefix(r.URL.Path, "/api/media/"),
 		strings.HasPrefix(r.URL.Path, "/api/audio-resume-cache/media/"),
+		strings.HasPrefix(r.URL.Path, "/api/video-optimization/media/"),
 		strings.HasPrefix(r.URL.Path, "/api/thumbnails/"),
 		strings.HasPrefix(r.URL.Path, "/api/library/events"):
 		return false

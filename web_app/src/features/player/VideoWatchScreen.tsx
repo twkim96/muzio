@@ -33,6 +33,11 @@ import { formatTime } from './formatTime';
 import { useVideoTheaterMode, VideoViewport } from './VideoMount';
 import type { Playability } from '../../core/playback/capabilities/canPlayMime';
 import type { PlaybackSource } from '../../core/playback/source/source';
+import type { VideoOptimizationStatus } from '../../core/api/videoOptimizationClient';
+import {
+  restoreOriginalVideoSource,
+  videoOptimizationService,
+} from './videoOptimizationService';
 
 const WATCH_GESTURE_EXIT_MS = 180;
 const WATCH_GESTURE_SETTLE_MS = 200;
@@ -162,6 +167,7 @@ export function VideoWatchScreen({
                 {sourceDetail}
               </p>
               <ExternalPlaybackActions source={source} title={title} />
+              <VideoOptimizationPanel source={source} positionSec={positionSec} playability={playability} />
               {playability === 'no' && (
                 <div className="mt-3 rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] px-3 py-2">
                   <p
@@ -202,6 +208,121 @@ export function VideoWatchScreen({
       </div>
     </div>
   );
+}
+
+function VideoOptimizationPanel({
+  source,
+  positionSec,
+  playability,
+}: {
+  source: PlaybackSource | null;
+  positionSec: number;
+  playability: Playability;
+}) {
+  const store = usePlayerStore();
+  const playSource = store((state) => state.playSource);
+  const [status, setStatus] = useState<VideoOptimizationStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const mediaId = source?.mediaId ?? '';
+
+  useEffect(() => {
+    if (mediaId === '') { setStatus(null); return; }
+    let cancelled = false;
+    let timer: number | null = null;
+    const refresh = async () => {
+      const next = await videoOptimizationService.status(mediaId, true);
+      if (cancelled) return;
+      setStatus(next);
+      if (next?.state === 'building') {
+        timer = window.setTimeout(refresh, 1000);
+      }
+    };
+    void refresh();
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [mediaId, refreshVersion]);
+
+  if (source === null || status === null) return null;
+  const run = async (action: () => Promise<VideoOptimizationStatus | null>) => {
+    setBusy(true);
+    try {
+      const next = await action();
+      setStatus(next);
+      if (next?.state === 'building') setRefreshVersion((value) => value + 1);
+    } finally { setBusy(false); }
+  };
+  const usingReady = status.url !== undefined && source.url.startsWith(status.url);
+
+  return (
+    <section
+      data-testid="video-optimization"
+      className="mt-3 rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] px-3 py-3"
+      aria-label="Faster playback copy"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-[var(--color-fg)]">Faster playback copy</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--color-muted)]">
+            {optimizationMessage(status, usingReady, playability)}
+          </p>
+          {status.eligible && status.state !== 'ready' && (
+            <p className="text-xs leading-5 text-[var(--color-muted)]">
+              Estimated {formatSize(status.estimatedOutputBytes)} · free {formatSize(status.availableBytes)} · peak cache {formatSize(status.peakCacheBytes)}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(status.state === 'eligible' || status.state === 'failed') && playability !== 'no' && (
+            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.prepare(mediaId))} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+              {status.state === 'failed' ? 'Retry preparation' : 'Prepare faster playback'}
+            </button>
+          )}
+          {status.state === 'building' && (
+            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.cancel(mediaId))} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+              Cancel build
+            </button>
+          )}
+          {status.state === 'ready' && !usingReady && (
+            <button type="button" disabled={busy} onClick={() => {
+              const direct = { ...source, url: buildStreamingUrl(mediaId, { startSec: positionSec }) };
+              void playSource(videoOptimizationService.resolve(direct));
+            }} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+              Use faster copy
+            </button>
+          )}
+          {status.state === 'ready' && usingReady && (
+            <button type="button" disabled={busy} onClick={() => {
+              videoOptimizationService.preferOriginal(mediaId);
+              void playSource(restoreOriginalVideoSource(source, positionSec));
+            }} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+              Use original
+            </button>
+          )}
+          {status.state === 'ready' && !usingReady && status.cacheKey !== undefined && (
+            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.clear(mediaId, status.cacheKey!))} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+              Clear copy
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function optimizationMessage(status: VideoOptimizationStatus, usingReady: boolean, playability: Playability): string {
+  if (status.state === 'ready') return usingReady ? 'Playing the immutable faststart copy.' : 'The copy is ready. It will be selected for later playback.';
+  if (status.state === 'building') return 'Preparing in the background. Existing playback stays on the original file.';
+  if (status.state === 'insufficient-space') return 'Not enough free space to build the copy safely.';
+  if (status.state === 'failed') return status.reason ?? 'Preparation failed. Direct playback remains available.';
+  if (status.state === 'eligible' && playability === 'no') return 'The browser reports this codec as unsupported, so a container-only copy would not help. Direct playback remains available.';
+  if (status.state === 'eligible') return 'This end-moov file can be copied without re-encoding. The original is never modified.';
+  if (status.layout === 'front-moov' && (status.movieIndexBytes ?? 0) >= 16 * 1024 * 1024) return 'The index is already at the front, so faststart cannot help. This large index is a segmented-playback candidate for 1.4.2.';
+  if (status.layout === 'front-moov') return 'This file already has a front-loaded index; no faster copy is needed.';
+  if (status.layout === 'fragmented') return 'Fragmented MP4 is not copied by this faststart cache; direct playback remains available.';
+  return status.reason ?? 'This file is not eligible; direct playback remains available.';
 }
 
 function VideoDescription({

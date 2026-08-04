@@ -38,6 +38,8 @@ import type {
   ProgressServiceAttachment,
 } from '../progress/progressService';
 import type { AudioResumeCacheService } from './audioResumeCacheService';
+import type { VideoOptimizationService } from './videoOptimizationService';
+import { restoreOriginalVideoSource } from './videoOptimizationService';
 import {
   buildMusicQueue,
   clearQueueTracks,
@@ -122,6 +124,7 @@ export interface PlayerState extends PlayerSnapshot {
   detachEngine(kind: 'audio' | 'video', expectedEngine?: PlaybackEngine): void;
   /** Load a source on the appropriate session and start playback. */
   playSource(source: PlaybackSource): Promise<void>;
+  prefetchVideoOptimization(mediaId: string): void;
   /** Replace the music queue, select a track, and start audio playback. */
   playMusicQueue(sources: PlaybackSource[], startMediaId: string): Promise<void>;
   /** Insert a library audio source after the current Queue item and play it. */
@@ -211,6 +214,9 @@ interface MountSlot {
    * must not promote it to "last played".
    */
   preparedSeed: boolean;
+  seedPreparationGeneration: number;
+  seedPreparationPending: boolean;
+  optimizationFallbackInProgress: boolean;
   endStartupGate: (() => void) | null;
   endSeekGate: (() => void) | null;
   seekTargetSec: number | null;
@@ -275,6 +281,8 @@ export interface PlayerStoreOptions {
   progressService?: ProgressService | null;
   /** Optional single-slot server cache used to accelerate AAC resume. */
   audioResumeCache?: AudioResumeCacheService | null;
+  /** Explicit single-slot faststart sidecar selector for direct-play video. */
+  videoOptimization?: VideoOptimizationService | null;
   /** Test hook for deterministic sleep-timer behavior. */
   now?: () => number;
   setInterval?: (handler: () => void, timeoutMs: number) => unknown;
@@ -386,6 +394,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
   const engineFactory = options.createEngine ?? createEngine;
   const progressService = options.progressService ?? null;
   const audioResumeCache = options.audioResumeCache ?? null;
+  const videoOptimization = options.videoOptimization ?? null;
   const likedRepository =
     options.likedRepository === undefined
       ? createLocalStorageLikedTracksRepository()
@@ -442,6 +451,9 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       seededSource: null,
       seededState: null,
       preparedSeed: false,
+      seedPreparationGeneration: 0,
+      seedPreparationPending: false,
+      optimizationFallbackInProgress: false,
       endStartupGate: null,
       endSeekGate: null,
       seekTargetSec: null,
@@ -457,6 +469,9 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       seededSource: null,
       seededState: null,
       preparedSeed: false,
+      seedPreparationGeneration: 0,
+      seedPreparationPending: false,
+      optimizationFallbackInProgress: false,
       endStartupGate: null,
       endSeekGate: null,
       seekTargetSec: null,
@@ -577,7 +592,10 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       }
     };
 
-    const playSourceOnSlot = async (source: PlaybackSource) => {
+    const playSourceOnSlot = async (
+      source: PlaybackSource,
+      options: { skipVideoOptimization?: boolean } = {},
+    ) => {
       const targetKind = source.mediaType;
       const otherKind = targetKind === 'audio' ? 'video' : 'audio';
       const slot = slots[targetKind];
@@ -597,6 +615,21 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       if (targetKind === 'audio' && audioResumeCache !== null) {
         playbackSource = audioResumeCache.resolve(playbackSource);
       }
+      if (
+        targetKind === 'video' &&
+        videoOptimization !== null &&
+        !options.skipVideoOptimization
+      ) {
+        playbackSource = videoOptimization.resolve(playbackSource);
+      }
+      if (
+        targetKind === 'video' &&
+        playbackSource.optimizationOriginalUrl !== undefined
+      ) {
+        slot.optimizationFallbackInProgress = false;
+      }
+      slot.seedPreparationGeneration += 1;
+      slot.seedPreparationPending = false;
       if (targetKind === 'video') {
         recordPlaybackDiagnosticMilestone(
           'video_selection',
@@ -800,6 +833,35 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           nextState.positionSec >= 30
         ) {
           audioResumeCache.prepare(nextState.source.mediaId);
+        }
+        if (
+          kind === 'video' &&
+          videoOptimization !== null &&
+          nextState.status.kind === 'error' &&
+          nextState.source?.optimizationOriginalUrl !== undefined &&
+          !slot.optimizationFallbackInProgress
+        ) {
+          slot.optimizationFallbackInProgress = true;
+          videoOptimization.invalidate(nextState.source.mediaId);
+          const fallback = restoreOriginalVideoSource(
+            nextState.source,
+            nextState.positionSec,
+          );
+          if (slot.preparedSeed && slot.session !== null) {
+            slot.seededSource = fallback;
+            slot.session.load(fallback);
+            if (nextState.positionSec > 0) {
+              slot.session.seek(nextState.positionSec);
+            }
+            sync();
+            return;
+          }
+          void playSourceOnSlot(fallback, {
+            skipVideoOptimization: true,
+          }).catch(() => {
+            // The direct source owns any subsequent error. The optimization
+            // fallback is deliberately attempted only once.
+          });
         }
         if (kind === 'audio') maybeAdvanceAudioQueue();
         if (kind === 'audio') updateAudioGateState(nextState);
@@ -1123,6 +1185,8 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
               : 0;
         slot.seededState = { positionSec, durationSec };
         slot.preparedSeed = false;
+        slot.seedPreparationGeneration += 1;
+        slot.seedPreparationPending = false;
         slot.pendingPlay = null;
         set({ active: targetKind });
         sync();
@@ -1132,13 +1196,39 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         const slot = slots[kind];
         if (slot.seededSource === null || slot.session === null) return;
         if (slot.session.getState().source !== null) return;
-        slot.preparedSeed = true;
-        slot.session.load(slot.seededSource);
+        if (slot.seedPreparationPending) return;
+        const seededSource = slot.seededSource;
+        const session = slot.session;
         const positionSec = slot.seededState?.positionSec ?? 0;
-        if (positionSec > 0) {
-          slot.session.seek(positionSec);
+        const loadSeed = (resolved: PlaybackSource) => {
+          if (
+            slot.seededSource !== seededSource ||
+            slot.session !== session ||
+            session.getState().source !== null
+          ) {
+            return;
+          }
+          slot.seededSource = resolved;
+          slot.preparedSeed = true;
+          session.load(resolved);
+          if (positionSec > 0) session.seek(positionSec);
+          sync();
+        };
+        if (kind !== 'video' || videoOptimization === null) {
+          loadSeed(seededSource);
+          return;
         }
-        sync();
+        const generation = ++slot.seedPreparationGeneration;
+        slot.seedPreparationPending = true;
+        void videoOptimization.status(seededSource.mediaId, true).then(() => {
+          if (generation !== slot.seedPreparationGeneration) return;
+          slot.seedPreparationPending = false;
+          loadSeed(videoOptimization.resolve(seededSource));
+        }).catch(() => {
+          if (generation !== slot.seedPreparationGeneration) return;
+          slot.seedPreparationPending = false;
+          loadSeed(seededSource);
+        });
       },
 
       async playSource(source) {
@@ -1151,6 +1241,13 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           });
         }
         await playSourceOnSlot(source);
+      },
+
+      prefetchVideoOptimization(mediaId) {
+        if (videoOptimization === null || mediaId.trim() === '') return;
+        void videoOptimization.status(mediaId).catch(() => {
+          // Prefetch must never interfere with the direct playback path.
+        });
       },
 
       async playMusicQueue(sources, startMediaId) {

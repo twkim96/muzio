@@ -262,6 +262,18 @@ func TestResolveAudioResumeCachePathNextToConfig(t *testing.T) {
 	}
 }
 
+func TestResolveVideoOptimizationPathNextToConfig(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "nested", "config.json")
+	got, err := ResolveVideoOptimizationPath(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(filepath.Dir(configPath), "video-optimization", "v1")
+	if got != want {
+		t.Fatalf("ResolveVideoOptimizationPath = %q, want %q", got, want)
+	}
+}
+
 func writeConfig(t *testing.T, content string) string {
 	t.Helper()
 

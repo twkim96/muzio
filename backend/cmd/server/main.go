@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ import (
 	"muzio/backend/internal/progress"
 	"muzio/backend/internal/streaming"
 	"muzio/backend/internal/thumbnail"
+	"muzio/backend/internal/videoopt"
 )
 
 func main() {
@@ -71,11 +73,16 @@ func main() {
 	if audioResumeCache != nil {
 		defer audioResumeCache.Close()
 	}
+	videoOptimization := configureVideoOptimization(configPath, libraryService, ffmpegInfo, logger)
+	if videoOptimization != nil {
+		defer videoOptimization.Close()
+	}
 	appService := appRuntime{
-		Service:     libraryService,
-		appearance:  config.NewAppearanceStore(configPath),
-		thumbnails:  thumbnailManager,
-		audioResume: audioResumeCache,
+		Service:           libraryService,
+		appearance:        config.NewAppearanceStore(configPath),
+		thumbnails:        thumbnailManager,
+		audioResume:       audioResumeCache,
+		videoOptimization: videoOptimization,
 	}
 	for _, root := range rootSettings.EffectiveRoots() {
 		logger.Info("media root configured", "path", root)
@@ -299,12 +306,23 @@ func hasSplitMediaRoots(settings library.MediaRootSettings) bool {
 
 type appRuntime struct {
 	*library.Service
-	appearance  config.AppearanceStore
-	thumbnails  *thumbnail.Manager
-	audioResume *audioresume.Manager
+	appearance        config.AppearanceStore
+	thumbnails        *thumbnail.Manager
+	audioResume       *audioresume.Manager
+	videoOptimization *videoopt.Manager
+}
+
+func (a appRuntime) VideoOptimization() httpserver.VideoOptimization {
+	if a.videoOptimization == nil {
+		return nil
+	}
+	return a.videoOptimization
 }
 
 func (a appRuntime) AudioResumeCache() httpserver.AudioResumeCache {
+	if a.audioResume == nil {
+		return nil
+	}
 	return a.audioResume
 }
 
@@ -400,6 +418,48 @@ func configureAudioResumeCache(
 		return nil
 	}
 	logger.Info("audio resume cache configured", "cache", cachePath)
+	return manager
+}
+
+func configureVideoOptimization(configPath string, service *library.Service, ffmpegInfo fallback.FFmpegInfo, logger *slog.Logger) *videoopt.Manager {
+	return configureVideoOptimizationWithProbeLookup(
+		configPath,
+		service,
+		ffmpegInfo,
+		logger,
+		exec.LookPath,
+	)
+}
+
+func configureVideoOptimizationWithProbeLookup(
+	configPath string,
+	service *library.Service,
+	ffmpegInfo fallback.FFmpegInfo,
+	logger *slog.Logger,
+	lookupProbe func(string) (string, error),
+) *videoopt.Manager {
+	if !ffmpegInfo.Available {
+		return nil
+	}
+	cachePath, err := config.ResolveVideoOptimizationPath(configPath)
+	if err != nil {
+		logger.Warn("video optimization cache path unavailable", "error", err)
+		return nil
+	}
+	probePath, err := lookupProbe("ffprobe")
+	if err != nil {
+		logger.Info("video optimization disabled", "reason", "ffprobe not found in PATH")
+		return nil
+	}
+	manager, err := videoopt.NewManager(videoopt.Options{
+		CacheDir: cachePath, Resolver: service, Idle: service,
+		Builder: videoopt.FFmpegBuilder{Path: ffmpegInfo.Path, ProbePath: probePath}, Logger: logger,
+	})
+	if err != nil {
+		logger.Warn("video optimization unavailable", "path", cachePath, "error", err)
+		return nil
+	}
+	logger.Info("video optimization configured", "cache", cachePath)
 	return manager
 }
 

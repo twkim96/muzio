@@ -1,4 +1,4 @@
-# Muzio 1.4.0
+# Muzio 1.4.1
 
 Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 브라우저에서 탐색하고 재생하는 경량 self-hosted 미디어 앱입니다.
@@ -8,25 +8,25 @@ Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 | Item | Current contract |
 | --- | --- |
 | Product/service name | `Muzio` |
-| Version | `1.4.0` |
+| Version | `1.4.1` |
 | Primary client | React + TypeScript web app |
 | Backend | Go `1.22`, CGO-free |
 | Normal runtime | Go server가 API, media, `web_app/dist`를 한 origin에서 제공 |
 | Intended network | localhost, trusted LAN, Tailscale tailnet |
 | Authentication | 없음 |
-| Transcoding | 일반 fallback은 계획 API만 제공; 최근 AAC 이어듣기는 단일 M4A remux cache 사용 |
+| Transcoding | 일반 fallback은 계획 API만 제공; AAC resume 및 명시적 video faststart에 stream-copy cache 사용 |
 | Persistence | config, library index, progress는 backend config directory; UI data는 browser storage |
 
 > **Security boundary:** 이 서버는 인증과 사용자 권한 분리가 없습니다.
 > 공용 인터넷에 직접 노출하지 마십시오. localhost, 신뢰된 LAN 또는 Tailscale
 > 내부에서만 사용합니다.
 
-`1.4.0`은 backend HTTPS를 Go 표준 `ServeTLS` 경로로 제공해 HTTP/2 ALPN을
-활성화하고, 영상 선택부터 Vidstack 준비·재생·이어보기와 server Range 응답을
-하나의 임시 diagnostic run으로 연결할 수 있게 합니다. 진단은 기본 비활성이며
-direct Range 재생, `metadata` preload, `can-play` 이후 재생, 기존 AAC resume
-cache 동작을 유지합니다. `1.3.15`의 embedded M4A artist metadata도 그대로
-보존됩니다.
+`1.4.1`은 end-`moov` MP4/MOV를 사용자가 명시적으로 요청했을 때만 FFmpeg
+stream-copy `+faststart` sidecar로 준비합니다. 원본 파일은 수정하지 않으며,
+검증된 단일 ready slot과 불변 `cacheKey` URL만 재생에 사용합니다. HTTP/2,
+진단, direct Range 재생과 기존 AAC resume cache 계약은 그대로 유지됩니다.
+Ready 선택은 브라우저에 한 slot만 지속되어 앱 재시작 뒤 첫 재생에도 사용할 수
+있고, library row focus/pointer 진입 시 상태를 사전 갱신합니다.
 
 ## Source Of Truth
 
@@ -50,6 +50,7 @@ README와 코드가 충돌하면 코드와 통과하는 테스트를 우선하�
 | path traversal and root safety | `backend/internal/mediapath/` |
 | progress conflict/persistence | `backend/internal/progress/` |
 | latest AAC resume remux cache | `backend/internal/audioresume/` |
+| explicit video faststart sidecar | `backend/internal/videoopt/` |
 | ffmpeg availability/fallback plan | `backend/internal/fallback/` |
 | app routes and shell composition | `web_app/src/app/` |
 | library state/live sync/virtual list | `web_app/src/features/library/` |
@@ -74,6 +75,7 @@ Go HTTP server
   -> filesystem watcher + SSE/delta updates
   -> HTTP Range media streaming
   -> single-slot AAC resume remux cache
+  -> explicit single-slot video faststart sidecar
   -> persistent playback progress
 ```
 
@@ -111,6 +113,16 @@ Important boundaries:
   correlation; normal playback does not add diagnostic query parameters.
 - Single-slot latest AAC M4A cache after 30 seconds of playback; uncached
   progress records retain the existing temporal-fragment resume fallback.
+- Explicit single-slot end-`moov` MP4/MOV faststart sidecar with bounded atom
+  inspection, free-space gating, FFmpeg stream-copy validation, and immutable
+  Range URLs. Eligibility probing and builds both wait for the shared media-quiet
+  gate and stop when normal media playback begins.
+- Replaced or cleared video sidecars remain addressable by immutable cache key
+  for a renewable 30-minute playback lease. A sidecar load failure retries the
+  original media once at the same resume position without changing media identity,
+  then invalidates that browser's stale ready hint.
+- Direct and faststart Range endpoints use the same opt-in diagnostic cookies and
+  bounded request/byte/timing record, so A/B samples remain comparable.
 - Persistent backend `progress.v1.json` with timestamp conflict resolution.
 - Atomic config/progress writes with backup recovery.
 - Queue virtualization for large music queues.
@@ -121,8 +133,8 @@ Important boundaries:
 Known limitations:
 
 - No authentication, multi-user isolation, or public-internet hardening.
-- No general-purpose fallback remux/transcode worker; the only remux job is the
-  bounded latest-AAC resume cache.
+- No general-purpose fallback remux/transcode worker. Remux is limited to the
+  bounded AAC resume cache and a user-requested single video faststart copy.
 - Video thumbnail extraction requires ffmpeg; SVG fallback artwork remains
   available when ffmpeg is missing or a source cannot be decoded.
 - Browser codec support still determines direct-play success.
@@ -191,7 +203,7 @@ If `VMA_CONFIG` is omitted, the config path is:
 ```
 
 The `videio_music_app` directory name is a legacy compatibility identifier.
-It remains unchanged in `1.4.0` so existing config, library index, and playback
+It remains unchanged in `1.4.1` so existing config, library index, and playback
 progress are reused without migration risk. The workspace directory path and
 `VMA_*` environment variables are also compatibility surfaces; new public
 names, package names, binaries, health identifiers, and control-server entries
@@ -205,6 +217,22 @@ Backend files beside the resolved config:
 | `library-index.v1.log` | last-known library and revision journal |
 | `progress.v1.json` | versioned playback progress records |
 | `audio-resume-cache/v1/` | latest raw-AAC M4A resume cache and slot metadata |
+| `video-optimization/v1/` | one validated faststart sidecar, metadata, and temporary build files |
+
+Video optimization estimates the output at the source size and requires that
+much additional free space plus `max(5%, 512 MiB)`. During replacement, the
+previous ready file, a new temporary output, and a retired generation can
+coexist. Source bytes are not counted as cache usage. Temp and final outputs
+are created in the same versioned directory so publish uses an atomic rename.
+The free-space gate runs both at prepare time and immediately before background
+work, and the safety margin is checked again before publish. The UI peak cache
+estimate reports cache bytes plus expected output, separately from required
+free space and its safety margin.
+Retired generations use one resettable cleanup timer; active Range requests
+defer deletion, later Range requests renew the playback lease, and sharing-
+violation deletion failures remain retired for a bounded retry.
+If the original disappears, changes fingerprint, or becomes ineligible, its
+current sidecar is removed from metadata and retired for bounded cleanup.
 
 `progress.v1.json` writes are coalesced with a `2 s` quiet window and flushed
 on shutdown with a bounded deadline. Corrupt JSON starts with an empty progress
@@ -277,6 +305,11 @@ values.
 | `GET /api/audio-resume-cache` | Latest AAC resume-cache status |
 | `PUT /api/audio-resume-cache/{id}` | Queue the latest AAC cache candidate |
 | `GET/HEAD /api/audio-resume-cache/media/{id}` | Range-friendly cached M4A stream |
+| `GET /api/video-optimization/{id}` | Eligibility, space, build, and ready status |
+| `PUT /api/video-optimization/{id}` | Explicitly prepare one faststart sidecar |
+| `DELETE /api/video-optimization/{id}/build` | Cancel that media's active build |
+| `DELETE /api/video-optimization/{id}/cache?v={cacheKey}` | Retire that immutable ready generation |
+| `GET/HEAD /api/video-optimization/media/{id}?v={cacheKey}` | Immutable Range-friendly MP4 sidecar |
 | `GET /api/progress` | Progress list |
 | `GET/PUT/DELETE /api/progress/{id}` | Progress record |
 

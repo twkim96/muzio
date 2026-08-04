@@ -221,40 +221,58 @@ func Handler(roots PathResolver, lookup Lookup, logger *slog.Logger) http.Handle
 		w.Header().Set("Cache-Control", "private, no-transform")
 		w.Header().Set("ETag", mediaWeakETag(media.ID, info.Size(), info.ModTime()))
 
-		started := time.Now()
-		rec := &mediaResponseRecorder{ResponseWriter: w, started: started}
-		http.ServeContent(rec, r, media.Name, info.ModTime(), file)
-		diagnosticTransportID := mediaDiagnosticTransportID(r)
-		diagnosticSampleID := ""
-		logLevel := slog.LevelDebug
-		if diagnosticTransportID != "" {
-			diagnosticSampleID = mediaDiagnosticCookieID(r, diagnosticSampleCookieName)
-			// A valid correlation ID is an explicit diagnostic-session opt-in.
-			// Promote only this bounded media record so production's default Info
-			// logger can collect it without enabling unrelated debug output.
-			logLevel = slog.LevelInfo
-		}
-		logger.Log(
-			r.Context(),
-			logLevel,
-			"media stream",
-			"id", media.ID,
-			"type", media.Type,
-			"protocol", r.Proto,
-			"diagnostic_transport_id", diagnosticTransportID,
-			"diagnostic_sample_id", diagnosticSampleID,
-			"method", r.Method,
-			"request_kind", mediaRequestKind(r),
-			"range", r.Header.Get("Range"),
-			"status", rec.statusOrOK(),
-			"bytes", rec.bytes,
-			"started_at_unix_ms", started.UnixMilli(),
-			"first_body_write_ms", rec.firstBodyWriteMillis(),
-			"duration_ms", time.Since(started).Milliseconds(),
-			"request_canceled", r.Context().Err() != nil,
-			"write_error", rec.writeErr,
-		)
+		ServeContentWithDiagnostics(w, r, media.Name, info.ModTime(), file, logger, media.ID, string(media.Type), "direct")
 	}
+}
+
+// ServeContentWithDiagnostics keeps direct and optimized media streams on the
+// same bounded Range telemetry contract without logging filesystem paths or
+// arbitrary query/cookie values.
+func ServeContentWithDiagnostics(
+	w http.ResponseWriter,
+	r *http.Request,
+	name string,
+	modifiedAt time.Time,
+	content io.ReadSeeker,
+	logger *slog.Logger,
+	mediaID string,
+	mediaType string,
+	sourceKind string,
+) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	started := time.Now()
+	rec := &mediaResponseRecorder{ResponseWriter: w, started: started}
+	http.ServeContent(rec, r, name, modifiedAt, content)
+	diagnosticTransportID := mediaDiagnosticTransportID(r)
+	diagnosticSampleID := ""
+	logLevel := slog.LevelDebug
+	if diagnosticTransportID != "" {
+		diagnosticSampleID = mediaDiagnosticCookieID(r, diagnosticSampleCookieName)
+		logLevel = slog.LevelInfo
+	}
+	logger.Log(
+		r.Context(),
+		logLevel,
+		"media stream",
+		"id", mediaID,
+		"type", mediaType,
+		"source_kind", sourceKind,
+		"protocol", r.Proto,
+		"diagnostic_transport_id", diagnosticTransportID,
+		"diagnostic_sample_id", diagnosticSampleID,
+		"method", r.Method,
+		"request_kind", mediaRequestKind(r),
+		"range", r.Header.Get("Range"),
+		"status", rec.statusOrOK(),
+		"bytes", rec.bytes,
+		"started_at_unix_ms", started.UnixMilli(),
+		"first_body_write_ms", rec.firstBodyWriteMillis(),
+		"duration_ms", time.Since(started).Milliseconds(),
+		"request_canceled", r.Context().Err() != nil,
+		"write_error", rec.writeErr,
+	)
 }
 
 func mediaDiagnosticTransportID(r *http.Request) string {
