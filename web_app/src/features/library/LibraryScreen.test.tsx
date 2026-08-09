@@ -501,6 +501,81 @@ describe('LibraryScreen', () => {
     expect(screen.getByLabelText('Play clip.mp4')).toBeInTheDocument();
   });
 
+  test('keeps audio metadata in a compact two-line mobile row', async () => {
+    renderScreen('audio', {
+      kind: 'ok',
+      items: [
+        {
+          id: 'a',
+          type: 'audio',
+          rootName: 'music',
+          relativePath: 'Album/song.mp3',
+          name: 'song.mp3',
+          sizeBytes: 1024,
+          modifiedAt: '2026-08-10T00:00:00Z',
+          metadata: {
+            title: 'Song',
+            artist: 'Artist',
+            album: 'Album',
+            durationSec: 125,
+          },
+        },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('library-list')).toHaveAttribute(
+        'data-row-height',
+        '54',
+      );
+    });
+    expect(screen.getByTestId('library-item')).toHaveStyle({ height: '54px' });
+    expect(screen.getByTestId('audio-mobile-metadata')).toHaveTextContent(
+      'Artist · 1.0 KB · 2026-08-10 · music',
+    );
+    expect(
+      screen.getByTestId('audio-mobile-metadata'),
+    ).not.toHaveTextContent('Album');
+    expect(
+      screen.getByTestId('audio-mobile-metadata'),
+    ).not.toHaveTextContent('2m');
+  });
+
+  test('uses artist, size, modified date, and library columns on desktop', async () => {
+    setNonMobileViewport(true);
+    renderScreen('audio', {
+      kind: 'ok',
+      items: [
+        {
+          id: 'a',
+          type: 'audio',
+          rootName: 'music',
+          relativePath: 'Album/song.mp3',
+          name: 'song.mp3',
+          sizeBytes: 1024,
+          modifiedAt: '2026-08-10T00:00:00Z',
+          metadata: {
+            title: 'Song',
+            artist: 'Artist',
+            album: 'Album',
+            durationSec: 125,
+          },
+        },
+      ],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('library-item')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Size')).toBeInTheDocument();
+    expect(screen.getByText('Modified')).toBeInTheDocument();
+    expect(screen.getByText('Library')).toBeInTheDocument();
+    expect(screen.getAllByText('1.0 KB').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('2026-08-10').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('music').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Time')).not.toBeInTheDocument();
+  });
+
   test('keeps image text inside a comfortable mobile row', async () => {
     renderScreen(
       'image',

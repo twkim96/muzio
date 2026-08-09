@@ -2,9 +2,10 @@
 
 ## 상태
 
-- 문서 상태: Code release complete - automated gates complete; real-device validation follow-up
+- 문서 상태: 1.4.2.1 web maintenance complete; real-device validation follow-up
 - 계획 승인일: 2026-08-03
 - 목표 버전: `1.4.2`
+- 웹 유지보수 버전: `1.4.2.1`
 - 작성일: 2026-08-03
 - 개발 시작일: 2026-08-04
 - 코드 완료일: 2026-08-04
@@ -98,6 +99,36 @@
   log로 남지 않는다.
 - random-access boundary는 검증하지만 `independent_segments` flag/tag는 실기기
   검증 전에는 생성하지 않는다. 외부 도구가 미검증 tag를 만든 package도 거부한다.
+
+## 2026-08-10 웹 목록 유지보수 (`1.4.2.1`)
+
+Status: Completed
+
+가수 metadata가 채워진 오디오 항목에서 모바일 목록이 제목·가수·파일 정보의
+3줄이 되면서 고정 54px 가상 행을 넘어 다음 항목과 겹치는 문제를 수정했다.
+가상 리스트 높이를 늘리지 않고 기존의 조밀한 2줄 계약을 유지한다.
+
+- [x] 모바일 첫 줄은 제목, 둘째 줄은 `가수 · 크기 · 날짜 · 루트` 순서로
+  표시한다. 가수가 없으면 크기부터 시작한다.
+- [x] 모바일 둘째 줄은 한 줄 `truncate`를 유지해 긴 metadata가 다음 행으로
+  넘치지 않게 한다.
+- [x] PC 오디오 표를 `Song / Artist / Size / Modified / Library` 열로 맞춰
+  모바일과 동일한 정보와 순서를 제공한다.
+- [x] PC의 앨범·재생시간 열은 제거하고 가수 metadata가 없어도 크기·날짜·루트는
+  독립 열로 유지한다.
+- [x] 오디오 가상 행 높이는 기존 54px를 유지하며 비디오·이미지 행 높이 계약은
+  변경하지 않는다.
+- [x] 모바일 2줄 구성과 PC 열 구성을 회귀 테스트로 고정한다.
+
+검증:
+
+- `npm test -- --run`: 47 files, 501 tests 통과
+- `npm run build`: TypeScript와 Vite production build 통과
+- package/lockfile/settings/PWA cache/README `1.4.2.1` 표면 검사 통과
+- `git diff --check` 통과
+
+이 유지보수는 웹 목록 표시와 버전 표면만 변경한다. HLS/fMP4, backend API,
+cache lifecycle과 아래 실기기 검증 대기 상태는 변경하지 않는다.
 
 ## Phase 0 - prototype 승인 게이트
 
@@ -339,6 +370,7 @@ Status: Automated verification complete; real-device validation deferred
 ### 버전 표면
 
 - [x] package/lockfile/settings/PWA cache `1.4.2`
+- [x] 웹 목록 유지보수 package/lockfile/settings/PWA cache `1.4.2.1`
 - [x] README HLS cache path, API, eligibility, storage 설명
 - [x] 실제 지원 codec/track 제한만 release note에 기록
 

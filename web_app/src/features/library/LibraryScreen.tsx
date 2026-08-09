@@ -281,15 +281,14 @@ function LibraryBody({
             className={
               type !== 'audio'
                 ? 'hidden'
-                : 'hidden h-[54px] grid-cols-[minmax(16rem,1.35fr)_minmax(8rem,0.72fr)_minmax(10rem,1fr)_5.5rem_6.75rem] items-center gap-4 border-b border-zinc-200/70 px-5 text-sm font-medium text-muted dark:border-white/10 xl:grid'
+                : 'hidden h-[54px] grid-cols-[minmax(16rem,1.35fr)_minmax(8rem,0.72fr)_6rem_7.5rem_minmax(6rem,0.6fr)_6.75rem] items-center gap-4 border-b border-zinc-200/70 px-5 text-sm font-medium text-muted dark:border-white/10 xl:grid'
             }
           >
-            <span>{type === 'audio' ? 'Song' : type === 'video' ? 'Video' : 'Image'}</span>
-            <span>{type === 'audio' ? 'Artist' : 'Details'}</span>
-            <span>{type === 'audio' ? 'Album' : 'Library'}</span>
-            <span className="text-right">
-              {type === 'audio' ? 'Time' : type === 'video' ? 'Progress' : 'Modified'}
-            </span>
+            <span>Song</span>
+            <span>Artist</span>
+            <span className="text-right">Size</span>
+            <span className="text-right">Modified</span>
+            <span>Library</span>
             <span className="sr-only">Actions</span>
           </div>
           <VirtualizedLibraryList

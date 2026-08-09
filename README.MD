@@ -1,4 +1,4 @@
-# Muzio 1.4.2
+# Muzio 1.4.2.1
 
 Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 브라우저에서 탐색하고 재생하는 경량 self-hosted 미디어 앱입니다.
@@ -8,7 +8,7 @@ Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 | Item | Current contract |
 | --- | --- |
 | Product/service name | `Muzio` |
-| Version | `1.4.2` |
+| Version | `1.4.2.1` |
 | Primary client | React + TypeScript web app |
 | Backend | Go `1.22`, CGO-free |
 | Normal runtime | Go server가 API, media, `web_app/dist`를 한 origin에서 제공 |
@@ -28,6 +28,11 @@ ready slot과 불변 `cacheKey` URL만 재생에 사용합니다. HTTP/2, 진단
 Range 재생과 기존 AAC resume cache 계약은 그대로 유지됩니다.
 Ready 선택은 브라우저에 한 slot만 지속되어 앱 재시작 뒤 첫 재생에도 사용할 수
 있고, library row focus/pointer 진입 시 상태를 사전 갱신합니다.
+
+`1.4.2.1`은 웹 목록 유지보수 릴리스입니다. 모바일 오디오 행은 제목과
+`가수 · 크기 · 날짜 · 루트`의 두 줄을 유지하며 긴 두 번째 줄은 말줄임합니다.
+PC 오디오 표도 `Song / Artist / Size / Modified / Library` 열로 같은 정보를
+표시합니다. 재생, backend API와 HLS/fMP4 계약은 `1.4.2`와 동일합니다.
 
 ## Source Of Truth
 
@@ -234,7 +239,7 @@ If `VMA_CONFIG` is omitted, the config path is:
 ```
 
 The `videio_music_app` directory name is a legacy compatibility identifier.
-It remains unchanged in `1.4.2` so existing config, library index, and playback
+It remains unchanged in `1.4.2.1` so existing config, library index, and playback
 progress are reused without migration risk. The workspace directory path and
 `VMA_*` environment variables are also compatibility surfaces; new public
 names, package names, binaries, health identifiers, and control-server entries

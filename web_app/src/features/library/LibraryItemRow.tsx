@@ -80,7 +80,6 @@ function LibraryItemRowComponent({
   const metadata = item.metadata;
   const displayTitle = metadata?.title || filename;
   const details = metadataDetails(item);
-  const columnMeta = columnMetadata(item);
   const store = usePlayerStore();
   const playSource = store((s) => s.playSource);
   const prefetchVideoOptimization = store((s) => s.prefetchVideoOptimization);
@@ -338,7 +337,7 @@ function LibraryItemRowComponent({
             data-testid="library-item-play"
             onClick={handlePrimaryAction}
             aria-label={`Play ${item.name}`}
-            className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 text-left xl:grid-cols-[auto_minmax(11rem,1fr)_minmax(8rem,0.72fr)_minmax(10rem,1fr)_5.5rem]"
+            className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 text-left xl:grid-cols-[auto_minmax(11rem,1fr)_minmax(8rem,0.72fr)_6rem_7.5rem_minmax(6rem,0.6fr)]"
           >
             <LibraryThumbnail item={item} />
             <div className="min-w-0">
@@ -349,25 +348,34 @@ function LibraryItemRowComponent({
                 {directory && <span className="text-muted">{directory}</span>}
                 {displayTitle}
               </p>
-              {details !== '' && (
-                <p className="truncate text-sm text-muted xl:hidden">{details}</p>
-              )}
-              <p className="truncate text-xs text-muted xl:hidden">
-                <span>{item.rootName}</span>
-                <span aria-hidden> · </span>
+              <p
+                data-testid="audio-mobile-metadata"
+                className="truncate text-sm text-muted xl:hidden"
+              >
+                {metadata?.artist && (
+                  <>
+                    <span>{metadata.artist}</span>
+                    <span aria-hidden> · </span>
+                  </>
+                )}
                 <span>{formatSize(item.sizeBytes)}</span>
                 <span aria-hidden> · </span>
                 <span>{formatModified(item.modifiedAt)}</span>
+                <span aria-hidden> · </span>
+                <span>{item.rootName}</span>
               </p>
             </div>
             <p className="hidden min-w-0 truncate text-sm text-muted xl:block">
-              {columnMeta.artist}
-            </p>
-            <p className="hidden min-w-0 truncate text-sm text-muted xl:block">
-              {columnMeta.album}
+              {metadata?.artist}
             </p>
             <p className="hidden min-w-0 text-right text-sm tabular-nums text-muted xl:block">
-              {columnMeta.duration}
+              {formatSize(item.sizeBytes)}
+            </p>
+            <p className="hidden min-w-0 text-right text-sm tabular-nums text-muted xl:block">
+              {formatModified(item.modifiedAt)}
+            </p>
+            <p className="hidden min-w-0 truncate text-sm text-muted xl:block">
+              {item.rootName}
             </p>
           </button>
         )}
@@ -433,39 +441,6 @@ export function rowPropsEqual(
 }
 
 export const LibraryItemRow = memo(LibraryItemRowComponent, rowPropsEqual);
-
-function columnMetadata(item: LibraryItem): {
-  artist: string;
-  album: string;
-  duration: string;
-  modified: string;
-} {
-  const metadata = item.metadata;
-  const duration = formatDuration(metadata?.durationSec);
-  if (item.type === 'audio') {
-    return {
-      artist: metadata?.artist || item.rootName,
-      album: metadata?.album || `${formatSize(item.sizeBytes)} · ${formatModified(item.modifiedAt)}`,
-      duration,
-      modified: formatModified(item.modifiedAt),
-    };
-  }
-  if (item.type === 'image') {
-    return {
-      artist: formatModified(item.modifiedAt),
-      album: `${item.rootName} · ${formatSize(item.sizeBytes)}`,
-      duration: '',
-      modified: formatModified(item.modifiedAt),
-    };
-  }
-  const details = metadataDetails(item);
-  return {
-    artist: details || formatModified(item.modifiedAt),
-    album: `${item.rootName} · ${formatSize(item.sizeBytes)}`,
-    duration,
-    modified: formatModified(item.modifiedAt),
-  };
-}
 
 function LibraryRowActions({
   item,

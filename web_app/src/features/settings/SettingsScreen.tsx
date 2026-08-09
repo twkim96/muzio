@@ -473,7 +473,7 @@ export function SettingsScreen() {
             <RuntimeItem label="Deployment" value="Go server + built web app" />
             <RuntimeItem label="Web app" value="Same origin as this page" />
             <RuntimeItem label="Backend service" value="Muzio" />
-            <RuntimeItem label="Version" value="1.4.2" />
+            <RuntimeItem label="Version" value="1.4.2.1" />
           </dl>
         </section>
       </div>
