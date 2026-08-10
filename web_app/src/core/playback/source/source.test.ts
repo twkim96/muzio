@@ -98,4 +98,30 @@ describe('playbackSourceFromLibraryItem', () => {
     expect(source).not.toBeInstanceOf(Promise);
     expect(source).toEqual(remoteSourceFromLibraryItem(sampleItem));
   });
+
+  test('forwards only ready embedded audio artwork', () => {
+    const source = playbackSourceFromLibraryItem({
+      ...sampleItem,
+      type: 'audio',
+      thumbnail: {
+        url: '/api/thumbnails/a1?v=cover&state=ready',
+        kind: 'embedded-artwork',
+        status: 'ready',
+        cacheKey: 'cover',
+      },
+    });
+    expect(source.artworkUrl).toBe('/api/thumbnails/a1?v=cover&state=ready');
+
+    const pending = playbackSourceFromLibraryItem({
+      ...sampleItem,
+      type: 'audio',
+      thumbnail: {
+        url: '/api/thumbnails/a1?v=cover&state=pending',
+        kind: 'embedded-artwork',
+        status: 'pending',
+        cacheKey: 'cover',
+      },
+    });
+    expect(pending.artworkUrl).toBeUndefined();
+  });
 });

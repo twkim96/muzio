@@ -212,13 +212,7 @@ export function FullPlayerScreen({
         <DismissButton label="Collapse music player" onCollapse={collapsePlayer} />
 
         <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-start px-6 py-10 [--player-art-width:min(26rem,38vh,78vw)] sm:justify-center sm:px-10 sm:py-10 sm:[--player-art-width:min(34rem,48vh,78vw)]">
-          <div
-            data-testid="now-playing-art"
-            className="mx-auto flex aspect-square w-[var(--player-art-width)] items-center justify-center rounded-2xl bg-zinc-200/80 text-7xl text-muted shadow-2xl shadow-black/20 dark:bg-white/[0.08]"
-            aria-hidden
-          >
-            <MusicGlyph className="h-16 w-16" />
-          </div>
+          <NowPlayingArtwork artworkUrl={source?.artworkUrl} />
 
           <section className="mx-auto mt-5 w-full max-w-3xl">
             <div className="mx-auto w-[var(--player-art-width)]">
@@ -441,6 +435,30 @@ export function FullPlayerScreen({
         </main>
       </div>
       <QueueDrawer open={queueOpen} onClose={() => setQueueOpen(false)} />
+    </div>
+  );
+}
+
+function NowPlayingArtwork({ artworkUrl }: { artworkUrl?: string }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [artworkUrl]);
+  return (
+    <div
+      data-testid="now-playing-art"
+      className="mx-auto flex aspect-square w-[var(--player-art-width)] items-center justify-center overflow-hidden rounded-2xl bg-zinc-200/80 text-7xl text-muted shadow-2xl shadow-black/20 dark:bg-white/[0.08]"
+      aria-hidden
+    >
+      {artworkUrl && !failed ? (
+        <img
+          data-testid="now-playing-art-image"
+          src={artworkUrl}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <MusicGlyph className="h-16 w-16" />
+      )}
     </div>
   );
 }

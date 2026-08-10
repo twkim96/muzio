@@ -2,10 +2,11 @@
 
 ## 상태
 
-- 문서 상태: 1.4.2.1 web maintenance complete; real-device validation follow-up
+- 문서 상태: 1.4.2.2 embedded album artwork patch and automated verification complete
 - 계획 승인일: 2026-08-03
 - 목표 버전: `1.4.2`
 - 웹 유지보수 버전: `1.4.2.1`
+- 앨범아트 패치 버전: `1.4.2.2`
 - 작성일: 2026-08-03
 - 개발 시작일: 2026-08-04
 - 코드 완료일: 2026-08-04
@@ -129,6 +130,50 @@ Status: Completed
 
 이 유지보수는 웹 목록 표시와 버전 표면만 변경한다. HLS/fMP4, backend API,
 cache lifecycle과 아래 실기기 검증 대기 상태는 변경하지 않는다.
+
+## 2026-08-11 내장 앨범아트 패치 (`1.4.2.2`)
+
+Status: Completed
+
+원인 분석:
+
+- 오디오 `BuildThumbnail`은 항상 `generated-fallback/ready`를 만들었고 thumbnail
+  manager는 video/image만 지원해 음악 파일의 embedded picture stream을 읽지 않았다.
+- 목록은 fallback URL을 렌더할 수 있었지만 playback source에는 artwork URL 계약이
+  없어서 미니/전체 플레이어와 Media Session이 항상 음표 또는 metadata만 표시했다.
+- audio snapshot의 thumbnail-only update는 presentation map에 분리되므로, 행 클릭이
+  semantic item의 오래된 pending thumbnail을 쓰면 준비된 cover가 player로 전달되지
+  않는 경로도 있었다.
+
+확정 계약:
+
+- [x] 오디오는 `embedded-artwork/pending`으로 scan하며 기존 fallback kind가 같은
+  fingerprint에 남아 있어도 새 kind로 한 번 migration한다.
+- [x] 전체 음악 library를 startup에 FFmpeg로 훑지 않는다. 실제 thumbnail HTTP
+  요청이 들어온 pending audio만 quiet/background gate 안에서 on-demand 추출한다.
+- [x] 첫 embedded picture stream을 seek 없이 최대 640x640 JPEG로 변환하고 기존
+  fingerprint cache key, atomic temp publish, immutable HTTP cache를 재사용한다.
+- [x] 커버 없음/추출 실패/FFmpeg 없음은 원본 재생에 영향을 주지 않고 SVG/음표
+  fallback으로 남는다. `no picture stream`은 정상적인 terminal 결과로 분류해
+  재시도나 warning log를 만들지 않는다.
+- [x] thumbnail-only ready update를 행 재생 source에 합쳐 목록, 미니 플레이어,
+  전체 플레이어와 Media Session에 같은 JPEG URL을 전달한다.
+- [x] package/lockfile/settings/PWA cache/README 버전을 `1.4.2.2`로 맞춘다.
+
+검증:
+
+- [x] Go `go test -count=1 ./...` 전체 package 통과
+- [x] Go `go vet ./...` 통과
+- [x] library/thumbnail/httpserver `go test -race -count=1` 통과
+- [x] frontend 47 files, 506 tests 통과
+- [x] changed frontend 5 files, 113 tests 재확인
+- [x] TypeScript와 Vite production build 통과
+- [x] 실제 FFmpeg `8.0.1` attached-pic M4A fixture에서 640x640 JPEG 추출 확인
+- [x] package/lockfile/settings/PWA cache/README/document `1.4.2.2` 표면 확인
+- [x] `git diff --check` 통과
+
+이 패치는 audio artwork와 `1.4.2.2` 버전 표면만 변경한다. HLS/fMP4 eligibility,
+video optimization, media/progress identity 및 아래 실기기 HLS gate는 변경하지 않는다.
 
 ## Phase 0 - prototype 승인 게이트
 
@@ -371,6 +416,7 @@ Status: Automated verification complete; real-device validation deferred
 
 - [x] package/lockfile/settings/PWA cache `1.4.2`
 - [x] 웹 목록 유지보수 package/lockfile/settings/PWA cache `1.4.2.1`
+- [x] 앨범아트 패치 package/lockfile/settings/PWA cache `1.4.2.2`
 - [x] README HLS cache path, API, eligibility, storage 설명
 - [x] 실제 지원 codec/track 제한만 release note에 기록
 

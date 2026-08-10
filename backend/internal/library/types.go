@@ -53,6 +53,7 @@ const (
 	ThumbnailKindFallback = "generated-fallback"
 	ThumbnailKindVideo    = "generated-frame"
 	ThumbnailKindImage    = "generated-preview"
+	ThumbnailKindAudio    = "embedded-artwork"
 
 	ThumbnailStatusPending  = "pending"
 	ThumbnailStatusReady    = "ready"

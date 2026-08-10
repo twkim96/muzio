@@ -415,13 +415,17 @@ func (s *Service) UpdateThumbnailStatus(id, cacheKey, status string) Reconciliat
 	}
 	current, err := snapshot.Get(id)
 	if err != nil ||
-		(current.Type != MediaTypeVideo && current.Type != MediaTypeImage) ||
+		(current.Type != MediaTypeVideo &&
+			current.Type != MediaTypeImage &&
+			current.Type != MediaTypeAudio) ||
 		current.Thumbnail.CacheKey != cacheKey {
 		return ReconciliationResult{Revision: snapshot.Revision()}
 	}
 	next := ThumbnailWithStatus(current.Thumbnail, current.ID, status)
 	if current.Type == MediaTypeImage {
 		next.Kind = ThumbnailKindImage
+	} else if current.Type == MediaTypeAudio {
+		next.Kind = ThumbnailKindAudio
 	} else {
 		next.Kind = ThumbnailKindVideo
 	}
@@ -701,7 +705,8 @@ func preserveRuntimeMediaFields(snapshot *Snapshot, items []Media) []Media {
 		current, exists := snapshot.byID[items[index].ID]
 		if !exists ||
 			current.Thumbnail.CacheKey == "" ||
-			current.Thumbnail.CacheKey != items[index].Thumbnail.CacheKey {
+			current.Thumbnail.CacheKey != items[index].Thumbnail.CacheKey ||
+			current.Thumbnail.Kind != items[index].Thumbnail.Kind {
 			continue
 		}
 		items[index].Thumbnail = current.Thumbnail

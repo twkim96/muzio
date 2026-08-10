@@ -388,6 +388,28 @@ describe('MiniPlayer', () => {
     expect(screen.getByTestId('overlay-open')).toHaveTextContent('open');
   });
 
+  test('shows embedded cover artwork in the cover button', () => {
+    const store = createPlayerStore();
+    store.getState().setSessionForTests(
+      'audio',
+      fakeSession({
+        status: { kind: 'playing' },
+        source: {
+          ...audioSource,
+          artworkUrl: '/api/thumbnails/a1?v=cover&state=ready',
+        },
+        positionSec: 20,
+        durationSec: 100,
+      }),
+    );
+    renderWithStore(store);
+
+    expect(screen.getByTestId('mini-player-artwork')).toHaveAttribute(
+      'src',
+      '/api/thumbnails/a1?v=cover&state=ready',
+    );
+  });
+
   test('ignores empty mini progress track taps', () => {
     const session = fakeSession({
       status: { kind: 'playing' },

@@ -152,6 +152,81 @@ func imageItem(id, cacheKey string) library.Media {
 	}
 }
 
+func audioItem(id, cacheKey string) library.Media {
+	return library.Media{
+		ID:           id,
+		Type:         library.MediaTypeAudio,
+		RootName:     "music",
+		RelativePath: id + ".m4a",
+		Thumbnail: library.Thumbnail{
+			CacheKey: cacheKey,
+			Kind:     library.ThumbnailKindAudio,
+			Status:   library.ThumbnailStatusPending,
+		},
+	}
+}
+
+func TestManagerTracksAudioWithoutEagerExtraction(t *testing.T) {
+	audioExtractor := &fakeExtractor{}
+	manager, err := NewManager(Options{
+		CacheDir:     t.TempDir(),
+		Resolver:     fakeResolver{path: "/music/song.m4a"},
+		Extract:      &fakeExtractor{},
+		AudioExtract: audioExtractor,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	item := audioItem("song", "audio-key")
+	manager.Track([]library.Media{item})
+	if got := audioExtractor.calls.Load(); got != 0 {
+		t.Fatalf("audio extractor calls after Track = %d, want 0", got)
+	}
+	if !manager.Enqueue(item) {
+		t.Fatal("on-demand audio enqueue rejected")
+	}
+	waitFor(t, func() bool { return manager.Ready(item) })
+	if got := audioExtractor.calls.Load(); got != 1 {
+		t.Fatalf("audio extractor calls = %d, want 1", got)
+	}
+}
+
+func TestManagerDoesNotRetryMissingEmbeddedArtwork(t *testing.T) {
+	audioExtractor := &fakeExtractor{err: ErrArtworkUnavailable}
+	failed := make(chan struct{}, 1)
+	manager, err := NewManager(Options{
+		CacheDir:     t.TempDir(),
+		Resolver:     fakeResolver{path: "/music/song.m4a"},
+		Extract:      &fakeExtractor{},
+		AudioExtract: audioExtractor,
+		RetryBase:    time.Millisecond,
+		RetryMax:     time.Millisecond,
+		MaxAttempts:  3,
+		OnFailure: func(library.Media) {
+			failed <- struct{}{}
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	item := audioItem("song", "audio-key")
+	if !manager.Enqueue(item) {
+		t.Fatal("audio enqueue rejected")
+	}
+	select {
+	case <-failed:
+	case <-time.After(time.Second):
+		t.Fatal("missing artwork failure was not published")
+	}
+	if got := audioExtractor.calls.Load(); got != 1 {
+		t.Fatalf("audio extractor calls = %d, want 1", got)
+	}
+}
+
 func TestEnqueueReadyItemSkipsRedundantReadyCallback(t *testing.T) {
 	item := video("ready", "ready-key")
 	item.Thumbnail.Status = library.ThumbnailStatusReady

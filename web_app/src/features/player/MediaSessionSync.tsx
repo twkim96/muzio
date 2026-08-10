@@ -155,6 +155,9 @@ function mediaMetadataForSource(source: PlaybackSource): MediaMetadataInitLike {
   return {
     title: source.title ?? source.name,
     ...(artist ? { artist } : {}),
+    ...(source.artworkUrl
+      ? { artwork: [{ src: source.artworkUrl, type: 'image/jpeg' }] }
+      : {}),
   };
 }
 

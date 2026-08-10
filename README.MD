@@ -1,4 +1,4 @@
-# Muzio 1.4.2.1
+# Muzio 1.4.2.2
 
 Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 브라우저에서 탐색하고 재생하는 경량 self-hosted 미디어 앱입니다.
@@ -8,7 +8,7 @@ Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 | Item | Current contract |
 | --- | --- |
 | Product/service name | `Muzio` |
-| Version | `1.4.2.1` |
+| Version | `1.4.2.2` |
 | Primary client | React + TypeScript web app |
 | Backend | Go `1.22`, CGO-free |
 | Normal runtime | Go server가 API, media, `web_app/dist`를 한 origin에서 제공 |
@@ -33,6 +33,13 @@ Ready 선택은 브라우저에 한 slot만 지속되어 앱 재시작 뒤 첫 �
 `가수 · 크기 · 날짜 · 루트`의 두 줄을 유지하며 긴 두 번째 줄은 말줄임합니다.
 PC 오디오 표도 `Song / Artist / Size / Modified / Library` 열로 같은 정보를
 표시합니다. 재생, backend API와 HLS/fMP4 계약은 `1.4.2`와 동일합니다.
+
+`1.4.2.2`는 음악 파일에 내장된 앨범 커버를 표시합니다. 보이는 음악 행의
+thumbnail 요청이 들어왔을 때만 FFmpeg로 첫 embedded picture stream을 bounded
+JPEG로 추출하며, 성공한 결과는 원본 fingerprint 기반 불변 cache에 저장됩니다.
+커버가 없거나 추출할 수 없는 파일은 기존 SVG/음표 fallback을 유지합니다.
+준비된 커버는 음악 목록, 미니 플레이어, 전체 플레이어와 Media Session에
+같은 URL로 전달됩니다.
 
 ## Source Of Truth
 
@@ -239,7 +246,7 @@ If `VMA_CONFIG` is omitted, the config path is:
 ```
 
 The `videio_music_app` directory name is a legacy compatibility identifier.
-It remains unchanged in `1.4.2.1` so existing config, library index, and playback
+It remains unchanged in `1.4.2.2` so existing config, library index, and playback
 progress are reused without migration risk. The workspace directory path and
 `VMA_*` environment variables are also compatibility surfaces; new public
 names, package names, binaries, health identifiers, and control-server entries
@@ -252,6 +259,7 @@ Backend files beside the resolved config:
 | `config.json` | host, port, split media roots, web dist, appearance |
 | `library-index.v1.log` | last-known library and revision journal |
 | `progress.v1.json` | versioned playback progress records |
+| `thumbnails/v1/` | immutable video frames, image previews, and embedded audio artwork |
 | `audio-resume-cache/v1/` | latest raw-AAC M4A resume cache and slot metadata |
 | `video-optimization/v1/` | one validated faststart file or HLS/fMP4 directory, metadata, and temporary build output |
 

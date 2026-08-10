@@ -2,9 +2,11 @@ package thumbnail
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -45,6 +47,42 @@ func TestFFmpegExtractorRequiresPath(t *testing.T) {
 	err := (FFmpegExtractor{}).Extract(context.Background(), "source", "output")
 	if err == nil {
 		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestFFmpegArtworkExtractorDoesNotSeek(t *testing.T) {
+	var arguments []string
+	extractor := FFmpegArtworkExtractor{
+		Path: "ffmpeg",
+		Command: func(ctx context.Context, name string, args ...string) *exec.Cmd {
+			arguments = append([]string(nil), args...)
+			return exec.CommandContext(ctx, "sh", "-c", "printf jpeg > \"$1\"", "sh", args[len(args)-1])
+		},
+	}
+	if err := extractor.Extract(context.Background(), "song.m4a", t.TempDir()+"/cover.jpg"); err != nil {
+		t.Fatal(err)
+	}
+	for _, argument := range arguments {
+		if argument == "-ss" {
+			t.Fatalf("artwork extraction unexpectedly seeks: %v", arguments)
+		}
+	}
+	joined := strings.Join(arguments, " ")
+	if !strings.Contains(joined, "-map 0:v:0") || !strings.Contains(joined, "-frames:v 1") {
+		t.Fatalf("artwork extraction arguments = %v", arguments)
+	}
+}
+
+func TestFFmpegArtworkExtractorClassifiesMissingPicture(t *testing.T) {
+	extractor := FFmpegArtworkExtractor{
+		Path: "ffmpeg",
+		Command: func(ctx context.Context, name string, args ...string) *exec.Cmd {
+			return exec.CommandContext(ctx, "sh", "-c", "printf \"Stream map '0:v:0' matches no streams.\" >&2; exit 1")
+		},
+	}
+	err := extractor.Extract(context.Background(), "song.m4a", t.TempDir()+"/cover.jpg")
+	if !errors.Is(err, ErrArtworkUnavailable) {
+		t.Fatalf("error = %v, want ErrArtworkUnavailable", err)
 	}
 }
 

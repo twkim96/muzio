@@ -59,6 +59,9 @@ func TestBuildThumbnailUsesStableCacheKey(t *testing.T) {
 	if first.URL == "" {
 		t.Fatalf("URL empty")
 	}
+	if first.Kind != ThumbnailKindAudio || first.Status != ThumbnailStatusPending {
+		t.Fatalf("audio thumbnail = %#v", first)
+	}
 }
 
 func TestBuildVideoThumbnailStartsPendingAndReadyChangesURL(t *testing.T) {

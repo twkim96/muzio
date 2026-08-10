@@ -282,6 +282,29 @@ describe('FullPlayerScreen', () => {
     expect(screen.queryByTestId('video-viewport')).not.toBeInTheDocument();
   });
 
+  test('renders embedded cover artwork for audio sources', () => {
+    const store = createPlayerStore();
+    store.getState().setSessionForTests(
+      'audio',
+      fakeSession({
+        status: { kind: 'playing' },
+        source: {
+          ...audioSource,
+          artworkUrl: '/api/thumbnails/a1?v=cover&state=ready',
+        },
+        positionSec: 20,
+        durationSec: 100,
+      }),
+    );
+
+    renderScreen(store);
+
+    expect(screen.getByTestId('now-playing-art-image')).toHaveAttribute(
+      'src',
+      '/api/thumbnails/a1?v=cover&state=ready',
+    );
+  });
+
   test('renders a flat icon-only action row without horizontal scrolling', () => {
     const store = createPlayerStore();
     store.getState().setSessionForTests(

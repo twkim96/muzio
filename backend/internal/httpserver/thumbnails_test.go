@@ -16,7 +16,47 @@ import (
 
 type cachedThumbnailLister struct {
 	*stubLister
-	path string
+	path     string
+	prepared chan library.Media
+}
+
+func (l *cachedThumbnailLister) PrepareThumbnail(item library.Media) {
+	if l.prepared != nil {
+		l.prepared <- item
+	}
+}
+
+func TestThumbnailHandlerQueuesPendingAudioArtworkOnDemand(t *testing.T) {
+	item := library.Media{
+		ID:   "song-id",
+		Type: library.MediaTypeAudio,
+		Name: "Song.m4a",
+		Thumbnail: library.Thumbnail{
+			CacheKey: "audio-key",
+			Kind:     library.ThumbnailKindAudio,
+			Status:   library.ThumbnailStatusPending,
+		},
+	}
+	prepared := make(chan library.Media, 1)
+	lister := &cachedThumbnailLister{
+		stubLister: &stubLister{items: []library.Media{item}},
+		prepared:   prepared,
+	}
+	handler := NewHandler(slog.New(slog.NewTextHandler(io.Discard, nil)), lister, nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/thumbnails/song-id", nil))
+
+	select {
+	case queued := <-prepared:
+		if queued.ID != item.ID {
+			t.Fatalf("prepared item = %#v", queued)
+		}
+	default:
+		t.Fatal("pending audio artwork was not queued")
+	}
+	if got := recorder.Header().Get("Cache-Control"); got != "no-cache" {
+		t.Fatalf("Cache-Control = %q", got)
+	}
 }
 
 func (l *cachedThumbnailLister) ThumbnailPath(library.Media) (string, bool) {

@@ -95,6 +95,7 @@ function LibraryItemRowComponent({
   const location = useLocation();
   const progressRepo = useProgressRepository();
   const progressRecord = useProgressRecord(item.id);
+  const resolvedThumbnail = useLibraryThumbnail(item);
   const likeKey = contentKeyForLibraryItem(item);
   const liked = likedMediaIds.includes(likeKey) || likedMediaIds.includes(item.id);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -148,7 +149,11 @@ function LibraryItemRowComponent({
     const record =
       item.type === 'video' ? progressRecord : progressRepo.read(item.id);
     const startSec = resumePositionFor(record) ?? undefined;
-    const source = playbackSourceFromLibraryItem(item);
+    const playbackItem =
+      resolvedThumbnail === undefined
+        ? item
+        : { ...item, thumbnail: resolvedThumbnail };
+    const source = playbackSourceFromLibraryItem(playbackItem);
     if (startSec !== undefined && source.kind === 'remote') {
       // Start the request directly at the resume offset via media fragment
       // so the browser does not first load byte 0 and then re-buffer for

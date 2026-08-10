@@ -40,6 +40,7 @@ export function MiniPlayer() {
   const [scrubValueSec, setScrubValueSec] = useState<number | null>(null);
   const [scrubPreviewSec, setScrubPreviewSec] = useState<number | null>(null);
   const [customMinutes, setCustomMinutes] = useState('45');
+  const [artworkFailed, setArtworkFailed] = useState(false);
   const timerShellRef = useRef<HTMLDivElement | null>(null);
   const scrubberRef = useRef<HTMLDivElement | null>(null);
   const scrubPreviewHideRef = useRef<number | null>(null);
@@ -55,6 +56,10 @@ export function MiniPlayer() {
   const seekActive = store((s) => s.seekActive);
   const retryActivePlayback = store((s) => s.retryActivePlayback);
   const networkHint = usePlaybackNetworkHint(state.status, state.source);
+
+  useEffect(() => {
+    setArtworkFailed(false);
+  }, [state.source?.artworkUrl]);
 
   useEffect(() => {
     if (!timerOpen) return;
@@ -276,7 +281,15 @@ export function MiniPlayer() {
             data-testid="open-full-player"
             onClick={open}
           >
-            {state.source.mediaType === 'video' ? (
+            {state.source.artworkUrl && !artworkFailed ? (
+              <img
+                data-testid="mini-player-artwork"
+                src={state.source.artworkUrl}
+                alt=""
+                className="h-full w-full rounded-lg object-cover"
+                onError={() => setArtworkFailed(true)}
+              />
+            ) : state.source.mediaType === 'video' ? (
               <VideoGlyph className="h-6 w-6" />
             ) : (
               <MusicGlyph className="h-6 w-6" />

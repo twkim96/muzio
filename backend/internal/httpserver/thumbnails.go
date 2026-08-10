@@ -21,6 +21,10 @@ type ThumbnailCache interface {
 	ThumbnailPath(library.Media) (string, bool)
 }
 
+type ThumbnailPreparer interface {
+	PrepareThumbnail(library.Media)
+}
+
 func thumbnailHandler(getter LibraryGetter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -52,6 +56,9 @@ func thumbnailHandler(getter LibraryGetter) http.HandlerFunc {
 				serveThumbnailFile(w, r, item, path) {
 				return
 			}
+		}
+		if preparer, ok := getter.(ThumbnailPreparer); ok {
+			preparer.PrepareThumbnail(item)
 		}
 		etag := fmt.Sprintf("%q", item.Thumbnail.CacheKey)
 		w.Header().Set("Content-Type", "image/svg+xml; charset=utf-8")

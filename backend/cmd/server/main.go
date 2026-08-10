@@ -333,6 +333,15 @@ func (a appRuntime) ThumbnailPath(item library.Media) (string, bool) {
 	return a.thumbnails.Path(item), true
 }
 
+func (a appRuntime) PrepareThumbnail(item library.Media) {
+	if a.thumbnails == nil ||
+		item.Type != library.MediaTypeAudio ||
+		item.Thumbnail.Status != library.ThumbnailStatusPending {
+		return
+	}
+	a.thumbnails.Upsert(item)
+}
+
 func (a appRuntime) GetAppearance() (config.AppearanceSettings, bool, error) {
 	return a.appearance.GetAppearance()
 }
@@ -361,6 +370,7 @@ func configureThumbnailManager(
 		Resolver:     service,
 		Idle:         service,
 		Extract:      thumbnail.FFmpegExtractor{Path: ffmpegInfo.Path},
+		AudioExtract: thumbnail.FFmpegArtworkExtractor{Path: ffmpegInfo.Path},
 		ImageExtract: thumbnail.ImageExtractor{},
 		Logger:       logger,
 		Workers:      thumbnailWorkerCount(),
@@ -620,6 +630,7 @@ func runVideoThumbnailScheduler(
 func shouldReconcileVideoThumbnails(event library.LibraryEvent) bool {
 	return event.Reason != "thumbnail" &&
 		(containsMediaType(event.AffectedTypes, library.MediaTypeVideo) ||
+			containsMediaType(event.AffectedTypes, library.MediaTypeAudio) ||
 			containsMediaType(event.AffectedTypes, library.MediaTypeImage))
 }
 
@@ -630,6 +641,7 @@ func reconcileVideoThumbnails(
 	logger *slog.Logger,
 ) thumbnailSchedulerState {
 	storedItems, revision := service.ListStoredTypesWithRevision(
+		library.MediaTypeAudio,
 		library.MediaTypeVideo,
 		library.MediaTypeImage,
 	)
@@ -659,7 +671,8 @@ func reconcileVideoThumbnails(
 	if !generationEnabled {
 		generatable := items[:0]
 		for _, item := range items {
-			if item.Type == library.MediaTypeVideo && !manager.Ready(item) {
+			if (item.Type == library.MediaTypeVideo || item.Type == library.MediaTypeAudio) &&
+				!manager.Ready(item) {
 				setThumbnailStatus(service, item, library.ThumbnailStatusFallback)
 			}
 			if item.Type == library.MediaTypeImage {
@@ -674,7 +687,12 @@ func reconcileVideoThumbnails(
 			setThumbnailStatus(service, item, library.ThumbnailStatusPending)
 		}
 	}
-	manager.Sync(items)
+	manager.Track(items)
+	for _, item := range items {
+		if item.Type != library.MediaTypeAudio {
+			manager.Enqueue(item)
+		}
+	}
 	return state
 }
 
@@ -696,7 +714,8 @@ func syncChangedVideoThumbnails(
 	}
 	for _, item := range changes.Upserts {
 		previous, wasManaged := state.items[item.ID]
-		managed := item.Type == library.MediaTypeVideo ||
+		managed := item.Type == library.MediaTypeAudio ||
+			item.Type == library.MediaTypeVideo ||
 			item.Type == library.MediaTypeImage
 		if wasManaged && (!managed || previous.Thumbnail.CacheKey != item.Thumbnail.CacheKey) {
 			manager.Remove(previous.Thumbnail.CacheKey)
@@ -710,7 +729,8 @@ func syncChangedVideoThumbnails(
 			manager.Remove(item.Thumbnail.CacheKey)
 			continue
 		}
-		if !generationEnabled && item.Type == library.MediaTypeVideo {
+		if !generationEnabled &&
+			(item.Type == library.MediaTypeVideo || item.Type == library.MediaTypeAudio) {
 			if !manager.Ready(item) {
 				setThumbnailStatus(service, item, library.ThumbnailStatusFallback)
 			}
@@ -722,7 +742,11 @@ func syncChangedVideoThumbnails(
 			item.Thumbnail.Status = library.ThumbnailStatusPending
 			state.items[item.ID] = item
 		}
-		manager.Upsert(item)
+		if item.Type == library.MediaTypeAudio {
+			manager.TrackOne(item)
+		} else {
+			manager.Upsert(item)
+		}
 	}
 	state.revision = changes.Revision
 	return true

@@ -966,6 +966,39 @@ func TestMergeRootScanResultsPreservesReadyThumbnailForSameCacheKey(t *testing.T
 	}
 }
 
+func TestMergeRootScanResultsMigratesThumbnailKindForSameCacheKey(t *testing.T) {
+	root := mediapath.Root{Name: "music", Path: "/music"}
+	current := Media{
+		ID:           "song",
+		Type:         MediaTypeAudio,
+		RootName:     root.Name,
+		RelativePath: "song.m4a",
+		Thumbnail: Thumbnail{
+			URL:      "/api/thumbnails/song?v=key&state=ready",
+			Kind:     ThumbnailKindFallback,
+			Status:   ThumbnailStatusReady,
+			CacheKey: "key",
+		},
+	}
+	scanned := current
+	scanned.Thumbnail = Thumbnail{
+		URL:      "/api/thumbnails/song?v=key&state=pending",
+		Kind:     ThumbnailKindAudio,
+		Status:   ThumbnailStatusPending,
+		CacheKey: "key",
+	}
+
+	items := mergeRootScanResults(
+		NewSnapshot([]Media{current}),
+		[]RootScanResult{{Root: root, Items: []Media{scanned}, Complete: true}},
+		MediaRootSettings{AudioRoots: []string{root.Path}},
+	)
+
+	if len(items) != 1 || items[0].Thumbnail != scanned.Thumbnail {
+		t.Fatalf("thumbnail = %#v, want %#v", items, scanned.Thumbnail)
+	}
+}
+
 func TestMergeRootScanResultsResetsThumbnailForChangedCacheKey(t *testing.T) {
 	root := mediapath.Root{Name: "videos", Path: "/videos"}
 	current := Media{

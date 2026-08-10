@@ -62,6 +62,7 @@ type Manager struct {
 	resolver  Resolver
 	idle      IdleWaiter
 	extract   Extractor
+	audio     Extractor
 	image     Extractor
 	onReady   ReadyHandler
 	onFailure FailureHandler
@@ -153,6 +154,7 @@ type Options struct {
 	Resolver     Resolver
 	Idle         IdleWaiter
 	Extract      Extractor
+	AudioExtract Extractor
 	ImageExtract Extractor
 	OnReady      ReadyHandler
 	OnFailure    FailureHandler
@@ -230,6 +232,7 @@ func NewManager(options Options) (*Manager, error) {
 		resolver:    options.Resolver,
 		idle:        options.Idle,
 		extract:     options.Extract,
+		audio:       options.AudioExtract,
 		image:       options.ImageExtract,
 		onReady:     options.OnReady,
 		onFailure:   options.OnFailure,
@@ -314,6 +317,18 @@ func (m *Manager) Upsert(item library.Media) bool {
 	return m.Enqueue(item)
 }
 
+// TrackOne adds one item to the desired cache set without scheduling it.
+func (m *Manager) TrackOne(item library.Media) bool {
+	if !m.supports(item) || item.Thumbnail.CacheKey == "" {
+		return false
+	}
+	m.mu.Lock()
+	m.desiredManaged = true
+	m.desired[item.Thumbnail.CacheKey] = struct{}{}
+	m.mu.Unlock()
+	return true
+}
+
 // Remove stops queued work for one cache key. Its generated file is retained
 // for the next periodic Reconcile pass so watcher bursts do not perform cache
 // directory I/O.
@@ -338,6 +353,18 @@ func (m *Manager) Remove(cacheKey string) {
 }
 
 func (m *Manager) Sync(items []library.Media) {
+	m.Track(items)
+	for _, item := range items {
+		m.Enqueue(item)
+	}
+	m.signalWake()
+}
+
+// Track replaces the complete desired cache set without scheduling extraction.
+// Audio artwork uses this path so a large music library is extracted lazily
+// when a visible thumbnail is requested instead of spawning one ffmpeg process
+// per file at startup.
+func (m *Manager) Track(items []library.Media) {
 	desired := make(map[string]struct{}, len(items))
 	for _, item := range items {
 		if m.supports(item) && item.Thumbnail.CacheKey != "" {
@@ -356,10 +383,6 @@ func (m *Manager) Sync(items []library.Media) {
 	}
 	m.mu.Unlock()
 
-	for _, item := range items {
-		m.Enqueue(item)
-	}
-	m.signalWake()
 }
 
 func (m *Manager) Ready(item library.Media) bool {
@@ -674,6 +697,7 @@ func (m *Manager) complete(result jobResult) {
 	key := job.item.Thumbnail.CacheKey
 	var ready bool
 	var failed bool
+	unavailable := errors.Is(result.err, ErrArtworkUnavailable)
 
 	m.mu.Lock()
 	if m.states[key] != job || !m.desiredLocked(key) {
@@ -688,6 +712,9 @@ func (m *Manager) complete(result jobResult) {
 		m.removeJobLocked(job)
 	case result.deferred:
 		m.scheduleRetryLocked(job)
+	case unavailable:
+		job.phase = jobFailed
+		failed = true
 	default:
 		job.attempts++
 		if job.attempts < m.maxTries {
@@ -704,13 +731,21 @@ func (m *Manager) complete(result jobResult) {
 		return
 	}
 	if failed {
-		m.logger.Warn(
-			"media thumbnail generation failed",
-			"id", job.item.ID,
-			"path", job.item.RelativePath,
-			"attempts", job.attempts,
-			"error", result.err,
-		)
+		if unavailable {
+			m.logger.Debug(
+				"embedded artwork unavailable",
+				"id", job.item.ID,
+				"path", job.item.RelativePath,
+			)
+		} else {
+			m.logger.Warn(
+				"media thumbnail generation failed",
+				"id", job.item.ID,
+				"path", job.item.RelativePath,
+				"attempts", job.attempts,
+				"error", result.err,
+			)
+		}
 		if m.onFailure != nil {
 			m.onFailure(job.item)
 		}
@@ -813,6 +848,8 @@ func (m *Manager) supports(item library.Media) bool {
 	switch item.Type {
 	case library.MediaTypeVideo:
 		return m.extract != nil
+	case library.MediaTypeAudio:
+		return m.audio != nil
 	case library.MediaTypeImage:
 		return m.image != nil
 	default:
@@ -821,10 +858,14 @@ func (m *Manager) supports(item library.Media) bool {
 }
 
 func (m *Manager) extractorFor(item library.Media) Extractor {
-	if item.Type == library.MediaTypeImage {
+	switch item.Type {
+	case library.MediaTypeAudio:
+		return m.audio
+	case library.MediaTypeImage:
 		return m.image
+	default:
+		return m.extract
 	}
-	return m.extract
 }
 
 func removeTemporaryFiles(cacheDir string) error {

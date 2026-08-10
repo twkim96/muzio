@@ -28,6 +28,8 @@ export interface RemotePlaybackSource {
   /** Optional metadata identity fields used by playlist/activity keys. */
   title?: string;
   artist?: string;
+  /** Immutable same-origin JPEG extracted from embedded audio cover art. */
+  artworkUrl?: string;
   /** Best known media duration from library metadata, used as a resume fallback. */
   durationSec?: number;
   /** Parent media root, mirrored from the listing record. Optional so the */
@@ -87,6 +89,7 @@ export function remoteSourceFromLibraryItem(
   mimeType?: string,
 ): RemotePlaybackSource {
   const resolvedMimeType = mimeType ?? item.mimeType;
+  const artworkUrl = audioArtworkUrl(item);
   return {
     kind: 'remote',
     mediaId: item.id,
@@ -96,12 +99,26 @@ export function remoteSourceFromLibraryItem(
     name: item.name,
     ...(item.metadata?.title ? { title: item.metadata.title } : {}),
     ...(item.metadata?.artist ? { artist: item.metadata.artist } : {}),
+    ...(artworkUrl ? { artworkUrl } : {}),
     ...(typeof item.metadata?.durationSec === 'number'
       ? { durationSec: item.metadata.durationSec }
       : {}),
     rootName: item.rootName,
     relativePath: item.relativePath,
   };
+}
+
+function audioArtworkUrl(item: PlayableLibraryItem): string | undefined {
+  const thumbnail = item.thumbnail;
+  if (
+    item.type !== 'audio' ||
+    thumbnail?.kind !== 'embedded-artwork' ||
+    thumbnail.status !== 'ready'
+  ) {
+    return undefined;
+  }
+  const url = thumbnail.url.trim();
+  return url === '' ? undefined : url;
 }
 
 export function playbackSourceFromLibraryItem(

@@ -203,6 +203,36 @@ describe('MediaSessionSync', () => {
     expect(mediaSession.playbackState).toBe('playing');
   });
 
+  test('publishes embedded cover artwork for the active audio source', async () => {
+    const mediaSession = installMediaSession();
+    const store = createPlayerStore();
+    store.getState().setSessionForTests(
+      'audio',
+      fakeSession({
+        status: { kind: 'playing' },
+        source: {
+          ...audioSource,
+          artworkUrl: '/api/thumbnails/a1?v=cover&state=ready',
+        },
+        positionSec: 0,
+        durationSec: 100,
+      }),
+    );
+
+    renderSync(store);
+
+    await waitFor(() => {
+      expect(mediaSession.metadata).toMatchObject({
+        artwork: [
+          {
+            src: '/api/thumbnails/a1?v=cover&state=ready',
+            type: 'image/jpeg',
+          },
+        ],
+      });
+    });
+  });
+
   test('replaces stale video metadata when audio becomes active', async () => {
     const mediaSession = installMediaSession();
     mediaSession.metadata = new FakeMediaMetadata({ title: 'Old Video' });

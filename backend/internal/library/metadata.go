@@ -64,6 +64,9 @@ func BuildThumbnail(mediaID string, mediaType MediaType, meta Metadata, modified
 	} else if mediaType == MediaTypeImage {
 		kind = ThumbnailKindImage
 		status = ThumbnailStatusPending
+	} else if mediaType == MediaTypeAudio {
+		kind = ThumbnailKindAudio
+		status = ThumbnailStatusPending
 	}
 	return Thumbnail{
 		URL:      thumbnailURL(mediaID, cacheKey, status),

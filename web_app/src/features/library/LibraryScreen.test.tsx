@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type {
   LibraryFetchOptions,
   LibraryFetchResult,
+  LibraryItem,
 } from '../../core/api/libraryClient';
 import { LibraryProvider } from './LibraryContext';
 import { LibraryScreen } from './LibraryScreen';
@@ -699,6 +700,58 @@ describe('LibraryScreen', () => {
         'a',
       ]);
       expect(playerStore.getState().musicQueueIndex).toBe(1);
+    });
+  });
+
+  test('uses a thumbnail-only ready update when starting audio playback', async () => {
+    const pendingItem: LibraryItem = {
+      id: 'a',
+      type: 'audio',
+      rootName: 'music',
+      relativePath: 'song.m4a',
+      name: 'song.m4a',
+      sizeBytes: 1024,
+      modifiedAt: '2026-08-11T00:00:00Z',
+      thumbnail: {
+        url: '/api/thumbnails/a?v=cover&state=pending',
+        kind: 'embedded-artwork',
+        status: 'pending',
+        cacheKey: 'cover',
+      },
+    };
+    const { stores, playerStore } = renderScreen('audio', {
+      kind: 'ok',
+      revision: 1,
+      items: [pendingItem],
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('Play song.m4a')).toBeInTheDocument();
+    });
+
+    act(() => {
+      stores.audio.getState().applyChanges({
+        kind: 'ok',
+        revision: 2,
+        resetRequired: false,
+        deletedIds: [],
+        upserts: [
+          {
+            ...pendingItem,
+            thumbnail: {
+              ...pendingItem.thumbnail!,
+              url: '/api/thumbnails/a?v=cover&state=ready',
+              status: 'ready',
+            },
+          },
+        ],
+      });
+    });
+    fireEvent.click(screen.getByLabelText('Play song.m4a'));
+
+    await waitFor(() => {
+      expect(playerStore.getState().audio.source?.artworkUrl).toBe(
+        '/api/thumbnails/a?v=cover&state=ready',
+      );
     });
   });
 
