@@ -207,6 +207,8 @@ Status: Completed (2026-08-11)
 - mobile full player는 desktop/iPad와 동일하게 content column을 세로 중앙 정렬해
   긴 portrait 화면에서 상단으로 붙고 하단만 비는 회귀를 수정했다. artwork 크기와
   tablet/desktop breakpoint 계약은 변경하지 않았다.
+- full/mini player의 like, timer, volume, queue, more, stop, shuffle, repeat 선택 상태는
+  터치 영역 전체의 배경·테두리를 칠하지 않고 아이콘 자체만 accent red로 표시한다.
 
 ## Phase 4 - Playlist 순서 편집 연결
 

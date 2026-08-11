@@ -553,6 +553,12 @@ describe('MiniPlayer', () => {
     fireEvent.click(timerButton);
 
     expect(screen.getByTestId('mini-timer-popover')).toBeInTheDocument();
+    expect(timerButton).toHaveClass('aria-expanded:text-accent');
+    expect(timerButton).not.toHaveClass(
+      'aria-expanded:bg-accent/12',
+      'aria-expanded:ring-1',
+      'aria-expanded:ring-accent/45',
+    );
     expect(timerButton.querySelector('svg')).not.toBeNull();
     expect(screen.getByTestId('mini-timer-popover').className).toContain('fixed');
     expect(screen.getByTestId('mini-timer-popover').className).toContain(
@@ -590,6 +596,14 @@ describe('MiniPlayer', () => {
     fireEvent.click(screen.getByLabelText('Repeat off'));
     fireEvent.click(screen.getByLabelText('Repeat all'));
     expect(store.getState().repeatMode).toBe('one');
+    expect(screen.getByLabelText('Repeat one')).toHaveClass(
+      'aria-pressed:text-accent',
+    );
+    expect(screen.getByLabelText('Repeat one')).not.toHaveClass(
+      'aria-pressed:bg-accent/12',
+      'aria-pressed:ring-1',
+      'aria-pressed:ring-accent/45',
+    );
     expect(screen.getByTestId('repeat-one-glyph')).toBeInTheDocument();
     expect(screen.getByTestId('repeat-one-glyph')).toHaveClass(
       'text-[0.38em]',

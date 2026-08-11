@@ -804,6 +804,14 @@ describe('FullPlayerScreen', () => {
     );
     fireEvent.click(screen.getByTestId('shuffle-toggle'));
     expect(store.getState().shuffle).toBe(true);
+    expect(screen.getByTestId('shuffle-toggle')).toHaveClass(
+      'aria-pressed:text-accent',
+    );
+    expect(screen.getByTestId('shuffle-toggle')).not.toHaveClass(
+      'aria-pressed:bg-accent/15',
+      'aria-pressed:ring-1',
+      'aria-pressed:ring-accent/45',
+    );
     fireEvent.click(screen.getByTestId('repeat-toggle'));
     expect(store.getState().repeatMode).toBe('all');
     fireEvent.click(screen.getByTestId('repeat-toggle'));
@@ -811,6 +819,14 @@ describe('FullPlayerScreen', () => {
     expect(screen.getByTestId('repeat-one-glyph')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('like-current'));
     expect(store.getState().likedMediaIds).toContain('audio:title:song');
+    expect(screen.getByTestId('like-current')).toHaveClass(
+      'aria-pressed:text-accent',
+    );
+    expect(screen.getByTestId('like-current')).not.toHaveClass(
+      'aria-pressed:bg-accent/15',
+      'aria-pressed:ring-1',
+      'aria-pressed:ring-accent/45',
+    );
   });
 
   test('queue drawer row click and transport next/previous change tracks', async () => {

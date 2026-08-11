@@ -586,7 +586,7 @@ function ActionButton({
       aria-expanded={expanded}
       data-testid={testId}
       disabled={disabled}
-      className="inline-flex h-10 min-w-0 items-center justify-center rounded-full text-xl leading-none text-white/72 transition hover:bg-white/[0.055] hover:text-white aria-pressed:bg-accent/15 aria-pressed:text-accent aria-pressed:ring-1 aria-pressed:ring-accent/45 disabled:cursor-not-allowed disabled:opacity-35 sm:h-12 sm:text-2xl"
+      className="inline-flex h-10 min-w-0 items-center justify-center rounded-full text-xl leading-none text-white/72 transition hover:bg-white/[0.055] hover:text-white aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-35 sm:h-12 sm:text-2xl"
       onClick={onClick}
     >
       {children}
@@ -636,7 +636,7 @@ function TransportButton({
       className={
         size === 'skip'
           ? 'inline-flex h-12 w-12 items-center justify-center rounded-xl text-white/64 transition hover:bg-white/[0.055] hover:text-white disabled:cursor-not-allowed disabled:opacity-45 sm:h-14 sm:w-14'
-          : 'inline-flex h-10 w-10 items-center justify-center rounded-xl text-3xl leading-none text-white/56 transition hover:bg-white/[0.055] hover:text-white aria-pressed:bg-accent/15 aria-pressed:text-accent aria-pressed:ring-1 aria-pressed:ring-accent/45 disabled:cursor-not-allowed disabled:opacity-45 sm:h-12 sm:w-12 sm:text-4xl'
+          : 'inline-flex h-10 w-10 items-center justify-center rounded-xl text-3xl leading-none text-white/56 transition hover:bg-white/[0.055] hover:text-white aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-45 sm:h-12 sm:w-12 sm:text-4xl'
       }
       onClick={onClick}
     >
