@@ -204,6 +204,9 @@ Status: Completed (2026-08-11)
 - production Edge full player에서 More actions가 enabled toggle로 렌더되고 Open stream,
   Share or copy stream URL, Track information이 노출되는 것을 확인했다. playlist가 없을
   때는 Music 메뉴에서 먼저 만들라는 정확한 안내를 표시한다.
+- mobile full player는 desktop/iPad와 동일하게 content column을 세로 중앙 정렬해
+  긴 portrait 화면에서 상단으로 붙고 하단만 비는 회귀를 수정했다. artwork 크기와
+  tablet/desktop breakpoint 계약은 변경하지 않았다.
 
 ## Phase 4 - Playlist 순서 편집 연결
 

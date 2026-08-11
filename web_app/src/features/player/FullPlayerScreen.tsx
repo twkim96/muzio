@@ -222,7 +222,10 @@ export function FullPlayerScreen({
         <div className="absolute inset-0 bg-gradient-to-b from-black/22 via-transparent to-black/30" />
         <DismissButton label="Collapse music player" onCollapse={collapsePlayer} />
 
-        <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-start px-6 py-10 [--player-art-width:min(26rem,38vh,78vw)] sm:justify-center sm:px-10 sm:py-10 sm:[--player-art-width:min(34rem,48vh,78vw)]">
+        <main
+          data-testid="music-player-content"
+          className="relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center px-6 py-10 [--player-art-width:min(26rem,38vh,78vw)] sm:px-10 sm:py-10 sm:[--player-art-width:min(34rem,48vh,78vw)]"
+        >
           <NowPlayingArtwork artworkUrl={source?.artworkUrl} />
 
           <section className="mx-auto mt-5 w-full max-w-3xl">

@@ -320,7 +320,10 @@ describe('FullPlayerScreen', () => {
     renderScreen(store);
 
     const actionRail = screen.getByTestId('player-action-rail');
+    const content = screen.getByTestId('music-player-content');
     expect(actionRail).toBeInTheDocument();
+    expect(content).toHaveClass('justify-center');
+    expect(content).not.toHaveClass('justify-start');
     expect(screen.getByTestId('full-status')).toHaveClass('invisible');
     expect(actionRail).toHaveClass('grid-cols-6');
     expect(actionRail).toHaveClass('overflow-visible');
