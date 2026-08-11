@@ -12,6 +12,7 @@ interface PlaylistContextValue {
   addItem(playlistId: string, contentKey: string): PlaylistRecord[];
   addItems(playlistId: string, contentKeys: readonly string[]): PlaylistRecord[];
   removeItems(playlistId: string, contentKeys: readonly string[]): PlaylistRecord[];
+  moveItem(playlistId: string, contentKey: string, direction: 'up' | 'down'): PlaylistRecord[];
   renamePlaylist(playlistId: string, name: string): PlaylistRecord[];
   deletePlaylist(playlistId: string): PlaylistRecord[];
   refreshPlaylists(): PlaylistRecord[];
@@ -54,6 +55,9 @@ export function PlaylistProvider({
         removeItems(playlistId, contentKeys) {
           return replace(playlistRepository.removeItems(playlistId, contentKeys));
         },
+        moveItem(playlistId, contentKey, direction) {
+          return replace(playlistRepository.moveItem(playlistId, contentKey, direction));
+        },
         renamePlaylist(playlistId, name) {
           return replace(playlistRepository.rename(playlistId, name));
         },
@@ -76,4 +80,8 @@ export function usePlaylists(): PlaylistContextValue {
     throw new Error('usePlaylists must be used inside PlaylistProvider');
   }
   return value;
+}
+
+export function useOptionalPlaylists(): PlaylistContextValue | null {
+  return useContext(PlaylistContext);
 }

@@ -28,6 +28,7 @@ export interface RemotePlaybackSource {
   /** Optional metadata identity fields used by playlist/activity keys. */
   title?: string;
   artist?: string;
+  album?: string;
   /** Immutable same-origin JPEG extracted from embedded audio cover art. */
   artworkUrl?: string;
   /** Best known media duration from library metadata, used as a resume fallback. */
@@ -99,6 +100,7 @@ export function remoteSourceFromLibraryItem(
     name: item.name,
     ...(item.metadata?.title ? { title: item.metadata.title } : {}),
     ...(item.metadata?.artist ? { artist: item.metadata.artist } : {}),
+    ...(item.metadata?.album ? { album: item.metadata.album } : {}),
     ...(artworkUrl ? { artworkUrl } : {}),
     ...(typeof item.metadata?.durationSec === 'number'
       ? { durationSec: item.metadata.durationSec }

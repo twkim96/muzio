@@ -2,7 +2,7 @@
 
 ## 상태
 
-- 문서 상태: 1.4.2.2 embedded album artwork patch and automated verification complete
+- 문서 상태: Closed on 2026-08-11 at `1.4.2.2`
 - 계획 승인일: 2026-08-03
 - 목표 버전: `1.4.2`
 - 웹 유지보수 버전: `1.4.2.1`
@@ -14,6 +14,18 @@
 - 이전 계획: `update_1.4.0.md`, `update_1.4.1.md`
 - 시작 조건: front-`moov` 대형 인덱스가 `1.4.0` 이후에도 주 병목이며
   faststart로 개선할 수 없음
+
+## 2026-08-11 종료 결정
+
+Status: Closed
+
+- `1.4.2` 계열의 기능 개발과 patch release는 `1.4.2.2`에서 종료한다.
+- HLS/fMP4 코드, 자동 검증, 웹 목록 유지보수와 내장 앨범아트 패치는 완료됐다.
+- 아래 iPad Safari/PWA 및 nPlayer 실기기 측정은 실행되지 않았으며 통과한 것으로
+  간주하지 않는다. 이는 완료 체크가 아니라 **미검증 acceptance debt**로 보존한다.
+- 미검증 HLS 실기기 항목은 UI 완성도를 다루는 `1.4.3`의 release gate로 옮기지
+  않는다. 사용자가 별도 실기기 검증을 요청할 때 이 문서를 기준으로 다시 연다.
+- `1.4.3` 이후 기능·UI TODO는 [update_1.4.3.md](update_1.4.3.md)에서만 관리한다.
 
 ## 목표
 
@@ -177,20 +189,20 @@ video optimization, media/progress identity 및 아래 실기기 HLS gate는 변
 
 ## Phase 0 - prototype 승인 게이트
 
-Status: Deferred to the consolidated real-device pass after 1.4.2 code review
+Status: Closed without execution (2026-08-11)
 
 사용자 결정에 따라 `1.4.0`~`1.4.2` 실기기 검증은 1.4.2 코드 리뷰가 끝난
 뒤 한 번에 수행한다. 이 단계의 30% 성능 기준은 아직 충족된 것으로 간주하지
 않으며, 현재 개발은 원본을 변경하지 않는 eligibility/package 기반부터 진행한다.
 
-- [ ] `1.4.0` 파일군 C에서 큰 front-`moov` Range와 parsing 지연을 재확인한다.
-- [ ] HTTP/2, resume target 조정, network gate 이후 남은 지연을 기록한다.
-- [ ] 대표 H.264/AAC 파일 한 개를 별도 temp 경로에 수동 package한다.
-- [ ] direct MP4와 HLS의 packaging 시간, output 크기, manifest 크기, segment
+- `1.4.0` 파일군 C에서 큰 front-`moov` Range와 parsing 지연 재확인: 미실행
+- HTTP/2, resume target 조정, network gate 이후 남은 지연 기록: 미실행
+- 대표 H.264/AAC 파일 한 개를 별도 temp 경로에 수동 package: 미실행
+- direct MP4와 HLS의 packaging 시간, output 크기, manifest 크기, segment
   개수/분포, first play, resume, seek를 비교한다.
-- [ ] 원본 GOP 간격과 생성된 segment duration의 min/median/p95/max를 기록한다.
+- 원본 GOP 간격과 생성된 segment duration의 min/median/p95/max 기록: 미실행
   stream-copy에서 `hls_time=6`은 정확한 6초 경계를 보장하지 않음을 전제로 한다.
-- [ ] Safari 탭과 홈 화면 PWA에서 native HLS 재생을 각각 확인한다.
+- Safari 탭과 홈 화면 PWA native HLS 재생 확인: 미실행
 
 완료 기준:
 
@@ -324,15 +336,15 @@ Status: Completed (2026-08-04)
 
 ## Phase 4 - player source selection과 resume
 
-Status: Code complete; real-device request-order evidence pending
+Status: Code complete; real-device evidence closed without execution
 
 - [x] ready `kind=hls-fmp4`와 Safari native HLS capability가 모두 있을 때만 HLS
   source를 선택한다.
 - [x] HLS MIME을 정확히 제공하고 Vidstack HLS source type을 검증한다.
 - [x] 원본 media ID를 progress/activity/queue identity로 유지한다.
 - [x] 저장된 seconds를 HLS timeline의 동일 위치로 적용한다.
-- [ ] N/R10/R50/R90에서 target 부근 segment가 먼저 요청되는지 진단한다.
-- [ ] persisted hint가 없는 cold 첫 touch에서 direct가 먼저 선택되는 비율과 visible-row
+- N/R10/R50/R90 target 부근 segment 최초 요청 진단: 미실행
+- persisted hint가 없는 cold 첫 touch에서 direct가 먼저 선택되는 비율과 visible-row
   prefetch의 요청 수를 측정한 뒤 bounded prefetch 채택 여부를 결정한다.
 - [x] HLS error 또는 stale package는 동일 play attempt에서 최대 한 번만 direct
   MP4로 명시적으로 retry한다. direct failure가 다시 HLS를 선택하는 loop를 막는다.
@@ -371,7 +383,7 @@ Status: Completed (2026-08-04)
 
 ## Phase 6 - 검증과 릴리스
 
-Status: Automated verification complete; real-device validation deferred
+Status: Release line closed; automated verification complete; real-device validation not executed
 
 ### 자동 검증
 
@@ -403,14 +415,14 @@ Status: Automated verification complete; real-device validation deferred
 - [x] source fingerprint 변경과 media 삭제
 - [x] disk 부족, cancel, FFmpeg failure
 
-### 실기기
+### 실기기 - 미실행 상태로 종료
 
-- [ ] iPad Safari/PWA N/R10/R50/R90 cold/warm 각 5회
-- [ ] target segment 최초 요청과 `선택 -> playing` 측정
-- [ ] seek, pause/resume, source 교체, fullscreen/PiP
-- [ ] 장시간 재생 waiting/rebuffer, segment 연속성, ready slot 교체 중 재생 유지
-- [ ] segment duration min/median/p95/max와 resume target 오차
-- [ ] direct fallback과 nPlayer HTTPS/SMB 비교
+- iPad Safari/PWA N/R10/R50/R90 cold/warm 각 5회
+- target segment 최초 요청과 `선택 -> playing` 측정
+- seek, pause/resume, source 교체, fullscreen/PiP
+- 장시간 재생 waiting/rebuffer, segment 연속성, ready slot 교체 중 재생 유지
+- segment duration min/median/p95/max와 resume target 오차
+- direct fallback과 nPlayer HTTPS/SMB 비교
 
 ### 버전 표면
 
@@ -432,13 +444,13 @@ Status: Automated verification complete; real-device validation deferred
 - HTTP/2 listener를 포함한 전체 `go test ./...`는 독립 리뷰 환경에서 통과했다.
   현재 workspace sandbox에서는 loopback bind 제한이 유지된다.
 
-## 전체 완료 기준
+## 보존된 실기기 acceptance 기준 - 미검증
 
 - eligible 초장시간 파일에서 거대 단일 `moov` 선행 다운로드를 피한다.
 - 파일군 C의 시작/이어보기 중앙값이 direct MP4보다 30% 이상 개선된다.
 - original, direct fallback, media ID, progress와 cache crash-safety가 유지된다.
 - unsupported codec/track 파일을 조용히 변환하거나 누락하지 않는다.
-- Safari/PWA 실제 기기 증거 없이는 완료로 표시하지 않는다.
+- Safari/PWA 실제 기기 증거가 없으므로 HLS 성능 acceptance는 완료로 표시하지 않는다.
 
 ## 범위 제외
 

@@ -8,7 +8,7 @@ import {
   type ReactNode,
   type TouchEvent as ReactTouchEvent,
 } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 
 import type { LibraryItem } from '../core/api/libraryClient';
 import { refreshMediaRoots, type MediaRootsResult } from '../core/api/mediaRootsClient';
@@ -26,6 +26,7 @@ import { PlaylistDrawer } from '../features/playlists/PlaylistDrawer';
 import { usePlaylists } from '../features/playlists/PlaylistContext';
 import {
   buildSmartCollections,
+  buildImageCollections,
   mapItemsByContentKey,
   resolvePlaylistItemsFromIndex,
 } from '../features/playlists/smartCollections';
@@ -84,6 +85,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const playerOverlay = usePlayerOverlay();
   const audioItems = libraryStores.audio(itemsFromLibraryState);
   const videoItems = libraryStores.video(itemsFromLibraryState);
+  const imageItems = libraryStores.image(itemsFromLibraryState);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [playlistDrawer, setPlaylistDrawer] = useState<{
@@ -101,6 +103,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMessage, setRefreshMessage] = useState('');
   const location = useLocation();
+  const navigate = useNavigate();
   const shellLocation = backgroundLocationFrom(location) ?? location;
   const isPlayerRoute = shellLocation.pathname.startsWith('/player');
   const isImageViewerRoute = shellLocation.pathname.startsWith('/image/');
@@ -127,7 +130,20 @@ export function AppShell({ children }: { children: ReactNode }) {
       }),
     [activityRecords, likedMediaIds, playableItemIndex, playableItems],
   );
+  const imageCollections = useMemo(
+    () => buildImageCollections({ items: imageItems, likedKeys: likedMediaIds }),
+    [imageItems, likedMediaIds],
+  );
   const playlistEntries = useMemo(() => {
+    if (section === 'image') {
+      return imageCollections.map((collection) => ({
+        id: `auto:${collection.id}`,
+        kind: 'automatic' as const,
+        title: collection.title,
+        count: collection.items.length,
+        items: collection.items,
+      }));
+    }
     if (section !== 'music' && section !== 'video') return [];
     const automaticIds =
       section === 'music' ? ['liked-music', 'most-played'] : ['recently-watching'];
@@ -157,7 +173,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         };
       }),
     ];
-  }, [playableItemIndex, playlists.playlists, section, smartCollections]);
+  }, [imageCollections, playableItemIndex, playlists.playlists, section, smartCollections]);
   const shellStyle = {
     '--app-sidebar-width': sidebar === null ? '0px' : '18rem',
     '--mobile-drawer-top': hasMobileMenu ? '13.75rem' : '6.25rem',
@@ -243,10 +259,31 @@ export function AppShell({ children }: { children: ReactNode }) {
       };
     });
   };
+  const movePlaylistItem = (
+    contentKey: string,
+    direction: 'up' | 'down',
+  ) => {
+    const playlistId = playlistDrawer?.playlistId;
+    if (playlistId === undefined) return;
+    const nextPlaylist = playlists
+      .moveItem(playlistId, contentKey, direction)
+      .find((playlist) => playlist.id === playlistId);
+    if (nextPlaylist === undefined) return;
+    setPlaylistDrawer((current) => current === null ? null : {
+      ...current,
+      items: resolvePlaylistItemsFromIndex(nextPlaylist, playableItemIndex),
+    });
+  };
   const playPlaylistItem = (item: LibraryItem) => {
-    if (!isPlayableLibraryItem(item)) return;
     const playlistItems = playlistDrawer?.items ?? [];
     setPlaylistDrawer(null);
+    if (item.type === 'image') {
+      navigate(`/image/${encodeURIComponent(item.id)}`, {
+        state: { backgroundLocation: shellLocation },
+      });
+      return;
+    }
+    if (!isPlayableLibraryItem(item)) return;
     if (item.type === 'audio') {
       const audioSources: PlaybackSource[] = [];
       for (const candidate of playlistItems) {
@@ -356,6 +393,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         items={playlistDrawer?.items ?? []}
         onClose={() => setPlaylistDrawer(null)}
         onPlayItem={playPlaylistItem}
+        onMoveItem={movePlaylistItem}
         onRemoveItems={removePlaylistItems}
         open={playlistDrawer !== null}
         playlistId={playlistDrawer?.playlistId}

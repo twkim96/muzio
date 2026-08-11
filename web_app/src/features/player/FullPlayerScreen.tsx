@@ -9,7 +9,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   fetchFallbackPlan,
 } from '../../core/api/fallbackClient';
-import { contentKeyForPlaybackSource } from '../../core/media/contentIdentity';
+import { contentKeyForPlaybackSource, contentKeysForPlaybackSource } from '../../core/media/contentIdentity';
+import {
+  openPlaybackStream,
+  shareOrCopyPlaybackStream,
+} from '../../core/playback/externalPlayback';
 import { canPlayMime } from '../../core/playback/capabilities/canPlayMime';
 import { explicitNextQueueIndex, previousQueueIndex } from './musicQueue';
 import { usePlayerStore } from './PlayerContext';
@@ -39,6 +43,7 @@ import {
 import { describePlaybackStatus } from './playerMessage';
 import { useDismissGesture } from './useDismissGesture';
 import { usePlayerKeyboardControls } from './usePlayerKeyboardControls';
+import { useOptionalPlaylists } from '../playlists/PlaylistContext';
 import {
   FallbackStatusView,
   VideoWatchScreen,
@@ -47,7 +52,7 @@ import {
 
 type FallbackState = VideoFallbackState;
 
-type PopoverKind = 'timer' | 'volume' | null;
+type PopoverKind = 'timer' | 'volume' | 'more' | null;
 
 /**
  * Full-screen player. Reads the active session and switches between the
@@ -65,6 +70,7 @@ export function FullPlayerScreen({
 } = {}) {
   const navigate = useNavigate();
   const store = usePlayerStore();
+  const playlists = useOptionalPlaylists();
   const snapshot = store();
   const state = selectActiveState(snapshot);
   const active = snapshot.active;
@@ -76,6 +82,8 @@ export function FullPlayerScreen({
   const [openPopover, setOpenPopover] = useState<PopoverKind>(null);
   const [queueOpen, setQueueOpen] = useState(false);
   const [customMinutes, setCustomMinutes] = useState('45');
+  const [moreMessage, setMoreMessage] = useState('');
+  const [showTrackInfo, setShowTrackInfo] = useState(false);
   usePlayerKeyboardControls(shellRef, active !== 'video');
   const retryActivePlayback = store((s) => s.retryActivePlayback);
   const source = state.source;
@@ -120,8 +128,13 @@ export function FullPlayerScreen({
     };
 
     document.addEventListener('pointerdown', handlePointerDown, true);
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenPopover(null);
+    };
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
       document.removeEventListener('pointerdown', handlePointerDown, true);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, [openPopover]);
 
@@ -154,10 +167,8 @@ export function FullPlayerScreen({
   const banner = describePlaybackStatus(state.status);
   const sourceName = source?.name ?? 'Loading...';
   const sourceDetail =
-    source?.artist ??
-    source?.rootName ??
-    source?.relativePath ??
-    (isVideo ? 'Video' : 'Music');
+    [source?.artist, !isVideo ? source?.album : undefined].filter(Boolean).join(' · ') ||
+    (source?.rootName ?? source?.relativePath ?? (isVideo ? 'Video' : 'Music'));
   const isInFlight =
     state.status.kind === 'playing' ||
     state.status.kind === 'buffering' ||
@@ -167,7 +178,7 @@ export function FullPlayerScreen({
     source === null ? '' : contentKeyForPlaybackSource(source);
   const liked =
     source !== null &&
-    (snapshot.likedMediaIds.includes(currentLikeKey) ||
+    (contentKeysForPlaybackSource(source).some((key) => snapshot.likedMediaIds.includes(key)) ||
       snapshot.likedMediaIds.includes(source.mediaId));
   const queueSnapshot = {
     tracks: snapshot.musicQueue,
@@ -283,7 +294,17 @@ export function FullPlayerScreen({
                 >
                   <QueueGlyph />
                 </ActionButton>
-                <ActionButton label="More actions" disabled>
+                <ActionButton
+                  label="More actions"
+                  active={openPopover === 'more'}
+                  expanded={openPopover === 'more'}
+                  disabled={source === null}
+                  onClick={() => {
+                    setOpenPopover((current) => current === 'more' ? null : 'more');
+                    setShowTrackInfo(false);
+                    setMoreMessage('');
+                  }}
+                >
                   <MoreGlyph />
                 </ActionButton>
                 <ActionButton
@@ -314,6 +335,60 @@ export function FullPlayerScreen({
                   onMute={snapshot.toggleMute}
                   onVolume={snapshot.setVolume}
                 />
+              </ActionPopoverPanel>
+            )}
+            {openPopover === 'more' && source !== null && (
+              <ActionPopoverPanel>
+                <div data-testid="player-more-menu" className="grid gap-2 text-sm">
+                  <p className="font-semibold">More actions</p>
+                  {(playlists?.playlists.length ?? 0) > 0 ? (
+                    <div className="grid gap-1">
+                      <span className="text-xs text-white/55">Add to Playlist</span>
+                      {playlists?.playlists.map((playlist) => (
+                        <button
+                          key={playlist.id}
+                          type="button"
+                          className="rounded-lg px-3 py-2 text-left hover:bg-white/10"
+                          onClick={() => {
+                            playlists.addItem(playlist.id, currentLikeKey);
+                            setMoreMessage(`Added to ${playlist.name}.`);
+                          }}
+                        >
+                          {playlist.name}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-white/55">Create a playlist from the Music menu first.</p>
+                  )}
+                  <button type="button" className="rounded-lg px-3 py-2 text-left hover:bg-white/10" onClick={() => openPlaybackStream(source.url)}>
+                    Open stream
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg px-3 py-2 text-left hover:bg-white/10"
+                    onClick={() => {
+                      void shareOrCopyPlaybackStream(sourceName, source.url).then((result) => {
+                        if (result === 'cancelled') return;
+                        setMoreMessage(result === 'shared' ? 'Stream URL shared.' : result === 'copied' ? 'Stream URL copied.' : result === 'unavailable' ? 'Sharing is not available.' : 'Sharing failed.');
+                      });
+                    }}
+                  >
+                    Share or copy stream URL
+                  </button>
+                  <button type="button" aria-expanded={showTrackInfo} className="rounded-lg px-3 py-2 text-left hover:bg-white/10" onClick={() => setShowTrackInfo((current) => !current)}>
+                    Track information
+                  </button>
+                  {showTrackInfo && (
+                    <dl data-testid="track-information" className="grid gap-1 rounded-lg bg-black/20 p-3 text-xs">
+                      <div><dt className="text-white/50">Title</dt><dd>{source.title ?? source.name}</dd></div>
+                      <div><dt className="text-white/50">Artist</dt><dd>{source.artist ?? 'Unknown'}</dd></div>
+                      {source.album && <div><dt className="text-white/50">Album</dt><dd>{source.album}</dd></div>}
+                      <div><dt className="text-white/50">File</dt><dd className="break-all">{source.relativePath ?? source.name}</dd></div>
+                    </dl>
+                  )}
+                  {moreMessage !== '' && <p role="status" className="text-xs text-white/60">{moreMessage}</p>}
+                </div>
               </ActionPopoverPanel>
             )}
             </div>

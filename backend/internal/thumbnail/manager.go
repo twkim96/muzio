@@ -26,6 +26,7 @@ const (
 	defaultRetryMaximum = 30 * time.Second
 	offlineGrace        = 30 * 24 * time.Hour
 	defaultWorkers      = 1
+	audioWorkers        = 1
 	imageWorkers        = 1
 )
 
@@ -77,6 +78,7 @@ type Manager struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	queue       chan *scheduledJob
+	audioQueue  chan *scheduledJob
 	imageQueue  chan *scheduledJob
 	completions chan jobResult
 	wake        chan struct{}
@@ -85,6 +87,7 @@ type Manager struct {
 	mu             sync.Mutex
 	states         map[string]*scheduledJob
 	pending        jobHeap
+	audioPending   jobHeap
 	imagePending   jobHeap
 	nextSequence   uint64
 	desired        map[string]struct{}
@@ -246,15 +249,20 @@ func NewManager(options Options) (*Manager, error) {
 		ctx:         ctx,
 		cancel:      cancel,
 		queue:       make(chan *scheduledJob, queueSize),
+		audioQueue:  make(chan *scheduledJob, audioWorkers),
 		imageQueue:  make(chan *scheduledJob, imageWorkers),
-		completions: make(chan jobResult, queueSize+1),
+		completions: make(chan jobResult, queueSize+audioWorkers+imageWorkers),
 		wake:        make(chan struct{}, 1),
 		states:      make(map[string]*scheduledJob),
 		desired:     make(map[string]struct{}),
 	}
 	heap.Init(&manager.pending)
+	heap.Init(&manager.audioPending)
 	heap.Init(&manager.imagePending)
 	workerCount := workers
+	if manager.audio != nil {
+		workerCount += audioWorkers
+	}
 	if manager.image != nil {
 		workerCount += imageWorkers
 	}
@@ -262,6 +270,9 @@ func NewManager(options Options) (*Manager, error) {
 	go manager.runScheduler()
 	for i := 0; i < workers; i++ {
 		go manager.runWorker(manager.queue)
+	}
+	if manager.audio != nil {
+		go manager.runWorker(manager.audioQueue)
 	}
 	if manager.image != nil {
 		go manager.runWorker(manager.imageQueue)
@@ -564,6 +575,7 @@ func (m *Manager) fillQueue() (time.Time, bool) {
 	now := time.Now()
 	var nextRetry time.Time
 	m.fillQueueLocked(&m.pending, m.queue, now, &nextRetry)
+	m.fillQueueLocked(&m.audioPending, m.audioQueue, now, &nextRetry)
 	m.fillQueueLocked(&m.imagePending, m.imageQueue, now, &nextRetry)
 	return nextRetry, !nextRetry.IsZero()
 }
@@ -615,6 +627,12 @@ func (m *Manager) start(job *scheduledJob) bool {
 
 func (m *Manager) generate(job *scheduledJob) jobResult {
 	item := job.item
+	// Embedded artwork is requested lazily for visible audio rows and extracting
+	// a single attached picture is bounded to one frame and one worker. Waiting
+	// for every media response to become idle can otherwise defer artwork
+	// forever while a paused browser keeps its audio Range request open. Video
+	// frames and image previews remain behind the playback quiet gate.
+	playbackSensitive := item.Type != library.MediaTypeAudio
 	if m.Ready(item) {
 		return jobResult{job: job}
 	}
@@ -622,7 +640,7 @@ func (m *Manager) generate(job *scheduledJob) jobResult {
 		return jobResult{job: job, err: context.Canceled}
 	}
 
-	if m.idle != nil {
+	if m.idle != nil && playbackSensitive {
 		idleCtx, cancelIdle := context.WithTimeout(m.ctx, m.idleTime)
 		var err error
 		if waiter, ok := m.idle.(quietIdleWaiter); ok {
@@ -648,7 +666,7 @@ func (m *Manager) generate(job *scheduledJob) jobResult {
 	defer cancelTimeout()
 	ctx := timeoutCtx
 	cancelWork := func() {}
-	if gate, ok := m.idle.(backgroundWorkGate); ok {
+	if gate, ok := m.idle.(backgroundWorkGate); ok && playbackSensitive {
 		ctx, cancelWork = gate.BackgroundWorkContext(timeoutCtx)
 	}
 	defer cancelWork()
@@ -816,6 +834,9 @@ func (m *Manager) removeJobLocked(job *scheduledJob) {
 }
 
 func (m *Manager) pendingFor(job *scheduledJob) *jobHeap {
+	if job.item.Type == library.MediaTypeAudio {
+		return &m.audioPending
+	}
 	if job.item.Type == library.MediaTypeImage {
 		return &m.imagePending
 	}

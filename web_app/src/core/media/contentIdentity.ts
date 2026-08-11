@@ -17,6 +17,17 @@ const EXTENSION_RE = /\.[^.]+$/;
 export function contentIdentityForLibraryItem(
   item: LibraryItem,
 ): ContentIdentity {
+  if (item.type === 'image') {
+    const title = sanitizePart(item.metadata?.title) ?? item.name;
+    const root = toToken(item.rootName);
+    const name = toToken(item.name);
+    const modified = toToken(item.modifiedAt);
+    return {
+      key: `image:asset:${root}:${name}:${item.sizeBytes}:${modified}`,
+      title,
+      artist: null,
+    };
+  }
   return contentIdentityForParts({
     mediaType: item.type,
     name: item.name,
@@ -92,8 +103,30 @@ export function contentKeyForLibraryItem(item: LibraryItem): string {
   return contentIdentityForLibraryItem(item).key;
 }
 
+export function contentKeysForLibraryItem(item: LibraryItem): string[] {
+  const keys = new Set([contentKeyForLibraryItem(item)]);
+  if (item.type !== 'image') {
+    const fallback = contentIdentityForName({ mediaType: item.type, name: item.name });
+    keys.add(fallback.key);
+    const artist = sanitizePart(item.metadata?.artist);
+    if (artist !== null) {
+      keys.add(buildIdentity(item.type, fallback.title, artist).key);
+    }
+  }
+  return [...keys];
+}
+
 export function contentKeyForPlaybackSource(source: PlaybackSource): string {
   return contentIdentityForPlaybackSource(source).key;
+}
+
+export function contentKeysForPlaybackSource(source: PlaybackSource): string[] {
+  const keys = new Set([contentKeyForPlaybackSource(source)]);
+  const fallback = contentIdentityForName({ mediaType: source.mediaType, name: source.name });
+  keys.add(fallback.key);
+  const artist = sanitizePart(source.artist);
+  if (artist !== null) keys.add(buildIdentity(source.mediaType, fallback.title, artist).key);
+  return [...keys];
 }
 
 function stripExtension(name: string): string {

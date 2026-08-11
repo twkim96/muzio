@@ -12,7 +12,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import type { BackgroundLocationState } from '../../app/backgroundLocation';
 import type { LibraryItem } from '../../core/api/libraryClient';
-import { contentKeyForLibraryItem } from '../../core/media/contentIdentity';
+import { contentKeyForLibraryItem, contentKeysForLibraryItem } from '../../core/media/contentIdentity';
 import {
   buildStreamingUrl,
   isPlayableLibraryItem,
@@ -97,7 +97,7 @@ function LibraryItemRowComponent({
   const progressRecord = useProgressRecord(item.id);
   const resolvedThumbnail = useLibraryThumbnail(item);
   const likeKey = contentKeyForLibraryItem(item);
-  const liked = likedMediaIds.includes(likeKey) || likedMediaIds.includes(item.id);
+  const liked = contentKeysForLibraryItem(item).some((key) => likedMediaIds.includes(key)) || likedMediaIds.includes(item.id);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const longPressTimerRef = useRef<number | null>(null);
   const longPressTriggeredRef = useRef(false);
@@ -318,10 +318,10 @@ function LibraryItemRowComponent({
                 </p>
               </div>
             </button>
-            {item.type === 'video' && (
+            {(item.type === 'video' || item.type === 'image') && (
               <div
                 data-row-options-shell
-                className="relative hidden w-[6.75rem] shrink-0 items-center justify-end gap-0.5 sm:flex"
+                className={`relative w-[6.75rem] shrink-0 items-center justify-end gap-0.5 ${item.type === 'image' ? 'flex' : 'hidden sm:flex'}`}
               >
                 <LibraryRowActions
                   item={item}
@@ -506,7 +506,7 @@ function LibraryRowActions({
 
   return (
     <>
-      {item.type === 'audio' && (
+      {(item.type === 'audio' || item.type === 'image') && (
         <button
           type="button"
           data-row-action

@@ -26,6 +26,33 @@ func TestEnrichMetadataFromFileUsesEmbeddedM4AArtist(t *testing.T) {
 	}
 }
 
+func TestEnrichMetadataFromFileUsesM4ATitleAlbumAndYear(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tagged.m4a")
+	var entries []byte
+	for _, entry := range []struct {
+		atom  [4]byte
+		value string
+	}{
+		{mp4AtomTitle, "Tagged title"},
+		{mp4AtomArtist, "Tagged artist"},
+		{mp4AtomAlbum, "Tagged album"},
+		{mp4AtomYear, "2026-08-11"},
+	} {
+		data := testMP4Atom(mp4AtomData, append(make([]byte, 8), []byte(entry.value)...))
+		entries = append(entries, testMP4Atom(entry.atom, data)...)
+	}
+	ilst := testMP4Atom(mp4AtomIlst, entries)
+	meta := testMP4Atom(mp4AtomMeta, append(make([]byte, 4), ilst...))
+	moov := testMP4Atom(mp4AtomMoov, testMP4Atom(mp4AtomUdta, meta))
+	if err := os.WriteFile(path, moov, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := EnrichMetadataFromFile(path, MediaTypeAudio, Metadata{Title: "fallback"})
+	if got.Title != "Tagged title" || got.Artist != "Tagged artist" || got.Album != "Tagged album" || got.Year != 2026 {
+		t.Fatalf("metadata = %#v", got)
+	}
+}
+
 func TestScanPublishesEmbeddedM4AArtist(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "010_guitar(260803).m4a")

@@ -69,6 +69,15 @@ const videoResult: LibraryFetchResult = {
       sizeBytes: 2048,
       modifiedAt: '2025-01-01T00:00:00Z',
     },
+    {
+      id: 'v2',
+      type: 'video',
+      rootName: 'video',
+      relativePath: 'newer.mp4',
+      name: 'newer.mp4',
+      sizeBytes: 4096,
+      modifiedAt: '2025-01-02T00:00:00Z',
+    },
   ],
 };
 
@@ -513,6 +522,62 @@ describe('App routes', () => {
         'Recently Watching',
       ),
     ).toBeInTheDocument();
+  });
+
+  test('recently watching drawer shows count and newest playback first', async () => {
+    const { playerStore } = renderApp('/library/video');
+
+    await waitFor(() => {
+      expect(screen.getByText('newer.mp4')).toBeInTheDocument();
+    });
+    act(() => {
+      playerStore.getState().importPlaybackActivity({
+        version: 1,
+        records: [
+          {
+            contentKey: contentKeyForLibraryItem(videoResult.items[0]),
+            mediaId: 'v1',
+            mediaType: 'video',
+            name: 'clip.mp4',
+            artist: null,
+            playCount: 9,
+            lastPlayedAt: '2026-06-01T10:00:00.000Z',
+            lastPositionSec: 10,
+            durationSec: 100,
+            completed: false,
+            events: [],
+          },
+          {
+            contentKey: contentKeyForLibraryItem(videoResult.items[1]),
+            mediaId: 'v2',
+            mediaType: 'video',
+            name: 'newer.mp4',
+            artist: null,
+            playCount: 1,
+            lastPlayedAt: '2026-06-03T10:00:00.000Z',
+            lastPositionSec: 20,
+            durationSec: 100,
+            completed: false,
+            events: [],
+          },
+        ],
+      });
+    });
+
+    fireEvent.click(screen.getByTestId('mobile-menu-peek'));
+    const navigation = screen.getByTestId('mobile-navigation');
+    const entry = within(navigation).getByRole('button', {
+      name: /Recently Watching/,
+    });
+    expect(entry).toHaveTextContent('2');
+    fireEvent.click(entry);
+
+    const drawer = screen.getByTestId('playlist-drawer');
+    const playButtons = within(drawer).getAllByRole('button', { name: /^Play / });
+    expect(playButtons.map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Play newer.mp4',
+      'Play clip.mp4',
+    ]);
   });
 
   test('refreshes all libraries from the menu refresh button', async () => {

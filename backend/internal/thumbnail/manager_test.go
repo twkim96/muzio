@@ -44,6 +44,33 @@ type interruptibleIdleGate struct {
 	started chan struct{}
 }
 
+type rejectingPlaybackGate struct {
+	waitCalls       atomic.Int32
+	backgroundCalls atomic.Int32
+}
+
+func (g *rejectingPlaybackGate) WaitForMediaIdle(context.Context) error {
+	g.waitCalls.Add(1)
+	return errors.New("playback is active")
+}
+
+func (g *rejectingPlaybackGate) WaitForMediaQuiet(
+	context.Context,
+	time.Duration,
+) error {
+	g.waitCalls.Add(1)
+	return errors.New("playback is active")
+}
+
+func (g *rejectingPlaybackGate) BackgroundWorkContext(
+	parent context.Context,
+) (context.Context, context.CancelFunc) {
+	g.backgroundCalls.Add(1)
+	ctx, cancel := context.WithCancel(parent)
+	cancel()
+	return ctx, cancel
+}
+
 func newInterruptibleIdleGate() *interruptibleIdleGate {
 	return &interruptibleIdleGate{started: make(chan struct{})}
 }
@@ -188,6 +215,77 @@ func TestManagerTracksAudioWithoutEagerExtraction(t *testing.T) {
 		t.Fatal("on-demand audio enqueue rejected")
 	}
 	waitFor(t, func() bool { return manager.Ready(item) })
+	if got := audioExtractor.calls.Load(); got != 1 {
+		t.Fatalf("audio extractor calls = %d, want 1", got)
+	}
+}
+
+func TestManagerExtractsRequestedAudioArtworkDuringActivePlayback(t *testing.T) {
+	gate := &rejectingPlaybackGate{}
+	audioExtractor := &fakeExtractor{}
+	manager, err := NewManager(Options{
+		CacheDir:     t.TempDir(),
+		Resolver:     fakeResolver{path: "/music/song.m4a"},
+		Idle:         gate,
+		Extract:      &fakeExtractor{},
+		AudioExtract: audioExtractor,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	item := audioItem("song", "audio-key")
+	manager.Track([]library.Media{item})
+	if !manager.Enqueue(item) {
+		t.Fatal("on-demand audio enqueue rejected")
+	}
+	waitFor(t, func() bool { return manager.Ready(item) })
+	if got := audioExtractor.calls.Load(); got != 1 {
+		t.Fatalf("audio extractor calls = %d, want 1", got)
+	}
+	if got := gate.waitCalls.Load(); got != 0 {
+		t.Fatalf("audio artwork waited for media idle %d times", got)
+	}
+	if got := gate.backgroundCalls.Load(); got != 0 {
+		t.Fatalf("audio artwork installed playback cancellation %d times", got)
+	}
+}
+
+func TestRequestedAudioArtworkIsNotBlockedByVideoIdleWait(t *testing.T) {
+	release := make(chan struct{})
+	idle := &fakeIdleWaiter{
+		started: make(chan struct{}),
+		release: release,
+	}
+	audioExtractor := &fakeExtractor{}
+	manager, err := NewManager(Options{
+		CacheDir:     t.TempDir(),
+		Resolver:     fakeResolver{path: "/media/source"},
+		Idle:         idle,
+		Extract:      &fakeExtractor{},
+		AudioExtract: audioExtractor,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+
+	if !manager.Enqueue(video("video", "video-key")) {
+		t.Fatal("video enqueue rejected")
+	}
+	select {
+	case <-idle.started:
+	case <-time.After(time.Second):
+		t.Fatal("video idle wait did not start")
+	}
+
+	audio := audioItem("song", "audio-key")
+	manager.TrackOne(audio)
+	if !manager.Enqueue(audio) {
+		t.Fatal("audio enqueue rejected")
+	}
+	waitFor(t, func() bool { return manager.Ready(audio) })
 	if got := audioExtractor.calls.Load(); got != 1 {
 		t.Fatalf("audio extractor calls = %d, want 1", got)
 	}

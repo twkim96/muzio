@@ -1,5 +1,5 @@
 import type { LibraryItem } from '../../core/api/libraryClient';
-import { contentIdentityForLibraryItem } from '../../core/media/contentIdentity';
+import { contentKeysForLibraryItem } from '../../core/media/contentIdentity';
 import type { PlaybackActivityRecord } from '../../core/storage/playbackActivityRepository';
 import type { PlaylistRecord } from '../../core/storage/playlistRepository';
 
@@ -7,6 +7,66 @@ export interface SmartCollection {
   id: string;
   title: string;
   items: LibraryItem[];
+}
+
+const IMAGE_COLLECTION_LIMIT = 100;
+
+export function buildImageCollections({
+  items,
+  likedKeys,
+}: {
+  items: readonly LibraryItem[];
+  likedKeys: readonly string[];
+}): SmartCollection[] {
+  const images = items.filter((item) => item.type === 'image');
+  const liked = new Set(likedKeys);
+  const newest = [...images].sort((a, b) =>
+    b.modifiedAt.localeCompare(a.modifiedAt) || a.id.localeCompare(b.id),
+  );
+  return [
+    {
+      id: 'image-favorites',
+      title: 'Favorites',
+      items: images.filter((item) => {
+        return contentKeysForLibraryItem(item).some((key) => liked.has(key)) || liked.has(item.id);
+      }).slice(0, IMAGE_COLLECTION_LIMIT),
+    },
+    {
+      id: 'image-recently-added',
+      title: 'Recently Added',
+      items: newest.slice(0, IMAGE_COLLECTION_LIMIT),
+    },
+    {
+      id: 'image-screenshots',
+      title: 'Screenshots',
+      items: images.filter(isScreenshot).slice(0, IMAGE_COLLECTION_LIMIT),
+    },
+    {
+      id: 'image-downloads',
+      title: 'Downloads',
+      items: images.filter((item) => pathTokens(item.rootName).some(isDownloadsRootToken)).slice(0, IMAGE_COLLECTION_LIMIT),
+    },
+  ];
+}
+
+function isDownloadsRootToken(value: string): boolean {
+  return value === 'downloads' || value.startsWith('downloads-');
+}
+
+function isScreenshot(item: LibraryItem): boolean {
+  const segments = pathTokens(`${item.rootName}/${item.relativePath}`);
+  if (segments.includes('screenshots')) return true;
+  const filename = item.name.normalize('NFKC').toLocaleLowerCase();
+  return /^(screen ?shot|screenshot|스크린샷|화면 ?캡처)[ _-]/u.test(filename);
+}
+
+function pathTokens(value: string): string[] {
+  return value
+    .normalize('NFKC')
+    .toLocaleLowerCase()
+    .split(/[\\/]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 export function resolvePlaylistItems(
@@ -48,8 +108,7 @@ export function buildSmartCollections({
       title: 'Liked Music',
       items: items.filter((item) => {
         if (item.type !== 'audio') return false;
-        const identity = contentIdentityForLibraryItem(item);
-        return liked.has(identity.key) || liked.has(item.id);
+        return contentKeysForLibraryItem(item).some((key) => liked.has(key)) || liked.has(item.id);
       }),
     },
     {
@@ -69,7 +128,7 @@ export function buildSmartCollections({
       items: recordsToItems(
         [...activityRecords]
           .filter((record) => record.mediaType === 'video' && record.playCount > 0)
-          .sort(comparePlayCount)
+          .sort(compareRecentlyPlayed)
           .slice(0, 50),
         byKey,
       ),
@@ -82,8 +141,9 @@ export function mapItemsByContentKey(
 ): Map<string, LibraryItem> {
   const map = new Map<string, LibraryItem>();
   for (const item of items) {
-    const key = contentIdentityForLibraryItem(item).key;
-    if (!map.has(key)) map.set(key, item);
+    for (const key of contentKeysForLibraryItem(item)) {
+      if (!map.has(key)) map.set(key, item);
+    }
   }
   return map;
 }
@@ -103,4 +163,16 @@ function comparePlayCount(
 ): number {
   if (a.playCount !== b.playCount) return b.playCount - a.playCount;
   return String(b.lastPlayedAt ?? '').localeCompare(String(a.lastPlayedAt ?? ''));
+}
+
+function compareRecentlyPlayed(
+  a: PlaybackActivityRecord,
+  b: PlaybackActivityRecord,
+): number {
+  const lastPlayed = String(b.lastPlayedAt ?? '').localeCompare(
+    String(a.lastPlayedAt ?? ''),
+  );
+  if (lastPlayed !== 0) return lastPlayed;
+  if (a.playCount !== b.playCount) return b.playCount - a.playCount;
+  return a.contentKey.localeCompare(b.contentKey);
 }

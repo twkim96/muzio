@@ -33,6 +33,10 @@ import {
   type PlaybackActivityRepository,
   type PlaybackActivitySource,
 } from '../../core/storage/playbackActivityRepository';
+import {
+  createLocalStoragePlaybackPreferencesRepository,
+  type PlaybackPreferencesRepository,
+} from '../../core/storage/playbackPreferencesRepository';
 import type {
   ProgressService,
   ProgressServiceAttachment,
@@ -289,6 +293,7 @@ export interface PlayerStoreOptions {
   clearInterval?: (handle: unknown) => void;
   likedRepository?: LikedTracksRepository | null;
   activityRepository?: PlaybackActivityRepository | null;
+  preferencesRepository?: PlaybackPreferencesRepository | null;
   activityProgressThrottleMs?: number;
   random?: () => number;
   networkGate?: PlaybackNetworkGate;
@@ -403,6 +408,21 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
     options.activityRepository === undefined
       ? createLocalStoragePlaybackActivityRepository()
       : options.activityRepository;
+  const preferencesRepository = options.preferencesRepository === undefined
+    ? createLocalStoragePlaybackPreferencesRepository()
+    : options.preferencesRepository;
+  const initialPreferences = preferencesRepository?.read() ?? {
+    volume: 1,
+    muted: false,
+    shuffle: false,
+    repeatMode: 'none' as const,
+  };
+  const persistPreferences = (preferences: {
+    volume: number;
+    muted: boolean;
+    shuffle: boolean;
+    repeatMode: RepeatMode;
+  }) => preferencesRepository?.write(preferences);
   const configuredActivityThrottleMs =
     options.activityProgressThrottleMs ?? PLAYBACK_PROGRESS_THROTTLE_MS;
   const activityProgressThrottleMs = Number.isFinite(
@@ -919,13 +939,13 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       active: null,
       sleepTimer: { kind: 'off' },
       stopAfterCurrent: false,
-      volume: 1,
-      muted: false,
+      volume: initialPreferences.volume,
+      muted: initialPreferences.muted,
       musicQueue: [],
       musicQueueIndex: -1,
-      shuffle: false,
+      shuffle: initialPreferences.shuffle,
       shuffleBaseQueue: null,
-      repeatMode: 'none',
+      repeatMode: initialPreferences.repeatMode,
       likedMediaIds: likedRepository?.list() ?? [],
       recentlyPlayed: [],
       activityRecords: activityRepository?.list() ?? [],
@@ -1431,11 +1451,15 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         const nextVolume = clampVolume(volume);
         applyPreferencesToAttachedElements(nextVolume, get().muted);
         set({ volume: nextVolume });
+        const state = get();
+        persistPreferences({ volume: state.volume, muted: state.muted, shuffle: state.shuffle, repeatMode: state.repeatMode });
       },
 
       setMuted(muted) {
         applyPreferencesToAttachedElements(get().volume, muted);
         set({ muted });
+        const state = get();
+        persistPreferences({ volume: state.volume, muted: state.muted, shuffle: state.shuffle, repeatMode: state.repeatMode });
       },
 
       toggleMute() {
@@ -1478,10 +1502,14 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
                 : Math.min(state.musicQueueIndex, restored.length - 1),
           };
         });
+        const state = get();
+        persistPreferences({ volume: state.volume, muted: state.muted, shuffle: state.shuffle, repeatMode: state.repeatMode });
       },
 
       cycleRepeatMode() {
         set((state) => ({ repeatMode: nextRepeatMode(state.repeatMode) }));
+        const state = get();
+        persistPreferences({ volume: state.volume, muted: state.muted, shuffle: state.shuffle, repeatMode: state.repeatMode });
       },
 
       toggleLike(mediaId) {

@@ -3,12 +3,14 @@ import { useEffect, useMemo, useState } from 'react';
 import type { LibraryItem } from '../../core/api/libraryClient';
 import { contentKeyForLibraryItem } from '../../core/media/contentIdentity';
 import { formatDuration } from '../library/formatLibraryItem';
+import { ImageGlyph } from '../../core/ui/AppIcons';
 
 export function PlaylistDrawer({
   editable = false,
   items,
   onClose,
   onPlayItem,
+  onMoveItem,
   onRemoveItems,
   open,
   title,
@@ -17,6 +19,7 @@ export function PlaylistDrawer({
   items: LibraryItem[];
   onClose: () => void;
   onPlayItem: (item: LibraryItem) => void;
+  onMoveItem?: (contentKey: string, direction: 'up' | 'down') => void;
   onRemoveItems?: (contentKeys: readonly string[]) => void;
   open: boolean;
   playlistId?: string;
@@ -130,13 +133,13 @@ export function PlaylistDrawer({
           </p>
         ) : (
           <ol className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-            {items.map((item) => (
-              <li key={item.id}>
+            {items.map((item, index) => (
+              <li key={item.id} className="flex items-center gap-1">
                 <button
                   type="button"
-                  aria-label={editing ? `Select ${item.name}` : `Play ${item.name}`}
+                  aria-label={editing ? `Select ${item.name}` : `${item.type === 'image' ? 'Open' : 'Play'} ${item.name}`}
                   aria-pressed={editing ? selectedKeys.has(contentKeyForLibraryItem(item)) : undefined}
-                  className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-white/10 aria-pressed:bg-accent/18"
+                  className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-white/10 aria-pressed:bg-accent/18"
                   onClick={() => {
                     if (editing) {
                       toggleSelected(item);
@@ -148,7 +151,9 @@ export function PlaylistDrawer({
                   <span className="flex h-11 w-11 items-center justify-center rounded-md bg-white/10 text-lg text-white/75">
                     {editing && selectedKeys.has(contentKeyForLibraryItem(item))
                       ? '✓'
-                      : item.type === 'video'
+                      : item.type === 'image'
+                        ? <ImageGlyph className="h-5 w-5" />
+                        : item.type === 'video'
                         ? '▶'
                         : '♪'}
                   </span>
@@ -157,13 +162,37 @@ export function PlaylistDrawer({
                       {item.metadata?.title || item.name}
                     </span>
                     <span className="block truncate text-xs text-white/50">
-                      {item.metadata?.artist ?? item.rootName}
+                      {[item.metadata?.artist, item.metadata?.album].filter(Boolean).join(' · ') || item.rootName}
                     </span>
                   </span>
-                  <span className="text-xs tabular-nums text-white/45">
-                    {formatDuration(item.metadata?.durationSec)}
-                  </span>
+                  {item.type !== 'image' && (
+                    <span className="text-xs tabular-nums text-white/45">
+                      {formatDuration(item.metadata?.durationSec)}
+                    </span>
+                  )}
                 </button>
+                {editing && editable && (
+                  <div className="flex shrink-0 flex-col">
+                    <button
+                      type="button"
+                      aria-label={`Move ${item.name} up`}
+                      disabled={index === 0}
+                      className="h-7 w-8 rounded text-sm hover:bg-white/10 disabled:opacity-30"
+                      onClick={() => onMoveItem?.(contentKeyForLibraryItem(item), 'up')}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Move ${item.name} down`}
+                      disabled={index === items.length - 1}
+                      className="h-7 w-8 rounded text-sm hover:bg-white/10 disabled:opacity-30"
+                      onClick={() => onMoveItem?.(contentKeyForLibraryItem(item), 'down')}
+                    >
+                      ↓
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ol>

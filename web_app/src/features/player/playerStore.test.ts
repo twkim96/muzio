@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type {
   PlaybackEngine,
@@ -24,6 +24,10 @@ import type {
 } from '../../core/storage/progressRepository';
 import { createProgressService } from '../progress/progressService';
 import { createPlayerStore, selectActiveState } from './playerStore';
+
+beforeEach(() => {
+  window.localStorage.clear();
+});
 
 function fakeElement(): MediaElementLike {
   return {

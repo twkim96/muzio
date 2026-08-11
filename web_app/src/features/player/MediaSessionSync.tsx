@@ -4,13 +4,16 @@ import type { PlaybackStatus } from '../../core/playback/session/session';
 import type { PlaybackSource } from '../../core/playback/source/source';
 import { usePlayerStore } from './PlayerContext';
 import { selectActiveState } from './playerStore';
+import { explicitNextQueueIndex, previousQueueIndex } from './musicQueue';
 
 type MediaSessionAction =
   | 'play'
   | 'pause'
   | 'seekbackward'
   | 'seekforward'
-  | 'seekto';
+  | 'seekto'
+  | 'previoustrack'
+  | 'nexttrack';
 
 interface MediaSessionActionDetails {
   action: MediaSessionAction;
@@ -56,6 +59,8 @@ const MEDIA_SESSION_ACTIONS: MediaSessionAction[] = [
   'seekbackward',
   'seekforward',
   'seekto',
+  'previoustrack',
+  'nexttrack',
 ];
 
 const DEFAULT_SEEK_OFFSET_SEC = 10;
@@ -65,6 +70,11 @@ export function MediaSessionSync() {
   const activeState = store(selectActiveState);
   const source = activeState.source;
   const status = activeState.status;
+  const active = store((state) => state.active);
+  const musicQueue = store((state) => state.musicQueue);
+  const musicQueueIndex = store((state) => state.musicQueueIndex);
+  const repeatMode = store((state) => state.repeatMode);
+  const stopAfterCurrent = store((state) => state.stopAfterCurrent);
   const metadataGenerationRef = useRef(0);
 
   useEffect(() => {
@@ -99,6 +109,14 @@ export function MediaSessionSync() {
       return;
     }
 
+    const queueSnapshot = {
+      tracks: musicQueue,
+      currentIndex: musicQueueIndex,
+      repeatMode,
+      stopAfterCurrent,
+    };
+    const previousAvailable = active === 'audio' && previousQueueIndex(queueSnapshot) !== null;
+    const nextAvailable = active === 'audio' && explicitNextQueueIndex(queueSnapshot) !== null;
     const handlers: Record<MediaSessionAction, MediaSessionActionHandler> = {
       play: () => {
         const state = store.getState();
@@ -135,17 +153,24 @@ export function MediaSessionSync() {
         const current = selectActiveState(state);
         state.seekActive(clampSeekTarget(seekTime, current.durationSec));
       },
+      previoustrack: () => store.getState().playPreviousQueueItem(),
+      nexttrack: () => store.getState().playNextQueueItem(),
     };
 
     for (const action of MEDIA_SESSION_ACTIONS) {
-      setActionHandler(mediaSession, action, handlers[action]);
+      const enabled = action === 'previoustrack'
+        ? previousAvailable
+        : action === 'nexttrack'
+          ? nextAvailable
+          : true;
+      if (enabled) setActionHandler(mediaSession, action, handlers[action]);
     }
     return () => {
       for (const action of MEDIA_SESSION_ACTIONS) {
         setActionHandler(mediaSession, action, null);
       }
     };
-  }, [store]);
+  }, [active, musicQueue, musicQueueIndex, repeatMode, stopAfterCurrent, store]);
 
   return null;
 }
@@ -155,6 +180,7 @@ function mediaMetadataForSource(source: PlaybackSource): MediaMetadataInitLike {
   return {
     title: source.title ?? source.name,
     ...(artist ? { artist } : {}),
+    ...(source.album ? { album: source.album } : {}),
     ...(source.artworkUrl
       ? { artwork: [{ src: source.artworkUrl, type: 'image/jpeg' }] }
       : {}),

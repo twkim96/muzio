@@ -185,7 +185,8 @@ function QueueRow({
   onPlay: () => void;
   track: PlaybackSource;
 }) {
-  const detail = track.artist ?? track.relativePath ?? track.rootName ?? 'Music';
+  const detail = [track.artist, track.album].filter(Boolean).join(' · ') ||
+    (track.relativePath ?? track.rootName ?? 'Music');
   return (
     <li>
       <button

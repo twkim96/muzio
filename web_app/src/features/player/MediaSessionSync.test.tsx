@@ -411,6 +411,41 @@ describe('MediaSessionSync', () => {
     );
   });
 
+  test('exposes queue navigation only while an audio queue can move', async () => {
+    const mediaSession = installMediaSession();
+    const session = fakeSession({
+      status: { kind: 'paused' }, source: null, positionSec: 0, durationSec: 0,
+    });
+    const store = createPlayerStore();
+    store.getState().setSessionForTests('audio', session);
+    await store.getState().playMusicQueue([
+      audioSource,
+      { ...audioSource, mediaId: 'a2', url: '/api/media/a2', name: 'second.mp3' },
+    ], 'a1');
+    renderSync(store);
+
+    await waitFor(() => expect(mediaSession.handlers.nexttrack).toBeTypeOf('function'));
+    expect(mediaSession.handlers.previoustrack).toBeUndefined();
+    await act(async () => {
+      await mediaSession.handlers.nexttrack?.({ action: 'nexttrack' });
+    });
+    await waitFor(() => expect(mediaSession.handlers.previoustrack).toBeTypeOf('function'));
+    expect(store.getState().musicQueueIndex).toBe(1);
+    expect(mediaSession.handlers.nexttrack).toBeNull();
+
+    await act(async () => {
+      store.getState().setSessionForTests('audio', null);
+      store.getState().setSessionForTests('video', fakeSession({
+        status: { kind: 'playing' }, source: videoSource, positionSec: 0, durationSec: 10,
+      }));
+      await store.getState().playSource(videoSource);
+    });
+    await waitFor(() => {
+      expect(mediaSession.handlers.previoustrack).toBeNull();
+      expect(mediaSession.handlers.nexttrack).toBeNull();
+    });
+  });
+
   test('routes media session play and pause actions to the active player', async () => {
     const mediaSession = installMediaSession();
     const session = fakeSession({

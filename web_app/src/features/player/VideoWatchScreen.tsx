@@ -14,6 +14,10 @@ import {
   buildStreamingUrl,
   playbackSourceFromLibraryItem,
 } from '../../core/playback/source/source';
+import {
+  openPlaybackStream,
+  shareOrCopyPlaybackStream,
+} from '../../core/playback/externalPlayback';
 import { useLibraryStores, useLibraryThumbnail } from '../library/LibraryContext';
 import {
   formatDuration,
@@ -374,7 +378,7 @@ function VideoDescription({
     <section
       ref={gestureRef}
       data-testid="video-description"
-      aria-label="Video description"
+      aria-label="Video information"
       className="rounded-[var(--video-watch-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] p-4 lg:col-start-1 lg:row-start-2 lg:mt-0"
     >
       <dl className="grid gap-3 text-sm leading-5 sm:grid-cols-2">
@@ -402,28 +406,21 @@ function ExternalPlaybackActions({
 }) {
   const [message, setMessage] = useState('');
   if (source === null) return null;
-  const url = absolutePlaybackUrl(source.url);
-
   const openStream = () => {
-    window.open(url, '_blank', 'noopener,noreferrer');
+    openPlaybackStream(source.url);
   };
   const shareStream = async () => {
-    try {
-      if (typeof navigator.share === 'function') {
-        await navigator.share({ title, url });
-        setMessage('Stream URL shared.');
-        return;
-      }
-      if (navigator.clipboard?.writeText !== undefined) {
-        await navigator.clipboard.writeText(url);
-        setMessage('Stream URL copied.');
-        return;
-      }
-      setMessage('Sharing is not available.');
-    } catch (error) {
-      if (isAbortError(error)) return;
-      setMessage('Sharing failed.');
-    }
+    const result = await shareOrCopyPlaybackStream(title, source.url);
+    if (result === 'cancelled') return;
+    setMessage(
+      result === 'shared'
+        ? 'Stream URL shared.'
+        : result === 'copied'
+          ? 'Stream URL copied.'
+          : result === 'unavailable'
+            ? 'Sharing is not available.'
+            : 'Sharing failed.',
+    );
   };
 
   return (
@@ -460,14 +457,6 @@ function ExternalPlaybackActions({
   );
 }
 
-function absolutePlaybackUrl(url: string): string {
-  if (typeof window === 'undefined') return url;
-  return new URL(url, window.location.href).href;
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError';
-}
 
 function DismissButton({
   label,
@@ -658,6 +647,15 @@ function videoDetailRows({
   if (root) rows.push({ label: 'Root', value: root });
   if (path) rows.push({ label: 'Path', value: path });
   if (!root && !path) rows.push({ label: 'Source', value: sourceDetail });
+  if (currentItem?.metadata?.year) {
+    rows.push({ label: 'Year', value: String(currentItem.metadata.year) });
+  }
+  if (currentItem?.metadata?.season) {
+    rows.push({ label: 'Season', value: String(currentItem.metadata.season) });
+  }
+  if (currentItem?.metadata?.episode) {
+    rows.push({ label: 'Episode', value: String(currentItem.metadata.episode) });
+  }
 
   const knownDuration =
     durationSec > 0

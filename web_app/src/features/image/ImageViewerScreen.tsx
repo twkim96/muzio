@@ -3,9 +3,12 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { buildStreamingUrl } from '../../core/playback/source/source';
 import { DownChevronIcon } from '../../core/ui/AppIcons';
+import { LikeGlyph } from '../../core/ui/AppIcons';
+import { contentKeyForLibraryItem } from '../../core/media/contentIdentity';
 import { useLibraryStores } from '../library/LibraryContext';
 import { describeLibraryError } from '../library/libraryMessage';
 import { useDismissGesture } from '../player/useDismissGesture';
+import { usePlayerStore } from '../player/PlayerContext';
 
 export function ImageViewerScreen({
   mediaIdOverride,
@@ -19,6 +22,9 @@ export function ImageViewerScreen({
   const navigate = useNavigate();
   const stores = useLibraryStores();
   const state = stores.image();
+  const playerStore = usePlayerStore();
+  const likedMediaIds = playerStore((current) => current.likedMediaIds);
+  const toggleLike = playerStore((current) => current.toggleLike);
 
   useEffect(() => {
     if (state.status === 'idle') {
@@ -61,6 +67,22 @@ export function ImageViewerScreen({
         >
           <DownChevronIcon />
         </button>
+
+        {image !== null && (
+          <button
+            type="button"
+            data-testid="image-viewer-favorite"
+            aria-label={`${likedMediaIds.includes(contentKeyForLibraryItem(image)) ? 'Remove from' : 'Add to'} favorites`}
+            aria-pressed={likedMediaIds.includes(contentKeyForLibraryItem(image))}
+            className="absolute right-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full text-white/88 transition hover:bg-white/10 hover:text-white aria-pressed:text-accent sm:right-6 sm:top-6"
+            onClick={() => toggleLike(contentKeyForLibraryItem(image))}
+          >
+            <LikeGlyph
+              liked={likedMediaIds.includes(contentKeyForLibraryItem(image))}
+              className="h-6 w-6"
+            />
+          </button>
+        )}
 
         {state.status === 'loading' && (
           <StatusMessage>Loading image...</StatusMessage>

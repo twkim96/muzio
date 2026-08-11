@@ -19,6 +19,9 @@ var (
 	mp4AtomMeta   = [4]byte{'m', 'e', 't', 'a'}
 	mp4AtomIlst   = [4]byte{'i', 'l', 's', 't'}
 	mp4AtomArtist = [4]byte{0xa9, 'A', 'R', 'T'}
+	mp4AtomAlbum  = [4]byte{0xa9, 'a', 'l', 'b'}
+	mp4AtomTitle  = [4]byte{0xa9, 'n', 'a', 'm'}
+	mp4AtomYear   = [4]byte{0xa9, 'd', 'a', 'y'}
 	mp4AtomData   = [4]byte{'d', 'a', 't', 'a'}
 )
 
@@ -27,34 +30,49 @@ type mp4Atom struct {
 	payloadSize   int64
 }
 
-// EnrichMetadataFromFile overlays cheap, container-native metadata on top of
-// the filename/path fallback. Only M4A artist is read today: the scanner must
-// not spawn one ffprobe process per library item, and unrelated formats keep
-// their established naming behavior.
+// EnrichMetadataFromFile overlays bounded, container-native audio tags without
+// spawning one ffprobe process per library item.
 func EnrichMetadataFromFile(path string, mediaType MediaType, metadata Metadata) Metadata {
-	if mediaType != MediaTypeAudio || !strings.EqualFold(filepath.Ext(path), ".m4a") {
+	if mediaType != MediaTypeAudio {
 		return metadata
 	}
-	artist, err := readM4AArtist(path)
-	if err == nil && artist != "" {
-		metadata.Artist = artist
+	var fields audioTagFields
+	var err error
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".m4a", ".mp4":
+		fields, err = readM4ATags(path)
+	case ".mp3":
+		fields, err = readID3v2Tags(path)
+	case ".flac":
+		fields, err = readFLACTags(path)
+	default:
+		return metadata
 	}
+	if err != nil {
+		return metadata
+	}
+	applyAudioTagFields(&metadata, fields)
 	return metadata
 }
 
 func readM4AArtist(path string) (string, error) {
+	fields, err := readM4ATags(path)
+	return fields.Artist, err
+}
+
+func readM4ATags(path string) (audioTagFields, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return "", err
+		return audioTagFields{}, err
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
-		return "", err
+		return audioTagFields{}, err
 	}
 	moov, ok, err := findMP4Atom(file, 0, info.Size(), mp4AtomMoov)
 	if err != nil || !ok {
-		return "", err
+		return audioTagFields{}, err
 	}
 
 	// iTunes-style metadata normally lives at moov/udta/meta/ilst. A few
@@ -65,17 +83,17 @@ func readM4AArtist(path string) (string, error) {
 		moov.payloadSize,
 		mp4AtomUdta,
 	); findErr != nil {
-		return "", findErr
+		return audioTagFields{}, findErr
 	} else if found {
-		if artist, found, readErr := readArtistFromMetaParent(file, udta); readErr != nil || found {
-			return artist, readErr
+		if fields, found, readErr := readTagsFromMetaParent(file, udta); readErr != nil || found {
+			return fields, readErr
 		}
 	}
-	artist, _, err := readArtistFromMetaParent(file, moov)
-	return artist, err
+	fields, _, err := readTagsFromMetaParent(file, moov)
+	return fields, err
 }
 
-func readArtistFromMetaParent(reader io.ReaderAt, parent mp4Atom) (string, bool, error) {
+func readTagsFromMetaParent(reader io.ReaderAt, parent mp4Atom) (audioTagFields, bool, error) {
 	meta, ok, err := findMP4Atom(
 		reader,
 		parent.payloadOffset,
@@ -83,10 +101,10 @@ func readArtistFromMetaParent(reader io.ReaderAt, parent mp4Atom) (string, bool,
 		mp4AtomMeta,
 	)
 	if err != nil || !ok {
-		return "", false, err
+		return audioTagFields{}, false, err
 	}
 	if meta.payloadSize < 4 {
-		return "", false, nil
+		return audioTagFields{}, false, nil
 	}
 	// meta is a FullBox. Its four-byte version/flags prefix is not an atom.
 	ilst, ok, err := findMP4Atom(
@@ -96,21 +114,40 @@ func readArtistFromMetaParent(reader io.ReaderAt, parent mp4Atom) (string, bool,
 		mp4AtomIlst,
 	)
 	if err != nil || !ok {
-		return "", false, err
+		return audioTagFields{}, false, err
 	}
-	artistAtom, ok, err := findMP4Atom(
-		reader,
-		ilst.payloadOffset,
-		ilst.payloadSize,
-		mp4AtomArtist,
-	)
+	fields := audioTagFields{}
+	foundAny := false
+	for _, tag := range []struct {
+		atom [4]byte
+		set  func(string)
+	}{
+		{mp4AtomTitle, func(value string) { fields.Title = value }},
+		{mp4AtomArtist, func(value string) { fields.Artist = value }},
+		{mp4AtomAlbum, func(value string) { fields.Album = value }},
+		{mp4AtomYear, func(value string) { fields.Year = parseTagYear(value) }},
+	} {
+		value, found, readErr := readMP4TextTag(reader, ilst, tag.atom)
+		if readErr != nil {
+			return audioTagFields{}, false, readErr
+		}
+		if found {
+			tag.set(value)
+			foundAny = true
+		}
+	}
+	return fields, foundAny, nil
+}
+
+func readMP4TextTag(reader io.ReaderAt, ilst mp4Atom, target [4]byte) (string, bool, error) {
+	tagAtom, ok, err := findMP4Atom(reader, ilst.payloadOffset, ilst.payloadSize, target)
 	if err != nil || !ok {
 		return "", false, err
 	}
 	dataAtom, ok, err := findMP4Atom(
 		reader,
-		artistAtom.payloadOffset,
-		artistAtom.payloadSize,
+		tagAtom.payloadOffset,
+		tagAtom.payloadSize,
 		mp4AtomData,
 	)
 	if err != nil || !ok || dataAtom.payloadSize <= 8 {
@@ -118,17 +155,17 @@ func readArtistFromMetaParent(reader io.ReaderAt, parent mp4Atom) (string, bool,
 	}
 	valueSize := dataAtom.payloadSize - 8 // type/flags + locale
 	if valueSize > maxM4AMetadataValueBytes {
-		return "", false, errors.New("m4a artist metadata is too large")
+		return "", false, errors.New("m4a metadata value is too large")
 	}
 	value := make([]byte, int(valueSize))
 	if _, err := reader.ReadAt(value, dataAtom.payloadOffset+8); err != nil {
 		return "", false, err
 	}
 	if !utf8.Valid(value) {
-		return "", false, errors.New("m4a artist metadata is not UTF-8")
+		return "", false, errors.New("m4a metadata value is not UTF-8")
 	}
-	artist := strings.Trim(string(value), "\x00 \t\r\n")
-	return artist, artist != "", nil
+	text := strings.Trim(string(value), "\x00 \t\r\n")
+	return text, text != "", nil
 }
 
 func findMP4Atom(
