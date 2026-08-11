@@ -43,14 +43,14 @@ const audioItem: LibraryItem = {
   metadata: { title: 'Song', artist: 'Artist' },
   thumbnail: {
     url: '/api/thumbnails/a1',
-    kind: 'generated',
+    kind: 'embedded-artwork',
     status: 'ready',
     cacheKey: 'thumb',
   },
 };
 
 describe('createLocalStorageAudioLibrarySnapshotCache', () => {
-  test('round-trips audio snapshots without thumbnail data', () => {
+  test('round-trips immutable ready embedded artwork', () => {
     const storage = new MemoryStorage();
     const cache = createLocalStorageAudioLibrarySnapshotCache(storage);
 
@@ -76,6 +76,7 @@ describe('createLocalStorageAudioLibrarySnapshotCache', () => {
           sizeBytes: 123,
           modifiedAt: '2026-01-01T00:00:00Z',
           metadata: { title: 'Song', artist: 'Artist' },
+          thumbnail: audioItem.thumbnail,
         },
       ],
     });
@@ -83,7 +84,7 @@ describe('createLocalStorageAudioLibrarySnapshotCache', () => {
 
   test('ignores corrupt payloads', () => {
     const storage = new MemoryStorage();
-    storage.setItem('library.snapshot.audio.v2', 'not json');
+    storage.setItem('library.snapshot.audio.v3', 'not json');
     const cache = createLocalStorageAudioLibrarySnapshotCache(storage);
 
     expect(cache.read()).toBeNull();
@@ -138,9 +139,9 @@ describe('createLocalStorageAudioLibrarySnapshotCache', () => {
   test('treats a cache with a rejected item as incomplete', () => {
     const storage = new MemoryStorage();
     storage.setItem(
-      'library.snapshot.audio.v2',
+      'library.snapshot.audio.v3',
       JSON.stringify({
-        version: 2,
+        version: 3,
         revision: 12,
         etag: 'W/"library-12-audio"',
         complete: true,
@@ -158,15 +159,40 @@ describe('createLocalStorageAudioLibrarySnapshotCache', () => {
     });
   });
 
-  test('removes the legacy version-1 cache', () => {
+  test('removes legacy version-1 and version-2 caches', () => {
     const storage = new MemoryStorage();
     storage.setItem(
       'library.snapshot.audio.v1',
       JSON.stringify({ version: 1, revision: 1, items: [audioItem] }),
     );
+    storage.setItem(
+      'library.snapshot.audio.v2',
+      JSON.stringify({ version: 2, revision: 1, items: [audioItem] }),
+    );
     const cache = createLocalStorageAudioLibrarySnapshotCache(storage);
 
     expect(cache.read()).toBeNull();
     expect(storage.getItem('library.snapshot.audio.v1')).toBeNull();
+    expect(storage.getItem('library.snapshot.audio.v2')).toBeNull();
+  });
+
+  test('does not persist pending artwork state', () => {
+    const storage = new MemoryStorage();
+    const cache = createLocalStorageAudioLibrarySnapshotCache(storage);
+    cache.write({
+      revision: 3,
+      complete: true,
+      items: [{
+        ...audioItem,
+        thumbnail: {
+          url: '/api/thumbnails/a1?state=pending',
+          kind: 'embedded-artwork',
+          status: 'pending',
+          cacheKey: 'pending',
+        },
+      }],
+    });
+
+    expect(cache.read()?.items[0]?.thumbnail).toBeUndefined();
   });
 });

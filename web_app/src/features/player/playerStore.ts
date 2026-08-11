@@ -142,6 +142,9 @@ export interface PlayerState extends PlayerSnapshot {
     source: PlaybackSource,
     savedState?: { positionSec?: number; durationSec?: number },
   ): void;
+  /** Refresh display metadata/artwork for the selected media without
+   *  reloading the underlying element or changing its playback position. */
+  updateSourcePresentation(source: PlaybackSource): void;
   /**
    * Loads a boot-time seed into an already attached session without starting
    * playback. Video calls this only after the visible viewport exists, so the
@@ -199,6 +202,7 @@ interface MountSlot {
    * for tests and startup races where a play request arrives before a mount.
    */
   pendingPlay: PlaybackSource | null;
+  presentationSource: PlaybackSource | null;
   /**
    * Lifecycle handle returned by progressService.attach, when one is wired.
    * Disposing it flushes the last position to storage and detaches the
@@ -381,6 +385,36 @@ function samePlaybackMedia(
   );
 }
 
+function mergePlaybackSourcePresentation(
+  source: PlaybackSource,
+  presentation: PlaybackSource | null,
+): PlaybackSource {
+  if (presentation === null || !samePlaybackMedia(source, presentation)) {
+    return source;
+  }
+  const next = {
+    ...source,
+    name: presentation.name,
+    title: presentation.title,
+    artist: presentation.artist,
+    album: presentation.album,
+    artworkUrl: presentation.artworkUrl,
+    durationSec: presentation.durationSec ?? source.durationSec,
+    rootName: presentation.rootName,
+    relativePath: presentation.relativePath,
+  };
+  return source.name === next.name &&
+    source.title === next.title &&
+    source.artist === next.artist &&
+    source.album === next.album &&
+    source.artworkUrl === next.artworkUrl &&
+    source.durationSec === next.durationSec &&
+    source.rootName === next.rootName &&
+    source.relativePath === next.relativePath
+    ? source
+    : next;
+}
+
 function activitySourceFromPlaybackSource(
   source: PlaybackSource,
 ): PlaybackActivitySource {
@@ -467,6 +501,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       unsubscribe: null,
       element: null,
       pendingPlay: null,
+      presentationSource: null,
       progressAttachment: null,
       seededSource: null,
       seededState: null,
@@ -485,6 +520,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       unsubscribe: null,
       element: null,
       pendingPlay: null,
+      presentationSource: null,
       progressAttachment: null,
       seededSource: null,
       seededState: null,
@@ -511,7 +547,13 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
     const projectFromSlot = (kind: 'audio' | 'video'): PlaybackState => {
       const slot = slots[kind];
       const state = slot.session ? slot.session.getState() : initialPlayback;
-      if (state.source !== null) return state;
+      if (state.source !== null) {
+        const source = mergePlaybackSourcePresentation(
+          state.source,
+          slot.presentationSource,
+        );
+        return source === state.source ? state : { ...state, source };
+      }
       if (slot.pendingPlay !== null) {
         return {
           status: { kind: 'loading' },
@@ -632,6 +674,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           mediaFragmentStartSec(slot.seededSource) || seedPositionSec,
         );
       }
+      slot.presentationSource = playbackSource;
       if (targetKind === 'audio' && audioResumeCache !== null) {
         playbackSource = audioResumeCache.resolve(playbackSource);
       }
@@ -1196,6 +1239,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           source,
           positionSec,
         );
+        slot.presentationSource = source;
         const durationSec =
           typeof savedState?.durationSec === 'number' &&
           Number.isFinite(savedState.durationSec) &&
@@ -1212,6 +1256,27 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         slot.seedPreparationPending = false;
         slot.pendingPlay = null;
         set({ active: targetKind });
+        sync();
+      },
+
+      updateSourcePresentation(source) {
+        const slot = slots[source.mediaType];
+        const liveSource = slot.session?.getState().source ??
+          slot.pendingPlay ?? slot.seededSource;
+        if (!samePlaybackMedia(liveSource, source)) return;
+        slot.presentationSource = source;
+        if (slot.pendingPlay !== null) {
+          slot.pendingPlay = mergePlaybackSourcePresentation(
+            slot.pendingPlay,
+            source,
+          );
+        }
+        if (slot.seededSource !== null) {
+          slot.seededSource = mergePlaybackSourcePresentation(
+            slot.seededSource,
+            source,
+          );
+        }
         sync();
       },
 
@@ -1752,6 +1817,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         slot.progressAttachment = null;
         slot.unsubscribe?.();
         slot.session = session;
+        slot.presentationSource = session?.getState().source ?? null;
         slot.engine = null;
         slot.unsubscribe = null;
         slot.element = null;

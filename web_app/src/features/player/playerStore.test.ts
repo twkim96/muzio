@@ -1605,6 +1605,47 @@ describe('volume and mute', () => {
 });
 
 describe('seedSource', () => {
+  test('hydrates active source artwork without reloading or losing position', () => {
+    const session = makeFakeSession();
+    session.setState({
+      status: { kind: 'paused' },
+      source: {
+        ...audioSource,
+        name: 'Caravan Palace - Suzy.mp3',
+        title: undefined,
+        artist: undefined,
+        album: undefined,
+        artworkUrl: undefined,
+      },
+      positionSec: 64,
+      durationSec: 247,
+    });
+    const store = createPlayerStore();
+    store.getState().setSessionForTests('audio', session);
+
+    store.getState().updateSourcePresentation({
+      ...audioSource,
+      name: 'Caravan Palace - Suzy.mp3',
+      title: 'Suzy',
+      artist: 'Caravan Palace',
+      album: 'Caravan Palace',
+      artworkUrl: '/api/thumbnails/a1?v=cover&state=ready',
+    });
+
+    expect(store.getState().audio).toMatchObject({
+      positionSec: 64,
+      durationSec: 247,
+      source: {
+        title: 'Suzy',
+        artist: 'Caravan Palace',
+        album: 'Caravan Palace',
+        artworkUrl: '/api/thumbnails/a1?v=cover&state=ready',
+      },
+    });
+    expect(session.calls.load).not.toHaveBeenCalled();
+    expect(session.calls.seek).not.toHaveBeenCalled();
+  });
+
   test('parks a source on the matching slot and marks active without playing', () => {
     const sessions: ReturnType<typeof makeFakeSession>[] = [];
     const store = createPlayerStore({

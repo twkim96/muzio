@@ -112,6 +112,17 @@ Status: Completed (2026-08-11)
 - service 재시작 후 Control Server health가 `OK`이고 기존 재생 선택을 변경하지 않았다.
 - thumbnail package test/race와 전체 Go test/vet가 통과한다.
 
+추가 회귀 수정 (2026-08-11):
+
+- 기존 `library.snapshot.audio.v2`가 thumbnail을 제외한 채 ETag를 저장해, reload 뒤
+  서버가 `embedded-artwork/ready`여도 boot-time resume source가 filename/root fallback에
+  머무는 결함을 Suzy fixture로 재현했다.
+- audio snapshot을 v3로 올리고 immutable `embedded-artwork/ready`만 보존하며, 기존 v1/v2
+  cache는 한 번 폐기한다. library가 로드되면 active source의 metadata/artwork presentation만
+  갱신하고 media element, 재생 위치, URL은 다시 로드하지 않는다.
+- production Edge에서 `Caravan Palace - Suzy.mp3`가 기존 `1:03 / 4:07` 위치를 유지한 채
+  실제 640x640 cover와 `Caravan Palace · Caravan Palace`를 표시하는 것을 확인했다.
+
 ## Phase 1 - Recently Watching 의미 수정
 
 Status: Completed (2026-08-11)

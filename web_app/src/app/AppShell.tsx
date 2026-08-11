@@ -82,10 +82,25 @@ export function AppShell({ children }: { children: ReactNode }) {
   const activityRecords = playerStore((state) => state.activityRecords);
   const playMusicQueue = playerStore((state) => state.playMusicQueue);
   const playSource = playerStore((state) => state.playSource);
+  const updateSourcePresentation = playerStore(
+    (state) => state.updateSourcePresentation,
+  );
+  const activeAudioMediaId = playerStore(
+    (state) => state.audio.source?.mediaId ?? null,
+  );
+  const activeVideoMediaId = playerStore(
+    (state) => state.video.source?.mediaId ?? null,
+  );
   const playerOverlay = usePlayerOverlay();
   const audioItems = libraryStores.audio(itemsFromLibraryState);
   const videoItems = libraryStores.video(itemsFromLibraryState);
   const imageItems = libraryStores.image(itemsFromLibraryState);
+  const audioPresentation = libraryStores.audio(
+    (state) => state.presentation,
+  );
+  const videoPresentation = libraryStores.video(
+    (state) => state.presentation,
+  );
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [playlistDrawer, setPlaylistDrawer] = useState<{
@@ -112,6 +127,30 @@ export function AppShell({ children }: { children: ReactNode }) {
   const sidebar = section === null ? null : sideSections[section];
   const hasMobileMenu = sidebar !== null;
   const canCreatePlaylist = section === 'music' || section === 'video';
+  useEffect(() => {
+    for (const [mediaId, items, presentation] of [
+      [activeAudioMediaId, audioItems, audioPresentation],
+      [activeVideoMediaId, videoItems, videoPresentation],
+    ] as const) {
+      if (mediaId === null) continue;
+      const item = items.find((candidate) => candidate.id === mediaId);
+      if (item === undefined || !isPlayableLibraryItem(item)) continue;
+      const thumbnail = presentation.get(item.id) ?? item.thumbnail;
+      updateSourcePresentation(
+        playbackSourceFromLibraryItem(
+          thumbnail === undefined ? item : { ...item, thumbnail },
+        ),
+      );
+    }
+  }, [
+    activeAudioMediaId,
+    activeVideoMediaId,
+    audioItems,
+    audioPresentation,
+    updateSourcePresentation,
+    videoItems,
+    videoPresentation,
+  ]);
   const playableItems = useMemo(
     () => [...audioItems, ...videoItems].filter(isPlayableLibraryItem),
     [audioItems, videoItems],

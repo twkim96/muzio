@@ -1,9 +1,12 @@
 import type { LibraryItem } from '../../core/api/libraryClient';
 import type { LibrarySnapshot, LibrarySnapshotCache } from './libraryStore';
 
-const SCHEMA_VERSION = 2;
-const STORAGE_KEY = 'library.snapshot.audio.v2';
-const LEGACY_STORAGE_KEY = 'library.snapshot.audio.v1';
+const SCHEMA_VERSION = 3;
+const STORAGE_KEY = 'library.snapshot.audio.v3';
+const LEGACY_STORAGE_KEYS = [
+  'library.snapshot.audio.v2',
+  'library.snapshot.audio.v1',
+] as const;
 const MAX_ITEMS = 20_000;
 
 interface StoredSnapshot {
@@ -83,6 +86,14 @@ function defaultLocalStorage(): Storage | null {
 }
 
 function stripForSnapshot(item: LibraryItem): LibraryItem {
+  const thumbnail = item.thumbnail;
+  const stableArtwork =
+    thumbnail?.kind === 'embedded-artwork' &&
+    thumbnail.status === 'ready' &&
+    thumbnail.url.trim() !== '' &&
+    thumbnail.cacheKey.trim() !== ''
+      ? thumbnail
+      : undefined;
   return {
     id: item.id,
     type: item.type,
@@ -93,7 +104,12 @@ function stripForSnapshot(item: LibraryItem): LibraryItem {
     sizeBytes: item.sizeBytes,
     modifiedAt: item.modifiedAt,
     metadata: item.metadata,
+    ...(stableArtwork !== undefined ? { thumbnail: stableArtwork } : {}),
   };
+}
+
+function removeLegacySnapshots(storage: Storage) {
+  for (const key of LEGACY_STORAGE_KEYS) storage.removeItem(key);
 }
 
 export function createLocalStorageAudioLibrarySnapshotCache(
@@ -104,7 +120,7 @@ export function createLocalStorageAudioLibrarySnapshotCache(
     read() {
       if (targetStorage === null) return null;
       try {
-        targetStorage.removeItem(LEGACY_STORAGE_KEY);
+        removeLegacySnapshots(targetStorage);
         return parseSnapshot(targetStorage.getItem(STORAGE_KEY));
       } catch {
         return null;
@@ -123,7 +139,7 @@ export function createLocalStorageAudioLibrarySnapshotCache(
         items: items.slice(0, MAX_ITEMS).map(stripForSnapshot),
       };
       try {
-        targetStorage.removeItem(LEGACY_STORAGE_KEY);
+        removeLegacySnapshots(targetStorage);
         targetStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
       } catch {
         // Best effort only. If quota is full, playback and live fetches still
@@ -134,7 +150,7 @@ export function createLocalStorageAudioLibrarySnapshotCache(
       if (targetStorage === null) return;
       try {
         targetStorage.removeItem(STORAGE_KEY);
-        targetStorage.removeItem(LEGACY_STORAGE_KEY);
+        removeLegacySnapshots(targetStorage);
       } catch {
         // ignore
       }
