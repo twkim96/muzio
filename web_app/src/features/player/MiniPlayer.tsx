@@ -458,7 +458,7 @@ export function MiniPlayer() {
               </div>
             )}
           </div>
-          <div className="relative">
+          <div className="relative hidden sm:block" data-testid="mini-volume-control">
             <button
               type="button"
               aria-label="Volume"
@@ -493,6 +493,18 @@ export function MiniPlayer() {
               </div>
             )}
           </div>
+          <button
+            type="button"
+            data-testid="mini-next-mobile"
+            aria-label="Next track"
+            disabled={!canPlayNext}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-950 hover:bg-zinc-200/60 disabled:opacity-35 dark:text-white dark:hover:bg-white/[0.06] sm:hidden"
+            onClick={() => {
+              void snapshot.playNextQueueItem();
+            }}
+          >
+            <SkipGlyph direction="forward" className="h-7 w-7" />
+          </button>
           <button
             type="button"
             data-status={state.status.kind}

@@ -375,6 +375,36 @@ describe('MiniPlayer', () => {
     expect(store.getState().volume).toBe(0.35);
   });
 
+  test('shows next track instead of volume in the mobile mini player', async () => {
+    const store = createPlayerStore();
+    store.getState().attachElement('audio', fakeElement());
+    await store.getState().playMusicQueue(
+      [
+        audioSource,
+        {
+          ...audioSource,
+          mediaId: 'a2',
+          url: '/api/media/a2',
+          name: 'second.mp3',
+        },
+      ],
+      'a1',
+    );
+    renderWithStore(store);
+
+    expect(screen.getByTestId('mini-volume-control')).toHaveClass(
+      'hidden',
+      'sm:block',
+    );
+    const next = screen.getByTestId('mini-next-mobile');
+    expect(next).toHaveClass('sm:hidden');
+    expect(next).toBeEnabled();
+
+    fireEvent.click(next);
+    expect(store.getState().musicQueueIndex).toBe(1);
+    expect(next).toBeDisabled();
+  });
+
   test('opens the full player only from the cover button', async () => {
     const store = createPlayerStore();
     store.getState().attachElement('audio', fakeElement());
