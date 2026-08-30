@@ -10,3 +10,14 @@
 
 !web_app/
 !web_app/**
+
+!android_app/
+!android_app/**
+
+android_app/.gradle/
+android_app/.kotlin/
+android_app/**/build/
+android_app/local.properties
+android_app/**/.DS_Store
+android_app/**/*.jks
+android_app/**/*.keystore
