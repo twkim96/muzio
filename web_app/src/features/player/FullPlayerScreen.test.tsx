@@ -1022,7 +1022,7 @@ describe('FullPlayerScreen', () => {
       peakCacheBytes: 2048, movieIndexBytes: 32 * 1024 * 1024,
       gop: { count: 10, min: 5, median: 6, p95: 7, max: 8 },
     };
-    vi.spyOn(videoOptimizationService, 'supportsNativeHLS').mockReturnValue(true);
+    vi.spyOn(videoOptimizationService, 'supportsHLSPlayback').mockReturnValue(true);
     vi.spyOn(videoOptimizationService, 'status').mockImplementation(async (_id, _refresh, kind) => (
       kind === 'hls-fmp4'
         ? hlsEligible

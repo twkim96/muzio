@@ -237,7 +237,7 @@ function VideoOptimizationPanel({
     const refresh = async () => {
       const [faststart, hls] = await Promise.all([
         videoOptimizationService.status(mediaId, true, 'faststart-mp4'),
-        videoOptimizationService.supportsNativeHLS()
+        videoOptimizationService.supportsHLSPlayback()
           ? videoOptimizationService.status(mediaId, true, 'hls-fmp4')
           : Promise.resolve(null),
       ]);
@@ -338,9 +338,9 @@ function VideoOptimizationPanel({
 function optimizationMessage(status: VideoOptimizationStatus, usingReady: boolean, playability: Playability): string {
   if (status.state === 'ready') {
     const copy = status.cacheKind === 'hls-fmp4' ? 'segmented HLS copy' : 'faststart copy';
-    return usingReady ? `Playing the immutable ${copy}.` : `The ${copy} is ready. It will be selected for later playback.`;
+    return usingReady ? `Playing the immutable ${copy}.` : `The ${copy} is ready. It will switch on the next resume or seek.`;
   }
-  if (status.state === 'building') return 'Preparing in the background. Existing playback stays on the original file.';
+  if (status.state === 'building') return 'Preparing in the background while current playback stays on the original file.';
   if (status.state === 'insufficient-space') return 'Not enough free space to build the copy safely.';
   if (status.state === 'failed') return status.reason ?? 'Preparation failed. Direct playback remains available.';
   if (status.state === 'eligible' && playability === 'no') return 'The browser reports this codec as unsupported, so a container-only copy would not help. Direct playback remains available.';

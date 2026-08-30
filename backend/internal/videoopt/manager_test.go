@@ -854,6 +854,36 @@ func TestManagerReturnsBuildingBeforeGatedProbeStarts(t *testing.T) {
 	}
 }
 
+func TestManagerExplicitHLSBuildDoesNotWaitForMediaQuiet(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "long.mp4")
+	if err := os.WriteFile(path, frontMoovFixture(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gate := &waitingGate{release: make(chan struct{})}
+	hlsBuilder := &fakeHLSBuilder{plan: HLSPlan{
+		Eligible: true, CacheKind: HLSCacheKind, DurationSeconds: 12,
+		EstimatedOutputBytes: 1024, RequiredFreeBytes: 1024, PeakCacheBytes: 1024,
+		TargetSegmentSeconds: 6,
+		GOP:                  DurationStats{Count: 2, Min: 6, Median: 6, P95: 6, Max: 6},
+	}}
+	manager, err := NewManager(Options{
+		CacheDir: filepath.Join(root, "cache"), Resolver: testResolver{"long.mp4": path},
+		Builder: &controlledBuilder{releases: map[string]chan struct{}{}}, HLS: hlsBuilder,
+		HLSOptions: HLSPlanOptions{MinimumMovieIndexBytes: 1, MaximumGOPSeconds: 8, TargetSegmentSeconds: 6},
+		Idle:       gate, Space: fixedSpace(1 << 40),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	item := videoItem(t, "long", "long.mp4", path)
+	if status, err := manager.RequestKind(item, HLSCacheKind); err != nil || status.State != "building" {
+		t.Fatalf("request status=%#v error=%v", status, err)
+	}
+	waitForVideoStatusKind(t, manager, item, HLSCacheKind, "ready")
+}
+
 func TestManagerRechecksSpaceAfterMediaQuietGate(t *testing.T) {
 	root := t.TempDir()
 	path := writeEndMoovVideo(t, root, "video.mp4")
@@ -937,7 +967,7 @@ func TestManagerBackgroundBuildStopsWhenMediaStreamBegins(t *testing.T) {
 	t.Fatalf("build remained active: %#v", manager.Status(item))
 }
 
-func TestManagerTreatsCanceledHLSFFmpegAsNormalBackgroundCancellation(t *testing.T) {
+func TestManagerHLSBuildSurvivesMediaStreamAndExplicitCancelIsNormal(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "long.mp4")
 	if err := os.WriteFile(path, frontMoovFixture(), 0o600); err != nil {
@@ -979,6 +1009,13 @@ func TestManagerTreatsCanceledHLSFFmpegAsNormalBackgroundCancellation(t *testing
 	}
 	waitForCommandMarker(t, marker)
 	gate.beginMediaStream()
+	time.Sleep(20 * time.Millisecond)
+	if status := manager.StatusKind(item, HLSCacheKind); status.BuildingMediaID != item.ID {
+		t.Fatalf("media stream canceled explicit HLS build: %#v", status)
+	}
+	if !manager.Cancel(item.ID) {
+		t.Fatal("explicit HLS cancel failed")
+	}
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {
 		status := manager.StatusKind(item, HLSCacheKind)

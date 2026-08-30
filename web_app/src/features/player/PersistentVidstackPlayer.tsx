@@ -27,6 +27,7 @@ import {
 import type { PlaybackSource } from '../../core/playback/source/source';
 import { TheaterGlyph } from '../../core/ui/AppIcons';
 import { usePlayerStore } from './PlayerContext';
+import { configureEmbeddedHLSProvider } from './hlsPlaybackSupport';
 import { createVidstackEngine } from './vidstackEngine';
 
 interface CommittedSource {
@@ -172,6 +173,7 @@ export function PersistentVidstackPlayer({
           preload="metadata"
           playsInline
           streamType="on-demand"
+          onProviderChange={configureEmbeddedHLSProvider}
         >
           <MediaProvider />
           <DefaultVideoLayout

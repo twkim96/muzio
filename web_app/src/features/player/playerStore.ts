@@ -225,6 +225,8 @@ interface MountSlot {
   seedPreparationGeneration: number;
   seedPreparationPending: boolean;
   optimizationFallbackInProgress: boolean;
+  optimizationSwitchInProgress: boolean;
+  optimizationHandledSeekSeq: number;
   endStartupGate: (() => void) | null;
   endSeekGate: (() => void) | null;
   seekTargetSec: number | null;
@@ -509,6 +511,8 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       seedPreparationGeneration: 0,
       seedPreparationPending: false,
       optimizationFallbackInProgress: false,
+      optimizationSwitchInProgress: false,
+      optimizationHandledSeekSeq: 0,
       endStartupGate: null,
       endSeekGate: null,
       seekTargetSec: null,
@@ -528,6 +532,8 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       seedPreparationGeneration: 0,
       seedPreparationPending: false,
       optimizationFallbackInProgress: false,
+      optimizationSwitchInProgress: false,
+      optimizationHandledSeekSeq: 0,
       endStartupGate: null,
       endSeekGate: null,
       seekTargetSec: null,
@@ -773,12 +779,68 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         if (targetKind === 'audio') {
           beginAudioStartupGate(slot, playbackSource.mediaId);
         }
+        slot.optimizationSwitchInProgress = false;
+        slot.optimizationHandledSeekSeq = 0;
         slot.session.load(playbackSource);
         await slot.session.play();
       } catch (err) {
         if (targetKind === 'audio') closeStartupGate(slot);
         throw err;
       }
+    };
+
+    const loadReadyVideoOptimizationAtBoundary = (
+      positionSec: number,
+    ): boolean => {
+      const slot = slots.video;
+      const session = slot.session;
+      if (
+        videoOptimization === null ||
+        session === null ||
+        slot.optimizationSwitchInProgress ||
+        !Number.isFinite(positionSec) ||
+        positionSec < 0
+      ) {
+        return false;
+      }
+      const source = session.getState().source;
+      if (
+        source === null ||
+        source.mediaType !== 'video' ||
+        source.optimizationOriginalUrl !== undefined ||
+        source.optimizationAutoSwitchBlocked === true
+      ) {
+        return false;
+      }
+      const directAtTarget = {
+        ...source,
+        url: buildStreamingUrl(source.mediaId, { startSec: positionSec }),
+      };
+      const optimized = videoOptimization.resolve(directAtTarget);
+      if (
+        optimized.optimizationOriginalUrl === undefined ||
+        optimized.url === directAtTarget.url
+      ) {
+        return false;
+      }
+
+      slot.optimizationSwitchInProgress = true;
+      slot.optimizationFallbackInProgress = false;
+      slot.optimizationHandledSeekSeq = 0;
+      recordPlaybackDiagnosticMilestone(
+        'video_optimization_boundary_switch',
+        optimized,
+        positionSec || null,
+      );
+      try {
+        session.load(optimized);
+        if (positionSec > 0) {
+          session.seek(positionSec);
+        }
+      } finally {
+        slot.optimizationSwitchInProgress = false;
+      }
+      return true;
     };
 
     const playMusicQueueIndex = async (index: number) => {
@@ -884,7 +946,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       slot.unsubscribe = slot.session.subscribe(() => {
         const nextState = slot.session?.getState() ?? initialPlayback;
         sync();
-        if (!slot.preparedSeed) {
+        if (!slot.preparedSeed && !slot.optimizationSwitchInProgress) {
           syncActivityProgress(kind, nextState);
         }
         if (
@@ -928,6 +990,31 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
             // The direct source owns any subsequent error. The optimization
             // fallback is deliberately attempted only once.
           });
+        }
+        if (kind === 'video') {
+          const seekSeq = nextState.userSeekSeq ?? 0;
+          if (seekSeq < slot.optimizationHandledSeekSeq) {
+            slot.optimizationHandledSeekSeq = seekSeq;
+          }
+          if (seekSeq > slot.optimizationHandledSeekSeq) {
+            slot.optimizationHandledSeekSeq = seekSeq;
+            const targetSec = nextState.userSeekTargetSec;
+            const shouldResume =
+              nextState.status.kind === 'playing' ||
+              nextState.status.kind === 'buffering' ||
+              nextState.status.kind === 'loading';
+            if (
+              targetSec !== undefined &&
+              targetSec !== null &&
+              loadReadyVideoOptimizationAtBoundary(targetSec) &&
+              shouldResume
+            ) {
+              void slot.session?.play().catch(() => {
+                // Provider errors are surfaced by the session and retain the
+                // existing one-shot direct fallback.
+              });
+            }
+          }
         }
         if (kind === 'audio') maybeAdvanceAudioQueue();
         if (kind === 'audio') updateAudioGateState(nextState);
@@ -1207,6 +1294,8 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         slot.unsubscribe?.();
         slot.session?.dispose();
         slot.preparedSeed = false;
+        slot.optimizationSwitchInProgress = false;
+        slot.optimizationHandledSeekSeq = 0;
         slot.session =
           lingeringState !== null && lingeringSource !== null
             ? createParkingLotSession(lingeringState)
@@ -1255,6 +1344,8 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         slot.seedPreparationGeneration += 1;
         slot.seedPreparationPending = false;
         slot.pendingPlay = null;
+        slot.optimizationSwitchInProgress = false;
+        slot.optimizationHandledSeekSeq = 0;
         set({ active: targetKind });
         sync();
       },
@@ -1309,7 +1400,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         const generation = ++slot.seedPreparationGeneration;
         slot.seedPreparationPending = true;
         const refreshes = [videoOptimization.status(seededSource.mediaId, true, 'faststart-mp4')];
-        if (videoOptimization.supportsNativeHLS()) {
+        if (videoOptimization.supportsHLSPlayback()) {
           refreshes.push(videoOptimization.status(seededSource.mediaId, true, 'hls-fmp4'));
         }
         void Promise.all(refreshes).then(() => {
@@ -1338,7 +1429,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       prefetchVideoOptimization(mediaId) {
         if (videoOptimization === null || mediaId.trim() === '') return;
         const requests = [videoOptimization.status(mediaId, false, 'faststart-mp4')];
-        if (videoOptimization.supportsNativeHLS()) {
+        if (videoOptimization.supportsHLSPlayback()) {
           requests.push(videoOptimization.status(mediaId, false, 'hls-fmp4'));
         }
         void Promise.all(requests).catch(() => {
@@ -1432,6 +1523,16 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           if (active === 'audio' && source !== null) {
             beginAudioStartupGate(slot, source.mediaId);
           }
+          if (
+            active === 'video' &&
+            source !== null &&
+            loadReadyVideoOptimizationAtBoundary(
+              session.getState().positionSec,
+            )
+          ) {
+            await session.play();
+            return;
+          }
           await session.play();
         } catch (err) {
           if (active === 'audio') closeStartupGate(slot);
@@ -1473,7 +1574,8 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         if (active === null) return;
         const session = slots[active].session;
         if (!session) return;
-        const source = session.getState().source;
+        const state = session.getState();
+        const source = state.source;
         if (
           active === 'audio' &&
           source !== null &&
@@ -1481,6 +1583,23 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           positionSec >= 0
         ) {
           beginAudioSeekGate(slots.audio, source.mediaId, positionSec);
+        }
+        if (
+          active === 'video' &&
+          Number.isFinite(positionSec) &&
+          positionSec >= 0 &&
+          loadReadyVideoOptimizationAtBoundary(positionSec)
+        ) {
+          if (
+            state.status.kind === 'playing' ||
+            state.status.kind === 'buffering' ||
+            state.status.kind === 'loading'
+          ) {
+            void session.play().catch(() => {
+              // Provider errors retain the existing one-shot direct fallback.
+            });
+          }
+          return;
         }
         session.seek(positionSec);
       },
@@ -1823,6 +1942,8 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         slot.element = null;
         slot.seededSource = null;
         slot.preparedSeed = false;
+        slot.optimizationSwitchInProgress = false;
+        slot.optimizationHandledSeekSeq = 0;
         if (session) {
           slot.unsubscribe = session.subscribe(() => {
             const nextState = session.getState();

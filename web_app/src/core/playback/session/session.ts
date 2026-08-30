@@ -28,6 +28,10 @@ export interface PlaybackState {
    * UI-mirrored seeks update positionSec immediately but do not advance this.
    */
   mediaPositionUpdateSeq?: number;
+  /** Increments whenever the provider reports a seek boundary. */
+  userSeekSeq?: number;
+  /** Provider position observed at the latest seek boundary. */
+  userSeekTargetSec?: number | null;
 }
 
 export type SessionListener = (state: PlaybackState) => void;
@@ -48,6 +52,8 @@ const initialState: PlaybackState = {
   positionSec: 0,
   durationSec: 0,
   mediaPositionUpdateSeq: 0,
+  userSeekSeq: 0,
+  userSeekTargetSec: null,
 };
 
 function sourceDurationSec(source: PlaybackSource): number {
@@ -79,6 +85,8 @@ export function createSession(engine: PlaybackEngine): PlaybackSession {
           positionSec: 0,
           durationSec: 0,
           mediaPositionUpdateSeq: 0,
+          userSeekSeq: 0,
+          userSeekTargetSec: null,
         });
         break;
       case 'metadata':
@@ -106,6 +114,14 @@ export function createSession(engine: PlaybackEngine): PlaybackSession {
         update({ status: { kind: 'buffering' } });
         break;
       case 'seeking':
+        if (state.source !== null) {
+          update({
+            positionSec: event.positionSec,
+            userSeekSeq: (state.userSeekSeq ?? 0) + 1,
+            userSeekTargetSec: event.positionSec,
+          });
+        }
+        break;
       case 'seeked':
       case 'stalled':
       case 'progress':
@@ -151,6 +167,8 @@ export function createSession(engine: PlaybackEngine): PlaybackSession {
         positionSec: 0,
         durationSec: sourceDurationSec(source),
         mediaPositionUpdateSeq: 0,
+        userSeekSeq: 0,
+        userSeekTargetSec: null,
       };
       emit();
       engine.load(source);

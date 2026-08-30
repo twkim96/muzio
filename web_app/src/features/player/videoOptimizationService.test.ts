@@ -76,6 +76,22 @@ describe('videoOptimizationService', () => {
     expect(service.resolve(source).url).toContain('/api/video-optimization/media/');
   });
 
+  it('keeps an explicitly restored original direct for the current playback attempt', async () => {
+    const service = createVideoOptimizationService({ fetchStatus: async () => ready, storage: null });
+    await service.status('video', true);
+    service.preferOriginal('video');
+    const restored = restoreOriginalVideoSource({
+      ...source,
+      url: '/api/video-optimization/media/video?v=key#t=45',
+      optimizationOriginalUrl: source.url,
+      optimizationOriginalMimeType: source.mimeType,
+      optimizationKind: 'faststart-mp4',
+    }, 90);
+
+    expect(service.resolve(restored)).toEqual(restored);
+    expect(service.resolve(source).url).toContain('/api/video-optimization/media/');
+  });
+
   it('restores a MOV original URL and MIME at the current position', () => {
     const optimized: PlaybackSource = {
       ...source,
@@ -90,6 +106,7 @@ describe('videoOptimizationService', () => {
       name: 'movie.mov',
       url: '/api/media/video#t=90.3',
       mimeType: 'video/quicktime',
+      optimizationAutoSwitchBlocked: true,
     });
   });
 
@@ -110,7 +127,7 @@ describe('videoOptimizationService', () => {
     expect(values.size).toBe(0);
   });
 
-  it('selects native HLS with the original identity and resume fragment', async () => {
+  it('selects embedded HLS with the original identity and resume fragment', async () => {
     const hlsReady: VideoOptimizationStatus = {
       ...ready,
       layout: 'front-moov',
@@ -134,7 +151,7 @@ describe('videoOptimizationService', () => {
     });
   });
 
-  it('keeps non-native HLS browsers on the direct source', async () => {
+  it('keeps browsers without native or MediaSource HLS support on the direct source', async () => {
     const service = createVideoOptimizationService({
       fetchStatus: async () => ({
         ...ready,

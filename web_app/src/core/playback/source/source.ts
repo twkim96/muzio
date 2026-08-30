@@ -42,6 +42,8 @@ export interface RemotePlaybackSource {
   optimizationOriginalUrl?: string;
   optimizationOriginalMimeType?: string;
   optimizationKind?: 'faststart-mp4' | 'hls-fmp4';
+  /** Keep this playback attempt on the original after an explicit user choice. */
+  optimizationAutoSwitchBlocked?: boolean;
 }
 
 const STREAM_BASE_PATH = '/api/media/';

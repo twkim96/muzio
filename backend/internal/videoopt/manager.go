@@ -570,7 +570,11 @@ func (m *Manager) Close() {
 
 func (m *Manager) build(ctx context.Context, generation uint64, c candidate) {
 	defer m.wg.Done()
-	if m.idle != nil {
+	// HLS packaging is always an explicit user request. It is a local
+	// stream-copy job and may run while the original is being streamed; the
+	// player keeps using the original until a later pause/resume or seek
+	// boundary. Automatic/faststart work remains subordinate to media playback.
+	if m.idle != nil && c.kind != HLSCacheKind {
 		if err := m.idle.WaitForMediaQuiet(ctx, m.quietGrace); err != nil {
 			m.finishBuild(generation, c, nil, err)
 			return

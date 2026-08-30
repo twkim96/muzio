@@ -152,6 +152,24 @@ describe('createVidstackEngine', () => {
     ]);
   });
 
+  test('projects a native Vidstack timeline seek into the session boundary state', () => {
+    const player = new FakeVidstackPlayer();
+    const engine = createVidstackEngine(player, async () => {});
+    const session = createSession(engine);
+
+    session.load(source);
+    dispatchSourceChange(player, source);
+    player.currentSrc = { src: source.url, type: source.mimeType };
+    player.currentTime = 90;
+    player.dispatchEvent(new Event('seeking'));
+
+    expect(session.getState()).toMatchObject({
+      positionSec: 90,
+      userSeekSeq: 1,
+      userSeekTargetSec: 90,
+    });
+  });
+
   test('persists video progress from Vidstack duration and time updates', () => {
     const player = new FakeVidstackPlayer();
     const engine = createVidstackEngine(player, async () => {});

@@ -8,6 +8,7 @@ import {
 } from '../../core/api/videoOptimizationClient';
 import type { PlaybackSource } from '../../core/playback/source/source';
 import { buildStreamingUrl } from '../../core/playback/source/source';
+import { supportsEmbeddedHLSPlayback } from './hlsPlaybackSupport';
 
 export interface VideoOptimizationService {
   status(mediaId: string, refresh?: boolean, kind?: VideoOptimizationKind): Promise<VideoOptimizationStatus | null>;
@@ -15,7 +16,7 @@ export interface VideoOptimizationService {
   cancel(mediaId: string, kind?: VideoOptimizationKind): Promise<VideoOptimizationStatus | null>;
   clear(mediaId: string, cacheKey: string, kind?: VideoOptimizationKind): Promise<VideoOptimizationStatus | null>;
   invalidate(mediaId: string, kind?: VideoOptimizationKind): void;
-  supportsNativeHLS(): boolean;
+  supportsHLSPlayback(): boolean;
   preferOriginal(mediaId: string): void;
   resolve(source: PlaybackSource): PlaybackSource;
 }
@@ -36,7 +37,7 @@ export function createVideoOptimizationService(options: VideoOptimizationService
   const prepare = options.prepare ?? ((id, kind) => prepareVideoOptimization(id, { kind }));
   const cancel = options.cancel ?? ((id, kind) => cancelVideoOptimization(id, { kind }));
   const clear = options.clear ?? ((id, key, kind) => clearVideoOptimization(id, key, { kind }));
-  const canPlayHLS = options.canPlayHLS ?? canPlayNativeHLS;
+  const canPlayHLS = options.canPlayHLS ?? supportsEmbeddedHLSPlayback;
   const storage = options.storage === undefined ? browserStorage() : options.storage;
   const statuses = new Map<string, VideoOptimizationStatus>();
   const preferOriginalOnce = new Set<string>();
@@ -75,10 +76,14 @@ export function createVideoOptimizationService(options: VideoOptimizationService
       const stored = readStoredReady(storage);
       if (stored?.mediaId === mediaId && (kind === undefined || stored.cacheKind === kind)) storage?.removeItem(READY_STORAGE_KEY);
     },
-    supportsNativeHLS: canPlayHLS,
+    supportsHLSPlayback: canPlayHLS,
     preferOriginal(mediaId) { preferOriginalOnce.add(mediaId); },
     resolve(source) {
       if (source.mediaType !== 'video') return source;
+      if (source.optimizationAutoSwitchBlocked === true) {
+        preferOriginalOnce.delete(source.mediaId);
+        return source;
+      }
       if (preferOriginalOnce.delete(source.mediaId)) return source;
       const hlsStatus = canPlayHLS() ? statuses.get(statusKey(source.mediaId, 'hls-fmp4')) : undefined;
       const status = hlsStatus?.state === 'ready'
@@ -103,16 +108,6 @@ export function createVideoOptimizationService(options: VideoOptimizationService
 
 function statusKey(mediaId: string, kind: VideoOptimizationKind): string {
   return `${kind}:${mediaId}`;
-}
-
-function canPlayNativeHLS(): boolean {
-  if (typeof document === 'undefined') return false;
-  try {
-    const video = document.createElement('video');
-    return video.canPlayType('application/vnd.apple.mpegurl') !== '' || video.canPlayType('application/x-mpegURL') !== '';
-  } catch {
-    return false;
-  }
 }
 
 function browserStorage(): Storage | null {
@@ -183,13 +178,16 @@ export function restoreOriginalVideoSource(
     optimizationOriginalUrl,
     optimizationOriginalMimeType,
     optimizationKind: _optimizationKind,
+    optimizationAutoSwitchBlocked: _optimizationAutoSwitchBlocked,
     ...rest
   } = source;
   void _optimizationKind;
+  void _optimizationAutoSwitchBlocked;
   const originalUrl = optimizationOriginalUrl ?? buildStreamingUrl(source.mediaId);
   return {
     ...rest,
     url: withMediaTime(originalUrl, positionSec),
+    optimizationAutoSwitchBlocked: true,
     ...(optimizationOriginalMimeType !== undefined
       ? { mimeType: optimizationOriginalMimeType }
       : {}),

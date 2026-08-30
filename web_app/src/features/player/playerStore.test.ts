@@ -207,6 +207,36 @@ const videoSource: PlaybackSource = {
   name: 'clip.mp4',
 };
 
+function boundaryOptimization(ready: { value: boolean }) {
+  return {
+    status: async () => null,
+    prepare: async () => null,
+    cancel: async () => null,
+    clear: async () => null,
+    invalidate: () => {},
+    supportsHLSPlayback: () => true,
+    preferOriginal: () => {},
+    resolve(source: PlaybackSource): PlaybackSource {
+      if (
+        !ready.value ||
+        source.optimizationAutoSwitchBlocked === true
+      ) {
+        return source;
+      }
+      const hashIndex = source.url.indexOf('#');
+      const fragment = hashIndex >= 0 ? source.url.slice(hashIndex) : '';
+      return {
+        ...source,
+        url: `/api/video-optimization/hls/${source.mediaId}/ready/index.m3u8${fragment}`,
+        mimeType: 'application/vnd.apple.mpegurl',
+        optimizationKind: 'hls-fmp4',
+        optimizationOriginalUrl: source.url,
+        optimizationOriginalMimeType: source.mimeType,
+      };
+    },
+  };
+}
+
 describe('createPlayerStore initial state', () => {
   test('starts idle on both kinds with no active', () => {
     const store = createPlayerStore();
@@ -1225,7 +1255,7 @@ describe('video optimization', () => {
         cancel: async () => null,
         clear: async () => null,
         invalidate: () => {},
-        supportsNativeHLS: () => false,
+        supportsHLSPlayback: () => false,
         preferOriginal: () => {},
         resolve,
       },
@@ -1255,7 +1285,7 @@ describe('video optimization', () => {
       videoOptimization: {
         status: async () => null, prepare: async () => null,
         cancel: async () => null, clear: async () => null, invalidate,
-        supportsNativeHLS: () => false,
+        supportsHLSPlayback: () => false,
         preferOriginal: () => {}, resolve: () => optimized,
       },
     });
@@ -1299,7 +1329,7 @@ describe('video optimization', () => {
       createEngine: () => fakeEngine(),
       videoOptimization: {
         status: async () => null, prepare: async () => null, cancel: async () => null,
-        clear: async () => null, invalidate, supportsNativeHLS: () => true,
+        clear: async () => null, invalidate, supportsHLSPlayback: () => true,
         preferOriginal: () => {}, resolve: () => optimized,
       },
     });
@@ -1336,7 +1366,7 @@ describe('video optimization', () => {
       createEngine: () => fakeEngine(),
       videoOptimization: {
         status, resolve, prepare: async () => null, cancel: async () => null,
-        clear: async () => null, invalidate: () => {}, supportsNativeHLS: () => false,
+        clear: async () => null, invalidate: () => {}, supportsHLSPlayback: () => false,
         preferOriginal: () => {},
       },
     });
@@ -1368,6 +1398,132 @@ describe('video optimization', () => {
       mimeType: 'video/quicktime',
     }));
     expect(session.calls.play).not.toHaveBeenCalled();
+  });
+
+  test('switches a paused direct video to ready HLS on resume at the same position', async () => {
+    const session = makeFakeSession();
+    const ready = { value: false };
+    const recordPlay = vi.fn((): PlaybackActivityRecord[] => []);
+    const progressPatches: Array<{ positionSec: number }> = [];
+    const updateProgress: PlaybackActivityRepository['updateProgress'] = (
+      _source,
+      patch,
+    ) => {
+      progressPatches.push(patch);
+      return false;
+    };
+    const store = createPlayerStore({
+      createSession: () => session,
+      createEngine: () => fakeEngine(),
+      videoOptimization: boundaryOptimization(ready),
+      activityRepository: {
+        list: () => [],
+        recordPlay,
+        updateProgress,
+        exportData: () => ({ version: 1, records: [] }),
+        importData: () => [],
+      },
+    });
+    store.getState().attachElement('video', fakeElement());
+    await store.getState().playSource(videoSource);
+    session.setState({
+      ...session.getState(),
+      status: { kind: 'paused' },
+      positionSec: 120.25,
+    });
+    ready.value = true;
+    const progressCallsBeforeSwitch = progressPatches.length;
+
+    await store.getState().togglePlayPause();
+
+    expect(session.calls.load).toHaveBeenLastCalledWith(expect.objectContaining({
+      mediaId: 'v1',
+      url: '/api/video-optimization/hls/v1/ready/index.m3u8#t=120.3',
+      optimizationKind: 'hls-fmp4',
+    }));
+    expect(session.calls.play).toHaveBeenCalledTimes(2);
+    expect(recordPlay).toHaveBeenCalledTimes(1);
+    expect(
+      progressPatches
+        .slice(progressCallsBeforeSwitch)
+        .every((patch) => patch.positionSec !== 0),
+    ).toBe(true);
+  });
+
+  test('switches a playing direct video to ready HLS on app seek and resumes playback', async () => {
+    const session = makeFakeSession();
+    const ready = { value: false };
+    const store = createPlayerStore({
+      createSession: () => session,
+      createEngine: () => fakeEngine(),
+      videoOptimization: boundaryOptimization(ready),
+    });
+    store.getState().attachElement('video', fakeElement());
+    await store.getState().playSource(videoSource);
+    session.setState({
+      ...session.getState(),
+      status: { kind: 'playing' },
+      positionSec: 30,
+    });
+    ready.value = true;
+
+    store.getState().seekActive(600);
+
+    expect(session.calls.load).toHaveBeenLastCalledWith(expect.objectContaining({
+      url: '/api/video-optimization/hls/v1/ready/index.m3u8#t=600',
+    }));
+    expect(session.calls.seek).toHaveBeenCalledWith(600);
+    expect(session.calls.play).toHaveBeenCalledTimes(2);
+  });
+
+  test('switches on a native provider seek and preserves paused intent', async () => {
+    const session = makeFakeSession();
+    const ready = { value: false };
+    const store = createPlayerStore({
+      createSession: () => session,
+      createEngine: () => fakeEngine(),
+      videoOptimization: boundaryOptimization(ready),
+    });
+    store.getState().attachElement('video', fakeElement());
+    await store.getState().playSource(videoSource);
+    const playCalls = session.calls.play.mock.calls.length;
+    ready.value = true;
+
+    session.setState({
+      ...session.getState(),
+      status: { kind: 'paused' },
+      positionSec: 900,
+      userSeekSeq: 1,
+      userSeekTargetSec: 900,
+    });
+
+    expect(session.calls.load).toHaveBeenLastCalledWith(expect.objectContaining({
+      url: '/api/video-optimization/hls/v1/ready/index.m3u8#t=900',
+    }));
+    expect(session.calls.play).toHaveBeenCalledTimes(playCalls);
+  });
+
+  test('keeps an explicitly selected original on direct playback boundaries', async () => {
+    const session = makeFakeSession();
+    const ready = { value: true };
+    const store = createPlayerStore({
+      createSession: () => session,
+      createEngine: () => fakeEngine(),
+      videoOptimization: boundaryOptimization(ready),
+    });
+    store.getState().attachElement('video', fakeElement());
+    await store.getState().playSource({
+      ...videoSource,
+      optimizationAutoSwitchBlocked: true,
+    });
+
+    store.getState().seekActive(300);
+
+    expect(session.calls.load).toHaveBeenLastCalledWith(expect.objectContaining({
+      url: '/api/media/v1',
+      optimizationAutoSwitchBlocked: true,
+    }));
+    expect(session.calls.seek).toHaveBeenCalledWith(300);
   });
 });
 

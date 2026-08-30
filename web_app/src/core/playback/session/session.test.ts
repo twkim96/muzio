@@ -63,6 +63,8 @@ describe('createSession.initialState', () => {
       positionSec: 0,
       durationSec: 0,
       mediaPositionUpdateSeq: 0,
+      userSeekSeq: 0,
+      userSeekTargetSec: null,
     });
   });
 });
@@ -78,6 +80,8 @@ describe('createSession.load', () => {
       positionSec: 0,
       durationSec: 0,
       mediaPositionUpdateSeq: 0,
+      userSeekSeq: 0,
+      userSeekTargetSec: null,
     });
     expect(calls.load).toHaveBeenCalledWith(remote);
   });
@@ -112,6 +116,8 @@ describe('createSession.load', () => {
       positionSec: 0,
       durationSec: 0,
       mediaPositionUpdateSeq: 0,
+      userSeekSeq: 0,
+      userSeekTargetSec: null,
     });
   });
 });
@@ -186,6 +192,25 @@ describe('engine -> session projection', () => {
     fire({ kind: 'time', positionSec: 12 });
     expect(session.getState().positionSec).toBe(12);
     expect(session.getState().mediaPositionUpdateSeq).toBe(1);
+  });
+
+  test('seeking records a provider boundary and resets it on the next source', () => {
+    const { engine, fire } = fakeEngine();
+    const session = createSession(engine);
+    session.load(remote);
+
+    fire({ kind: 'seeking', positionSec: 90 });
+
+    expect(session.getState()).toMatchObject({
+      positionSec: 90,
+      userSeekSeq: 1,
+      userSeekTargetSec: 90,
+    });
+    session.load({ ...remote, mediaId: 'next', url: '/api/media/next' });
+    expect(session.getState()).toMatchObject({
+      userSeekSeq: 0,
+      userSeekTargetSec: null,
+    });
   });
 });
 
