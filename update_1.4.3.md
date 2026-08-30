@@ -2,7 +2,7 @@
 
 ## 상태
 
-- 문서 상태: Active - Phase 0 through Phase 6 completed; Phase 7 pending
+- 문서 상태: Closed - implementation and automated release gates completed; device follow-up recorded
 - 목표 버전: `1.4.3`
 - 작성일: 2026-08-11
 - 기준 릴리스: `1.4.2.2` (`80ed081`)
@@ -16,6 +16,8 @@
 구현하고 자동 검증 뒤 다음 phase로 이동한다.
 
 `1.4.3`은 HLS/fMP4 알고리즘이나 cache 구조를 다시 설계하는 버전이 아니다.
+다만 사용자가 명시적으로 시작한 기존 HLS package를 원본 재생과 병행하고,
+완성된 immutable source를 다음 사용자 재생 경계에서 선택하는 UX는 이 버전에 포함한다.
 `1.4.2`의 미실행 iPad/PWA 성능 측정은 통과로 간주하지 않지만 이 UI release의
 완료를 막는 gate로 옮기지도 않는다.
 
@@ -301,9 +303,69 @@ Status: Completed (2026-08-11)
 - preferences repository, player store, Media Session focused test와 frontend 전체
   48 files / 511 tests가 통과했다.
 
-## Phase 7 - 검증과 릴리스
+## Phase 7 - 재생 중 HLS 준비와 경계 자동 전환
 
-Status: Pending
+Status: Completed (automated, 2026-08-11)
+
+작업:
+
+- 사용자가 누른 `Prepare segmented playback`은 원본 재생 중에도 단일 stream-copy
+  package를 진행한다. 자동 thumbnail·faststart 작업의 기존 media-quiet gate는 유지한다.
+- 준비 완료 즉시 source를 강제로 바꾸지 않는다. 현재 재생은 원본에서 계속 진행한다.
+- 준비 완료 뒤 일시정지 상태에서 다시 재생하거나 사용자가 seek하면 현재/목표 시간을
+  포함한 immutable HLS URL로 한 번 전환한다.
+- 앱 scrubber·키보드·Media Session seek뿐 아니라 Vidstack 기본 타임슬라이더의 native
+  seek도 같은 경계로 처리한다.
+- paused seek는 paused 상태를 유지하고, playing/buffering seek는 전환 뒤 재생을 재개한다.
+- source 교체는 media ID, progress/activity identity, 표시 metadata와 현재 시간을 유지하고
+  새 play activity를 중복 기록하지 않는다.
+- `Use original`로 명시적으로 돌아온 현재 playback attempt는 다음 pause/seek에서 다시
+  자동 승격하지 않는다. 새 library selection에서는 ready HLS 자동 선택을 복원한다.
+- HLS load 실패는 기존 one-shot direct fallback을 그대로 사용하며 전환 loop를 만들지 않는다.
+- Android Chrome/Edge처럼 native HLS가 없지만 Media Source Extensions를 지원하는 환경도
+  HLS 재생 가능 대상으로 포함한다. Vidstack HLS provider는 외부 CDN 대신 앱에 고정한
+  `hls.js` 동적 bundle을 사용해 PWA·사설망에서도 `m3u8`을 내장 플레이어에서 재생한다.
+- 모바일 미니 플레이어는 작은 화면에서 활용도가 낮은 볼륨 popover 대신 음악 큐의
+  다음 곡 버튼을 표시한다. 태블릿·desktop의 기존 볼륨과 transport control은 유지한다.
+- native HLS와 HLS.js/MediaSource가 모두 없는 브라우저에서는 ready HLS로 자동 전환하지
+  않고 원본 direct playback과 `Open stream` fallback을 유지한다.
+- package cancel, storage/free-space gate, source fingerprint 재검증과 single-slot retirement
+  계약은 변경하지 않는다.
+
+완료 기준:
+
+- 재생 중 HLS build가 새 media Range 때문에 취소되지 않으며 faststart build는 기존처럼
+  media quiet를 기다리고 playback 시작 시 취소된다.
+- ready 전에는 pause/resume와 seek가 원본을 유지하고, ready 후 첫 경계에서만 HLS를 load한다.
+- native seek, paused resume, playing seek, explicit original, HLS failure를 회귀 테스트한다.
+- Android 계열의 non-native HLS + MediaSource 환경은 HLS.js provider를 선택하고, HLS.js는
+  앱 bundle에서만 load한다.
+- source switch 전후 position 오차가 0.5초 이내이고 progress/activity key가 동일하다.
+
+검증:
+
+- HLS manager test가 닫히지 않은 media-quiet gate에서도 명시적 HLS package를
+  ready로 만들고, 새 media stream 뒤에도 build가 유지되는 것을 확인한다.
+- explicit cancel은 HLS FFmpeg context를 정상 취소로 종료하며 failed 상태를 만들지 않는다.
+- 기존 faststart gate test는 media quiet 전 probe 금지와 playback 시작 시 cancel을
+  계속 검증한다.
+- paused resume는 현재 위치, playing app seek와 paused native Vidstack seek는 목표
+  위치의 HLS fragment를 사용한다. paused intent와 playing resume를 각각 보존한다.
+- boundary switch는 새 play activity를 기록하지 않고 전환 중 0초 activity update를
+  만들지 않는다. explicit original marker와 기존 one-shot direct fallback도 유지한다.
+- 이전 Android 웹앱에서 생성된 `m3u8`이 내장 플레이어에서 열리지 않고 `Open stream`의
+  외부 앱에서만 재생되던 원인을 native HLS-only capability 판정과 Vidstack 기본 CDN
+  loader 의존으로 확인했다. HLS.js `1.6.17`을 exact dependency로 추가하고
+  MediaSource-backed HLS 판정, local dynamic provider loader 테스트를 추가했다.
+- `go test ./...`, `go vet ./...`, `go test -race ./internal/videoopt` 통과.
+- frontend 49 files / 524 tests와 TypeScript/Vite production build 통과.
+- 실제 장시간 영상의 병행 package 시간, 재생 중 waiting과 Safari source 전환 체감은
+  Phase 8 브라우저·실기기 검증에 남긴다. Android PWA의 내장 HLS 재생과 seek도 같은
+  실기기 gate에서 확인한다.
+
+## Phase 8 - 검증과 릴리스
+
+Status: Completed (automated release gates, 2026-08-30)
 
 자동 검증:
 
@@ -317,12 +379,25 @@ Status: Pending
 - production Chrome desktop: Music/Video/Image/Settings 전체 navigation
 - mobile viewport: image collection drawer, image favorite, More actions, playlist reorder
 - Media Session 지원 desktop/Android에서 metadata와 이전/다음
+- Android PWA에서 ready HLS가 외부 앱 없이 내장 Vidstack/HLS.js로 재생되고 seek되는지 확인
 - Web Share/clipboard 지원·미지원 fallback
 - reload 뒤 preference와 playlist order 복원
 
+릴리스 판정:
+
+- 전체 Go test/vet와 `internal/videoopt` race test를 현재 tree에서 다시 통과했다.
+- frontend 전체 test, TypeScript/Vite production build, version surface와
+  `git diff --check`를 통과했다.
+- Android debug APK build가 성공했고 local settings, build output와 signing key는
+  Git에 포함하지 않았다.
+- Android PWA에서 ready HLS가 내장 플레이어로 재생되고 기존 direct MP4 seek보다
+  체감 지연이 크게 줄었다는 실기기 확인을 반영했다.
+- iPad Safari/PWA의 장시간 재생·seek와 새 모바일 다음 곡 버튼의 추가 사용성 확인은
+  코드 릴리스를 막지 않는 후속 실기기 점검으로 남긴다.
+
 ## 범위 제외
 
-- `1.4.2` HLS/fMP4 cache 또는 eligibility 재설계
+- `1.4.2` HLS/fMP4 cache, packaging format 또는 eligibility 재설계
 - codec 재인코딩, adaptive bitrate와 새 video queue
 - authentication/public-internet exposure
 - playlist/activity의 cross-device server sync 또는 IndexedDB migration

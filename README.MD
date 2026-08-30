@@ -1,4 +1,4 @@
-# Muzio 1.4.2.2
+# Muzio 1.4.3
 
 Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 브라우저에서 탐색하고 재생하는 경량 self-hosted 미디어 앱입니다.
@@ -8,7 +8,7 @@ Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 | Item | Current contract |
 | --- | --- |
 | Product/service name | `Muzio` |
-| Version | `1.4.2.2` |
+| Version | `1.4.3` |
 | Primary client | React + TypeScript web app |
 | Backend | Go `1.22`, CGO-free |
 | Normal runtime | Go server가 API, media, `web_app/dist`를 한 origin에서 제공 |
@@ -40,6 +40,14 @@ JPEG로 추출하며, 성공한 결과는 원본 fingerprint 기반 불변 cache
 커버가 없거나 추출할 수 없는 파일은 기존 SVG/음표 fallback을 유지합니다.
 준비된 커버는 음악 목록, 미니 플레이어, 전체 플레이어와 Media Session에
 같은 URL로 전달됩니다.
+
+`1.4.3`은 화면에 남아 있던 image collection, 음악 More actions, playlist 순서
+편집, media metadata, Media Session 이전/다음과 재생 환경설정 저장을 완성합니다.
+명시적으로 시작한 HLS/fMP4 준비는 원본 재생과 병행하며, 준비 완료 후 다음
+재생·탐색 경계에서 현재 위치를 유지한 채 불변 HLS source로 전환합니다.
+Android Chromium은 앱에 고정한 `hls.js` bundle을 사용하므로 외부 플레이어 없이
+내장 Vidstack에서 HLS를 재생합니다. 모바일 미니 플레이어는 볼륨 대신 다음 곡
+버튼을 표시하고 태블릿·desktop은 기존 볼륨 control을 유지합니다.
 
 ## Source Of Truth
 
@@ -246,7 +254,7 @@ If `VMA_CONFIG` is omitted, the config path is:
 ```
 
 The `videio_music_app` directory name is a legacy compatibility identifier.
-It remains unchanged in `1.4.2.2` so existing config, library index, and playback
+It remains unchanged in `1.4.3` so existing config, library index, and playback
 progress are reused without migration risk. The workspace directory path and
 `VMA_*` environment variables are also compatibility surfaces; new public
 names, package names, binaries, health identifiers, and control-server entries

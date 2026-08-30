@@ -21,3 +21,5 @@ android_app/local.properties
 android_app/**/.DS_Store
 android_app/**/*.jks
 android_app/**/*.keystore
+
+**/.DS_Store
