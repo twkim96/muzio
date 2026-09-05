@@ -3,6 +3,7 @@
 ## 상태
 
 - 문서 상태: Closed - implementation and automated release gates completed; device follow-up recorded
+- 마감 확인: 2026-09-06, 릴리스 `3dbc3c6`; 후속 UI 패치는 `update_1.4.4.md`에서 진행
 - 목표 버전: `1.4.3`
 - 작성일: 2026-08-11
 - 기준 릴리스: `1.4.2.2` (`80ed081`)

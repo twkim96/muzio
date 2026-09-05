@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -34,6 +35,7 @@ import {
 } from '../../core/ui/AppIcons';
 import { usePlayerStore } from './PlayerContext';
 import { formatTime } from './formatTime';
+import { useIncrementalVideoItems } from './useIncrementalVideoItems';
 import { useVideoTheaterMode, VideoViewport } from './VideoMount';
 import type { Playability } from '../../core/playback/capabilities/canPlayMime';
 import type { PlaybackSource } from '../../core/playback/source/source';
@@ -83,6 +85,11 @@ export function VideoWatchScreen({
   const videoStale = videoStore((state) => state.stale);
   const currentProgress = useProgressRecord(source?.mediaId ?? '');
   const { theaterMode } = useVideoTheaterMode();
+  const layoutRef = useRef<HTMLElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (layoutRef.current !== null) layoutRef.current.scrollTop = 0;
+  }, [theaterMode]);
 
   useEffect(() => {
     const shouldLoad =
@@ -132,11 +139,13 @@ export function VideoWatchScreen({
           onCollapse={onCollapse}
         />
         <main
+          ref={layoutRef}
           data-testid="video-watch-layout"
-          className={`mx-auto grid h-full min-h-0 w-full grid-cols-1 grid-rows-[auto_minmax(0,1fr)] content-stretch gap-5 px-0 pb-0 pt-14 sm:px-6 sm:pt-16 lg:h-screen lg:min-h-screen lg:gap-[var(--video-watch-gutter)] ${
+          data-theater-mode={theaterMode}
+          className={`mx-auto h-full min-h-0 w-full ${
             theaterMode
-              ? 'max-w-none lg:grid-cols-1 lg:grid-rows-[auto_minmax(0,1fr)] lg:px-0 lg:pb-0'
-              : 'max-w-[var(--video-watch-max-width)] lg:grid-cols-[minmax(0,1fr)_var(--video-watch-sidebar-width)] lg:grid-rows-none lg:items-start lg:px-8 lg:pb-8'
+              ? 'max-w-none overflow-y-auto overscroll-contain'
+              : 'grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)] content-stretch gap-5 px-0 pb-0 pt-14 sm:px-6 sm:pt-16 max-w-[var(--video-watch-max-width)] lg:h-screen lg:min-h-screen lg:gap-[var(--video-watch-gutter)] lg:grid-cols-[minmax(0,1fr)_var(--video-watch-sidebar-width)] lg:grid-rows-none lg:items-start lg:px-8 lg:pb-8'
           }`}
         >
           <section
@@ -149,15 +158,17 @@ export function VideoWatchScreen({
               className="relative"
             >
               <VideoViewport
-                className={`aspect-video w-full touch-none overflow-hidden rounded-none bg-black sm:rounded-[var(--video-watch-radius)] ${
-                  theaterMode ? 'lg:rounded-none' : ''
+                className={`w-full touch-none overflow-hidden rounded-none bg-black ${
+                  theaterMode
+                    ? 'h-[100svh]'
+                    : 'aspect-video sm:rounded-[var(--video-watch-radius)]'
                 }`}
                 onHostChange={watchGesture.setFullscreenHost}
               />
             </div>
             <section
               data-testid="video-info"
-              className="px-4 pt-4 sm:px-0"
+              className={`px-4 pt-4 ${theaterMode ? 'sm:px-8' : 'sm:px-0'}`}
               aria-label="Video information"
             >
               <h1
@@ -487,7 +498,9 @@ function VideoUpNextList({
   items: VideoLibraryItem[];
   status: string;
 }) {
-  const visibleItems = items.slice(0, 24);
+  const { visibleCount, hasMore, loadMore, sentinelRef } =
+    useIncrementalVideoItems(items.length);
+  const visibleItems = items.slice(0, visibleCount);
 
   return (
     <aside
@@ -519,6 +532,16 @@ function VideoUpNextList({
               />
             ))}
           </ol>
+        )}
+        {hasMore && (
+          <button
+            ref={sentinelRef}
+            type="button"
+            onClick={loadMore}
+            className="mt-3 w-full rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] px-3 py-2 text-sm text-[var(--color-muted)] hover:bg-[var(--color-control-hover)]"
+          >
+            Load more videos
+          </button>
         )}
       </div>
     </aside>

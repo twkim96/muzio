@@ -1,4 +1,4 @@
-# Muzio 1.4.3
+# Muzio 1.4.4
 
 Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 브라우저에서 탐색하고 재생하는 경량 self-hosted 미디어 앱입니다.
@@ -8,7 +8,7 @@ Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 | Item | Current contract |
 | --- | --- |
 | Product/service name | `Muzio` |
-| Version | `1.4.3` |
+| Version | `1.4.4` |
 | Primary client | React + TypeScript web app |
 | Backend | Go `1.22`, CGO-free |
 | Normal runtime | Go server가 API, media, `web_app/dist`를 한 origin에서 제공 |
@@ -48,6 +48,11 @@ JPEG로 추출하며, 성공한 결과는 원본 fingerprint 기반 불변 cache
 Android Chromium은 앱에 고정한 `hls.js` bundle을 사용하므로 외부 플레이어 없이
 내장 Vidstack에서 HLS를 재생합니다. 모바일 미니 플레이어는 볼륨 대신 다음 곡
 버튼을 표시하고 태블릿·desktop은 기존 볼륨 control을 유지합니다.
+
+`1.4.4`는 영화관 모드의 상단 여백을 없애고 영상 전체와 재생바를 화면 높이
+안에 맞춥니다. 영상 비율을 유지하며 가로·세로 한도 안에서 최대 크기로 표시하고,
+정보와 목록은 아래로 스크롤해 볼 수 있습니다. Videos 목록은 24개 단위로
+자동 추가되어 마지막 영상까지 탐색할 수 있습니다.
 
 ## Source Of Truth
 

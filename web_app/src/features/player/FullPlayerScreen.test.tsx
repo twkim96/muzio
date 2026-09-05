@@ -1100,7 +1100,7 @@ describe('FullPlayerScreen', () => {
     }
   });
 
-  test('video theater mode expands the viewport across the watch screen', async () => {
+  test('video theater mode fits the viewport height and restores the watch layout without remounting playback', async () => {
     const store = createPlayerStore();
     store.getState().setSessionForTests(
       'video',
@@ -1119,6 +1119,7 @@ describe('FullPlayerScreen', () => {
     const secondaryColumn = screen.getByTestId('video-secondary-column');
     const viewport = screen.getByTestId('video-viewport');
     const toggle = screen.getByTestId('video-theater-toggle');
+    const mount = screen.getByTestId('video-mount');
 
     expect(layout).toHaveClass('max-w-[var(--video-watch-max-width)]');
     expect(layout).not.toHaveClass('max-w-none');
@@ -1132,17 +1133,47 @@ describe('FullPlayerScreen', () => {
     expect(toggle).toHaveAttribute('aria-pressed', 'true');
     expect(layout).toHaveClass(
       'max-w-none',
-      'lg:grid-cols-1',
-      'lg:grid-rows-[auto_minmax(0,1fr)]',
+      'overflow-y-auto',
     );
+    expect(layout).not.toHaveClass('pt-14', 'sm:pt-16');
     expect(layout).not.toHaveClass('max-w-[var(--video-watch-max-width)]');
     expect(primaryColumn).toHaveClass('lg:col-span-full');
-    expect(viewport).toHaveClass('aspect-video', 'w-full', 'lg:rounded-none');
+    expect(viewport).toHaveClass('h-[100svh]', 'w-full');
+    expect(viewport).not.toHaveClass('aspect-video');
+    expect(mount).toHaveClass('aspect-auto', '[&_video]:h-full', '[&_video]:object-contain');
+    expect(mount).toHaveStyle({ display: 'flex', border: '0px' });
     expect(secondaryColumn).toHaveClass(
       'lg:overflow-y-auto',
       'lg:overscroll-contain',
     );
     expect(secondaryColumn).not.toHaveClass('lg:contents');
+    layout.scrollTop = 300;
+    fireEvent.click(toggle);
+    expect(layout.scrollTop).toBe(0);
+    expect(layout).toHaveClass('max-w-[var(--video-watch-max-width)]', 'pt-14');
+    expect(viewport).toHaveClass('aspect-video');
+    expect(screen.getByTestId('video-mount')).toBe(mount);
+  });
+
+  test('Videos continues beyond the first 24 entries and reaches the final item', async () => {
+    const store = createPlayerStore();
+    store.getState().setSessionForTests('video', fakeSession({
+      status: { kind: 'paused' }, source: videoSource,
+      positionSec: 0, durationSec: 100,
+    }));
+    const libraryStores = createTestLibraryStores({
+      kind: 'ok',
+      items: Array.from({ length: 60 }, (_, index) =>
+        videoItem(`v${index + 1}`, `clip-${index + 1}.mp4`)),
+    });
+    renderScreen(store, { libraryStores });
+    const list = await screen.findByTestId('video-up-next-list');
+    expect(list.children).toHaveLength(24);
+    fireEvent.click(screen.getByRole('button', { name: 'Load more videos' }));
+    expect(list.children).toHaveLength(48);
+    fireEvent.click(screen.getByRole('button', { name: 'Load more videos' }));
+    expect(list.children).toHaveLength(60);
+    expect(screen.queryByRole('button', { name: 'Load more videos' })).not.toBeInTheDocument();
   });
 
   test('video title upward swipe scrolls the mobile video list', async () => {

@@ -164,7 +164,10 @@ export function PersistentVidstackPlayer({
         <MediaPlayer
           ref={setPlayer}
           data-testid="video-mount"
-          className="h-full w-full overflow-hidden rounded-2xl bg-black"
+          className={`h-full w-full overflow-hidden bg-black ${theaterMode
+            ? 'aspect-auto rounded-none [&_video]:h-full [&_video]:aspect-auto [&_video]:object-contain [&_.vds-controls-group:last-child]:mb-0'
+            : 'rounded-2xl'}`}
+          style={theaterMode ? { display: 'flex', border: 0 } : undefined}
           src={playerSource}
           title={source?.name ?? 'Video'}
           viewType="video"
