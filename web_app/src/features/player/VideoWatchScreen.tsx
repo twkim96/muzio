@@ -163,7 +163,7 @@ export function VideoWatchScreen({
           className={`mx-auto h-full min-h-0 w-full overflow-y-auto overscroll-contain ${
             theaterMode
               ? 'max-w-none [--video-watch-top:0px]'
-              : 'grid grid-cols-1 auto-rows-min content-start gap-5 px-0 pb-6 pt-14 [--video-watch-top:3.5rem] sm:px-6 sm:pt-16 sm:[--video-watch-top:4rem] max-w-[var(--video-watch-max-width)] lg:gap-[var(--video-watch-gutter)] lg:grid-cols-[minmax(0,1fr)_var(--video-watch-sidebar-width)] lg:items-start lg:px-8 lg:pb-8'
+              : 'grid grid-cols-1 auto-rows-min content-start gap-5 px-0 pb-6 pt-14 [--video-watch-top:3.5rem] sm:px-6 sm:pt-16 sm:[--video-watch-top:4rem] max-w-none lg:gap-[var(--video-watch-gutter)] lg:grid-cols-[minmax(0,1fr)_var(--video-watch-sidebar-width)] lg:items-start lg:px-8 lg:pb-8'
           }`}
         >
           <section

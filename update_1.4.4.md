@@ -42,3 +42,10 @@
 - 실제 Edge 영화관 모드 1920×300에서 영상 높이 164px, 제목 top=180px, 두 액션 bottom=284px로 모두 화면 안에 표시된다. wheel 220px 후 video top=-220px로 자연스럽게 올라간다.
 - mobile viewport 390×400에서 3줄 제목을 포함한 summary 높이 172px, 액션 bottom=382.94px로 줄바꿈 후에도 보인다. 목록은 페이지 스크롤로 24 → 48, desktop sidebar에서도 다음 batch로 증가한다.
 - 검증된 웹 bundle 배포 완료, 실제 서비스 sw.js에서 muzio-shell-v1.4.4-r2 확인. 기존 최초 패치의 100svh 전체 영상 높이 측정은 이 추가 패치의 최종 크기 계약으로 대체한다.
+
+## 추가 패치 - 페이지 전체 너비 (동일 1.4.4)
+
+- 일반 모드의 96rem 최대 너비 제한을 제거한다. 페이지 스크롤 영역은 화면 전체 폭을 사용하며 오른쪽 스크롤바가 브라우저 콘텐츠 영역 끝에 위치한다.
+- 기본 좌우 padding과 Videos 목록 폭은 유지하며 늘어난 폭은 영상 영역에 배분한다. 기존 영상 높이 제한, 제목·액션 공간 확보와 페이지 스크롤 동작을 유지한다.
+- 제품 버전은 1.4.4를 유지하고 PWA cache revision을 1.4.4-r3로 갱신한다.
+- 검증 완료: FullPlayerScreen 42 tests와 TypeScript/Vite build 통과. 실제 Edge 1720px 화면에서 scroll container left=0 / right=1720 / max-width=none, scrollbar width=15px 확인. 배포된 service worker cache는 1.4.4-r3.

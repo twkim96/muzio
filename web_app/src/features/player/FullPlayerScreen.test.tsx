@@ -1144,8 +1144,8 @@ describe('FullPlayerScreen', () => {
     const toggle = screen.getByTestId('video-theater-toggle');
     const mount = screen.getByTestId('video-mount');
 
-    expect(layout).toHaveClass('max-w-[var(--video-watch-max-width)]');
-    expect(layout).not.toHaveClass('max-w-none');
+    expect(layout).toHaveClass('w-full', 'max-w-none');
+    expect(layout).toHaveAttribute('data-theater-mode', 'false');
     expect(primaryColumn).not.toHaveClass('lg:col-span-full');
     expect(secondaryColumn).toHaveClass('lg:contents');
     expect(viewport).not.toHaveClass('lg:rounded-none');
@@ -1171,7 +1171,7 @@ describe('FullPlayerScreen', () => {
     layout.scrollTop = 300;
     fireEvent.click(toggle);
     expect(layout.scrollTop).toBe(0);
-    expect(layout).toHaveClass('max-w-[var(--video-watch-max-width)]', 'pt-14');
+    expect(layout).toHaveClass('w-full', 'max-w-none', 'pt-14');
     expect(viewport).toHaveClass('aspect-video');
     expect(screen.getByTestId('video-mount')).toBe(mount);
   });
