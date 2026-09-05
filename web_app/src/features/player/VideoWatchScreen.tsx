@@ -86,6 +86,8 @@ export function VideoWatchScreen({
   const currentProgress = useProgressRecord(source?.mediaId ?? '');
   const { theaterMode } = useVideoTheaterMode();
   const layoutRef = useRef<HTMLElement | null>(null);
+  const summaryRef = useRef<HTMLDivElement | null>(null);
+  const [summaryHeight, setSummaryHeight] = useState(140);
 
   useLayoutEffect(() => {
     if (layoutRef.current !== null) layoutRef.current.scrollTop = 0;
@@ -121,7 +123,22 @@ export function VideoWatchScreen({
   });
   const watchGesture = useVideoWatchGesture({
     onDismiss: onCollapse,
+    scrollRef: layoutRef,
   });
+
+  useLayoutEffect(() => {
+    const summary = summaryRef.current;
+    if (summary === null) return;
+    const measure = () => setSummaryHeight(summary.getBoundingClientRect().height);
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(summary);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [title, sourceDetail]);
 
   return (
     <div
@@ -142,10 +159,11 @@ export function VideoWatchScreen({
           ref={layoutRef}
           data-testid="video-watch-layout"
           data-theater-mode={theaterMode}
-          className={`mx-auto h-full min-h-0 w-full ${
+          style={{ '--video-summary-height': `${summaryHeight}px` } as CSSProperties}
+          className={`mx-auto h-full min-h-0 w-full overflow-y-auto overscroll-contain ${
             theaterMode
-              ? 'max-w-none overflow-y-auto overscroll-contain'
-              : 'grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)] content-stretch gap-5 px-0 pb-0 pt-14 sm:px-6 sm:pt-16 max-w-[var(--video-watch-max-width)] lg:h-screen lg:min-h-screen lg:gap-[var(--video-watch-gutter)] lg:grid-cols-[minmax(0,1fr)_var(--video-watch-sidebar-width)] lg:grid-rows-none lg:items-start lg:px-8 lg:pb-8'
+              ? 'max-w-none [--video-watch-top:0px]'
+              : 'grid grid-cols-1 auto-rows-min content-start gap-5 px-0 pb-6 pt-14 [--video-watch-top:3.5rem] sm:px-6 sm:pt-16 sm:[--video-watch-top:4rem] max-w-[var(--video-watch-max-width)] lg:gap-[var(--video-watch-gutter)] lg:grid-cols-[minmax(0,1fr)_var(--video-watch-sidebar-width)] lg:items-start lg:px-8 lg:pb-8'
           }`}
         >
           <section
@@ -158,30 +176,32 @@ export function VideoWatchScreen({
               className="relative"
             >
               <VideoViewport
-                className={`w-full touch-none overflow-hidden rounded-none bg-black ${
+                className={`aspect-video w-full max-h-[max(0px,calc(100svh-var(--video-summary-height)-var(--video-watch-top)-1rem))] touch-none overflow-hidden rounded-none bg-black ${
                   theaterMode
-                    ? 'h-[100svh]'
-                    : 'aspect-video sm:rounded-[var(--video-watch-radius)]'
+                    ? ''
+                    : 'sm:rounded-[var(--video-watch-radius)]'
                 }`}
                 onHostChange={watchGesture.setFullscreenHost}
               />
             </div>
             <section
               data-testid="video-info"
-              className={`px-4 pt-4 ${theaterMode ? 'sm:px-8' : 'sm:px-0'}`}
+              className={`px-4 ${theaterMode ? 'sm:px-8' : 'sm:px-0'}`}
               aria-label="Video information"
             >
-              <h1
-                data-testid="video-player-title"
-                className="break-words text-xl font-semibold leading-7 tracking-normal text-[var(--color-fg)] sm:text-2xl sm:leading-8"
-                title={title}
-              >
-                {title}
-              </h1>
-              <p className="mt-1 break-words text-sm leading-5 text-[var(--color-muted)]">
-                {sourceDetail}
-              </p>
-              <ExternalPlaybackActions source={source} title={title} />
+              <div ref={summaryRef} data-testid="video-summary" className="pt-4">
+                <h1
+                  data-testid="video-player-title"
+                  className="break-words text-xl font-semibold leading-7 tracking-normal text-[var(--color-fg)] sm:text-2xl sm:leading-8"
+                  title={title}
+                >
+                  {title}
+                </h1>
+                <p className="mt-1 break-words text-sm leading-5 text-[var(--color-muted)]">
+                  {sourceDetail}
+                </p>
+                <ExternalPlaybackActions source={source} title={title} />
+              </div>
               <VideoOptimizationPanel source={source} positionSec={positionSec} playability={playability} />
               {playability === 'no' && (
                 <div className="mt-3 rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] px-3 py-2">
@@ -202,9 +222,9 @@ export function VideoWatchScreen({
           <section
             data-testid="video-secondary-column"
             data-allow-scroll
-            className={`min-h-0 min-w-0 touch-pan-y overflow-y-auto overscroll-contain px-4 pb-6 pr-5 sm:px-0 sm:pr-1 ${
+            className={`min-h-0 min-w-0 touch-pan-y px-4 pb-6 pr-5 sm:px-0 sm:pr-1 ${
               theaterMode
-                ? 'lg:overflow-y-auto lg:overscroll-contain lg:px-8 lg:pb-8 lg:pr-8'
+                ? 'pt-5 lg:px-8 lg:pb-8 lg:pr-8'
                 : 'lg:contents lg:touch-auto lg:overflow-visible lg:overscroll-auto lg:p-0'
             }`}
             ref={watchGesture.setSecondaryHost}
@@ -498,6 +518,7 @@ function VideoUpNextList({
   items: VideoLibraryItem[];
   status: string;
 }) {
+  const { theaterMode } = useVideoTheaterMode();
   const { visibleCount, hasMore, loadMore, sentinelRef } =
     useIncrementalVideoItems(items.length);
   const visibleItems = items.slice(0, visibleCount);
@@ -507,14 +528,14 @@ function VideoUpNextList({
       data-testid="video-side-list"
       data-no-dismiss-gesture
       aria-label="Video list"
-      className="mt-4 min-w-0 touch-pan-y lg:sticky lg:top-[var(--video-watch-list-desktop-top)] lg:col-start-2 lg:row-start-1 lg:mt-0"
+      className={`mt-4 min-w-0 touch-pan-y ${theaterMode ? '' : 'lg:sticky lg:top-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:mt-0'}`}
     >
       <h2 className="mb-3 text-base font-semibold text-[var(--color-fg)]">
         Videos
       </h2>
       <div
         data-testid="video-side-scrollport"
-        className="min-h-0 touch-pan-y pr-1 lg:max-h-[var(--video-watch-list-desktop-max-height)] lg:overflow-y-auto lg:overscroll-contain"
+        className={`min-h-0 touch-pan-y pr-1 ${theaterMode ? '' : 'lg:max-h-[var(--video-watch-list-desktop-max-height)] lg:overflow-y-auto lg:overscroll-contain'}`}
       >
         {status === 'loading' && visibleItems.length === 0 ? (
           <p className="text-sm text-[var(--color-muted)]">Loading videos...</p>
@@ -772,8 +793,10 @@ function isVideoItem(item: LibraryItem): item is VideoLibraryItem {
 
 function useVideoWatchGesture({
   onDismiss,
+  scrollRef,
 }: {
   onDismiss: () => void;
+  scrollRef: RefObject<HTMLElement>;
 }): {
   setPrimaryHost: (host: HTMLElement | null) => void;
   setSecondaryHost: (host: HTMLElement | null) => void;
@@ -816,8 +839,8 @@ function useVideoWatchGesture({
   const startGesture = useCallback(
     (target: EventTarget | null, host: HTMLElement, x: number, y: number) => {
       if (
-        host === desktopDescriptionHost &&
-        !isLargeViewport()
+        (host === desktopDescriptionHost && !isLargeViewport()) ||
+        (scrollRef.current?.scrollTop ?? 0) > 0
       ) {
         return;
       }
@@ -835,7 +858,7 @@ function useVideoWatchGesture({
       setSettling(false);
       setExiting(false);
     },
-    [desktopDescriptionHost, fullscreenHost],
+    [desktopDescriptionHost, fullscreenHost, scrollRef],
   );
 
   const moveGesture = useCallback(
@@ -855,9 +878,9 @@ function useVideoWatchGesture({
         !start.allowFullscreen &&
         !isLargeViewport() &&
         deltaY < 0 &&
-        secondaryHost !== null
+        scrollRef.current !== null
       ) {
-        secondaryHost.scrollTop += start.lastY - y;
+        scrollRef.current.scrollTop += start.lastY - y;
         start.lastY = y;
         setOffset(0);
         return;
@@ -865,7 +888,7 @@ function useVideoWatchGesture({
       start.lastY = y;
       setOffset(deltaY > 0 ? Math.min(deltaY, window.innerHeight || 720) : 0);
     },
-    [primaryHost, secondaryHost],
+    [primaryHost, scrollRef],
   );
 
   const finishGesture = useCallback(

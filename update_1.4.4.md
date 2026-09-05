@@ -29,3 +29,16 @@
 ## 남은 실기기 점검
 
 - 1.4.3에서 남긴 iPad Safari/PWA 장시간 재생·seek 및 모바일 다음 곡 사용성 확인은 기존 후속 점검으로 유지한다.
+
+## 추가 패치 - 페이지 스크롤과 낮은 창 높이 (동일 1.4.4)
+
+- 일반 모드와 영화관 모드 모두 영상·제목·정보가 페이지와 함께 위로 스크롤된다. 모바일 Videos도 페이지 흐름에 포함하며 일반 desktop Videos의 독립 목록 스크롤은 유지한다.
+- 제목, 소스 설명과 Open stream·Share stream의 실제 높이를 ResizeObserver로 측정한다. 창 크기나 제목 줄바꿈에 맞춰 영상 높이를 제한하므로 낮은 창에서도 요약과 액션 공간을 확보한다.
+- 영상은 contain 비율로 표시되며 화면 높이가 줄면 영상의 실제 가로폭도 함께 줄어든다. 영화관 모드 상단 padding 제거와 하단 controls clipping 보정은 유지한다.
+- 모바일 제목의 위쪽 드래그는 전체 페이지를 스크롤한다. 페이지를 내려 본 상태의 드래그는 접기 제스처가 가로채지 않는다.
+- 제품 버전은 1.4.4로 유지하며 PWA shell cache만 1.4.4-r2로 갱신한다.
+- 검증 완료: frontend 50 files / 531 tests, TypeScript/Vite build, 1.4.4 version surfaces 통과. Backend는 변경하지 않아 최초 패치의 Go 검증을 재사용한다.
+- 실제 Edge 일반 모드 1920×360에서 영상 높이 160px, 제목·액션 마지막 bottom=344px를 확인했다. 영상 위에서 wheel 280px 후 video top=-216px, 정보 panel top=170px로 함께 스크롤된다.
+- 실제 Edge 영화관 모드 1920×300에서 영상 높이 164px, 제목 top=180px, 두 액션 bottom=284px로 모두 화면 안에 표시된다. wheel 220px 후 video top=-220px로 자연스럽게 올라간다.
+- mobile viewport 390×400에서 3줄 제목을 포함한 summary 높이 172px, 액션 bottom=382.94px로 줄바꿈 후에도 보인다. 목록은 페이지 스크롤로 24 → 48, desktop sidebar에서도 다음 batch로 증가한다.
+- 검증된 웹 bundle 배포 완료, 실제 서비스 sw.js에서 muzio-shell-v1.4.4-r2 확인. 기존 최초 패치의 100svh 전체 영상 높이 측정은 이 추가 패치의 최종 크기 계약으로 대체한다.

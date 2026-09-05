@@ -883,10 +883,9 @@ describe('FullPlayerScreen', () => {
     expect(screen.getByTestId('video-watch-layout')).toHaveClass(
       'h-full',
       'min-h-0',
-      'grid-rows-[auto_minmax(0,1fr)]',
-      'content-stretch',
-      'lg:min-h-screen',
-      'lg:grid-rows-none',
+      'auto-rows-min',
+      'content-start',
+      'overflow-y-auto',
     );
     expect(screen.getByTestId('video-watch-layout')).not.toHaveClass(
       'min-h-screen',
@@ -914,8 +913,6 @@ describe('FullPlayerScreen', () => {
     expect(screen.getByTestId('video-secondary-column')).toHaveClass(
       'min-h-0',
       'touch-pan-y',
-      'overflow-y-auto',
-      'overscroll-contain',
     );
     expect(screen.getByTestId('video-secondary-column')).not.toHaveClass(
       'max-h-[var(--video-watch-list-mobile-max-height)]',
@@ -1100,7 +1097,33 @@ describe('FullPlayerScreen', () => {
     }
   });
 
-  test('video theater mode fits the viewport height and restores the watch layout without remounting playback', async () => {
+  test('video sizing reserves the measured title and stream actions after a resize', async () => {
+    let summaryHeight = 128;
+    const originalBounds = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.dataset.testid === 'video-summary') {
+        return new DOMRect(0, 0, 300, summaryHeight);
+      }
+      return originalBounds.call(this);
+    });
+    const store = createPlayerStore();
+    store.getState().setSessionForTests('video', fakeSession({
+      status: { kind: 'paused' }, source: videoSource, positionSec: 0, durationSec: 100,
+    }));
+    renderScreen(store);
+    const summary = await screen.findByTestId('video-summary');
+    expect(summary).toContainElement(screen.getByTestId('video-player-title'));
+    expect(summary).toContainElement(screen.getByTestId('video-open-stream'));
+    expect(summary).toContainElement(screen.getByTestId('video-share-stream'));
+    const layout = screen.getByTestId('video-watch-layout');
+    expect(layout.style.getPropertyValue('--video-summary-height')).toBe('128px');
+    summaryHeight = 196;
+    fireEvent.resize(window);
+    expect(layout.style.getPropertyValue('--video-summary-height')).toBe('196px');
+    expect(layout).toHaveClass('overflow-y-auto');
+  });
+
+  test('video theater mode reserves information space and restores the watch layout without remounting playback', async () => {
     const store = createPlayerStore();
     store.getState().setSessionForTests(
       'video',
@@ -1138,14 +1161,12 @@ describe('FullPlayerScreen', () => {
     expect(layout).not.toHaveClass('pt-14', 'sm:pt-16');
     expect(layout).not.toHaveClass('max-w-[var(--video-watch-max-width)]');
     expect(primaryColumn).toHaveClass('lg:col-span-full');
-    expect(viewport).toHaveClass('h-[100svh]', 'w-full');
-    expect(viewport).not.toHaveClass('aspect-video');
+    expect(viewport).toHaveClass('aspect-video', 'w-full',
+      'max-h-[max(0px,calc(100svh-var(--video-summary-height)-var(--video-watch-top)-1rem))]');
+    expect(viewport).not.toHaveClass('h-[100svh]');
     expect(mount).toHaveClass('aspect-auto', '[&_video]:h-full', '[&_video]:object-contain');
     expect(mount).toHaveStyle({ display: 'flex', border: '0px' });
-    expect(secondaryColumn).toHaveClass(
-      'lg:overflow-y-auto',
-      'lg:overscroll-contain',
-    );
+    expect(secondaryColumn).not.toHaveClass('overflow-y-auto');
     expect(secondaryColumn).not.toHaveClass('lg:contents');
     layout.scrollTop = 300;
     fireEvent.click(toggle);
@@ -1176,7 +1197,7 @@ describe('FullPlayerScreen', () => {
     expect(screen.queryByRole('button', { name: 'Load more videos' })).not.toBeInTheDocument();
   });
 
-  test('video title upward swipe scrolls the mobile video list', async () => {
+  test('video title upward swipe scrolls the whole mobile watch page', async () => {
     const originalInnerWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
@@ -1205,8 +1226,8 @@ describe('FullPlayerScreen', () => {
       renderScreen(store, { libraryStores });
 
       expect(await screen.findByTestId('video-up-next-list')).toBeInTheDocument();
-      const secondaryScrollport = screen.getByTestId('video-secondary-column');
-      expect(secondaryScrollport.scrollTop).toBe(0);
+      const pageScrollport = screen.getByTestId('video-watch-layout');
+      expect(pageScrollport.scrollTop).toBe(0);
 
       fireEvent.touchStart(screen.getByTestId('video-player-title'), {
         touches: [{ clientX: 120, clientY: 320 }],
@@ -1218,7 +1239,7 @@ describe('FullPlayerScreen', () => {
         changedTouches: [{ clientX: 122, clientY: 220 }],
       });
 
-      expect(secondaryScrollport.scrollTop).toBe(100);
+      expect(pageScrollport.scrollTop).toBe(100);
       expect(screen.getByTestId('location')).toHaveTextContent('/player');
     } finally {
       Object.defineProperty(window, 'innerWidth', {
