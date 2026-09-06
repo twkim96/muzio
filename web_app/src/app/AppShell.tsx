@@ -15,6 +15,7 @@ import { ClockCounterClockwise } from '@phosphor-icons/react/dist/csr/ClockCount
 import { Playlist } from '@phosphor-icons/react/dist/csr/Playlist';
 import { ImageSquare } from '@phosphor-icons/react/dist/csr/ImageSquare';
 import { DownloadSimple } from '@phosphor-icons/react/dist/csr/DownloadSimple';
+import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
 import { GearSix } from '@phosphor-icons/react/dist/csr/GearSix';
 
 import type { LibraryItem } from '../core/api/libraryClient';
@@ -435,11 +436,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         >
           {children}
         </main>
-      <QueueDrawer open={queueOpen} onClose={() => setQueueOpen(false)} />
+      <QueueDrawer open={queueOpen} onClose={() => setQueueOpen(false)} onBack={() => { setQueueOpen(false); setDrawerOpen(true); }} />
       <PlaylistDrawer
         editable={playlistDrawer?.kind === 'custom'}
         items={playlistDrawer?.items ?? []}
         onClose={() => setPlaylistDrawer(null)}
+        onBack={() => { setPlaylistDrawer(null); setDrawerOpen(true); }}
         onPlayItem={playPlaylistItem}
         onMoveItem={movePlaylistItem}
         onRemoveItems={removePlaylistItems}
@@ -574,7 +576,7 @@ function SidebarDrawer({
                 type="button"
                 data-testid="playlist-edit-toggle"
                 aria-pressed={editing}
-                className="inline-flex h-10 items-center justify-center rounded-full px-3 text-sm font-semibold text-muted hover:bg-zinc-200/70 aria-pressed:text-accent dark:hover:bg-white/10"
+                className="inline-flex h-10 items-center justify-center rounded-full px-3 text-sm font-semibold leading-none text-muted hover:bg-zinc-200/70 aria-pressed:text-accent dark:hover:bg-white/10"
                 onClick={onEditToggle}
               >
                 Edit
@@ -588,7 +590,7 @@ function SidebarDrawer({
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
                 onClick={onCreatePlaylist}
               >
-                +
+                <Plus aria-hidden className="h-5 w-5" />
               </button>
             )}
           </div>
@@ -814,7 +816,7 @@ function SidebarContent({
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
                 onClick={onCreatePlaylist}
               >
-                +
+                <Plus aria-hidden className="h-5 w-5" />
               </button>
             )}
             {canCreatePlaylist && (
@@ -831,7 +833,7 @@ function SidebarContent({
           </div>
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+      <div data-allow-scroll className="scrollbar-none min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
         <div className="space-y-1">
           {playlistEntries.length > 0
             ? playlistEntries.map((entry) => (

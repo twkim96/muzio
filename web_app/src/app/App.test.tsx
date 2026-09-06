@@ -493,6 +493,33 @@ describe('App routes', () => {
     });
   });
 
+  test('playlist scroll can return from the bottom and back buttons restore navigation', async () => {
+    renderApp('/library/music');
+    await screen.findByText('song.mp3');
+    fireEvent.click(screen.getByLabelText('Like song.mp3'));
+    fireEvent.click(screen.getByTestId('navigation-menu-button'));
+    fireEvent.click(within(screen.getByTestId('mobile-navigation')).getByText('좋아하는 음악'));
+    const drawer = screen.getByTestId('playlist-drawer');
+    const list = within(drawer).getByRole('list');
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 900 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 300 });
+    list.scrollTop = 600;
+    const row = within(drawer).getByLabelText('Play song.mp3');
+    fireEvent.touchStart(row, { touches: [{ clientY: 100 }] });
+    const move = new Event('touchmove', { bubbles: true, cancelable: true });
+    Object.defineProperty(move, 'touches', { value: [{ clientY: 160 }] });
+    row.dispatchEvent(move);
+    expect(move.defaultPrevented).toBe(false);
+    fireEvent.click(within(drawer).getByLabelText('Back to navigation'));
+    expect(screen.queryByTestId('playlist-drawer')).not.toBeInTheDocument();
+    const navigation = screen.getByTestId('mobile-navigation');
+    fireEvent.click(within(navigation).getByTestId('menu-queue-button'));
+    expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Queue' })).getByLabelText('Back to sidebar'));
+    expect(screen.queryByRole('dialog', { name: 'Queue' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('mobile-navigation')).toBeInTheDocument();
+  });
+
   test('opens mobile navigation from a horizontal swipe on library content', async () => {
     renderApp('/library/music');
 

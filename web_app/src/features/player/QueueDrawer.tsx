@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { ArrowLeft } from '@phosphor-icons/react';
 
 import type { PlaybackSource } from '../../core/playback/source/source';
 import { PlayGlyph } from '../../core/ui/AppIcons';
@@ -17,9 +19,11 @@ interface QueueRange {
 export function QueueDrawer({
   open,
   onClose,
+  onBack,
 }: {
   open: boolean;
   onClose: () => void;
+  onBack?: () => void;
 }) {
   const store = usePlayerStore();
   const queue = store((state) => state.musicQueue);
@@ -112,7 +116,7 @@ export function QueueDrawer({
   const safeEnd = Math.min(Math.max(range.end, safeStart), queue.length);
   const visibleQueue = queue.slice(safeStart, safeEnd);
 
-  return (
+  return createPortal(
     <div
       data-testid="queue-drawer"
       className="fixed inset-0 z-[70]"
@@ -136,11 +140,23 @@ export function QueueDrawer({
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="mb-1 flex shrink-0 flex-col items-start gap-3">
-          <h2 className="h-[46.4px] w-fit text-left [--title-scale:1.45] sm:[--title-scale:1.16]">
-            <span className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
-              <span className="scale-[calc(1/var(--title-scale))]">Queue</span>
-            </span>
-          </h2>
+          <div className="flex w-full items-start justify-between gap-3">
+            <h2 className="h-[46.4px] w-fit text-left [--title-scale:1.45] sm:[--title-scale:1.16]">
+              <span className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
+                <span className="scale-[calc(1/var(--title-scale))]">Queue</span>
+              </span>
+            </h2>
+            {onBack && (
+              <button
+                type="button"
+                aria-label="Back to sidebar"
+                className="muzio-settings-button h-[46.4px] w-[46.4px] shrink-0 flex items-center justify-center"
+                onClick={onBack}
+              >
+                <ArrowLeft className="h-[21.1px] w-[21.1px]" />
+              </button>
+            )}
+          </div>
           <div className="flex h-12 w-full min-w-0 items-center justify-between gap-2">
             <p className="min-w-0 truncate text-sm text-muted">
               {current === null
@@ -169,7 +185,7 @@ export function QueueDrawer({
             data-total-count={queue.length}
             data-rendered-count={visibleQueue.length}
             data-allow-scroll
-            className="scrollbar-none min-h-0 flex-1 overflow-y-auto pr-1"
+            className="scrollbar-none min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1"
             onScroll={updateRange}
           >
             {safeStart > 0 && (
@@ -201,7 +217,8 @@ export function QueueDrawer({
           </ol>
         )}
       </aside>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -1,3 +1,4 @@
+import { ArrowLeft } from '@phosphor-icons/react/dist/csr/ArrowLeft';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { LibraryItem } from '../../core/api/libraryClient';
@@ -10,6 +11,7 @@ export function PlaylistDrawer({
   editable = false,
   items,
   onClose,
+  onBack,
   onPlayItem,
   onMoveItem,
   onRemoveItems,
@@ -19,6 +21,7 @@ export function PlaylistDrawer({
   editable?: boolean;
   items: LibraryItem[];
   onClose: () => void;
+  onBack?: () => void;
   onPlayItem: (item: LibraryItem) => void;
   onMoveItem?: (contentKey: string, direction: 'up' | 'down') => void;
   onRemoveItems?: (contentKeys: readonly string[]) => void;
@@ -85,7 +88,8 @@ export function PlaylistDrawer({
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="mb-1 flex shrink-0 flex-col items-start gap-3">
-          <h2 className="h-[46.4px] w-full min-w-0 [--title-scale:1.45] sm:[--title-scale:1.16]">
+          <div className="flex w-full items-center justify-between gap-3">
+          <h2 className="h-[46.4px] min-w-0 flex-1 [--title-scale:1.45] sm:[--title-scale:1.16]">
             <button
               type="button"
               aria-label="Close playlist"
@@ -96,6 +100,12 @@ export function PlaylistDrawer({
               <span className="min-w-0 truncate scale-[calc(1/var(--title-scale))]">{title}</span>
             </button>
           </h2>
+          {onBack && (
+            <button type="button" aria-label="Back to navigation" onClick={onBack} className="muzio-settings-button flex h-[46.4px] w-[46.4px] shrink-0 items-center justify-center text-foreground">
+              <ArrowLeft aria-hidden className="h-[21.1px] w-[21.1px]" />
+            </button>
+          )}
+          </div>
           <div className="flex min-h-12 w-full min-w-0 flex-wrap items-center gap-2">
             <p className="mr-auto text-sm text-muted">{items.length} items</p>
             {editable && (
@@ -133,7 +143,7 @@ export function PlaylistDrawer({
             No items.
           </p>
         ) : (
-          <ol className="-mx-2 min-h-0 flex-1 overflow-y-auto overscroll-contain py-3">
+          <ol data-allow-scroll className="scrollbar-none -mx-2 min-h-0 flex-1 overflow-y-auto overscroll-contain py-3">
             {items.map((item, index) => (
               <li key={item.id} className="flex items-center gap-1">
                 <button

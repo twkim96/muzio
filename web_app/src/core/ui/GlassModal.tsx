@@ -97,7 +97,7 @@ export function GlassModal({
             <CloseGlyph className="h-5 w-5" />
           </button>
         </header>
-        <div className="muzio-modal-body">{children}</div>
+        <div data-allow-scroll className="muzio-modal-body">{children}</div>
         {footer != null && <footer className="muzio-modal-footer">{footer}</footer>}
       </section>
     </div>, document.body,
