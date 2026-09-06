@@ -193,6 +193,19 @@ describe('App routes', () => {
     expect(screen.getByRole('textbox', { name: 'Music folders 1' })).toHaveValue('/draft-music');
   });
 
+  test.each(['/library/music', '/library/video', '/library/image', '/settings'])(
+    'opens navigation from the title on %s', async (path) => {
+      renderApp(path);
+      const title = screen.getByTestId('title-navigation-button');
+      fireEvent.click(title);
+      expect(screen.getByTestId('mobile-navigation')).toBeInTheDocument();
+      expect(title).toHaveAttribute('aria-expanded', 'true');
+      fireEvent.click(screen.getByRole('button', { name: 'Close navigation' }));
+      expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
+      await waitFor(() => expect(title).toHaveFocus());
+    },
+  );
+
   test('menu button controls the drawer and restores focus after backdrop close', async () => {
     renderApp('/library/music');
 

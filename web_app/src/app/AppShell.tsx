@@ -117,6 +117,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [deleteTarget, setDeleteTarget] = useState<PlaylistMenuEntry | null>(null);
   const [searchHost, setSearchHost] = useState<HTMLElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const navigationTriggerRef = useRef<HTMLButtonElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const shellLocation = backgroundLocationFrom(location) ?? location;
@@ -129,7 +130,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const canCreatePlaylist = section === 'music' || section === 'video';
   const closeDrawer = () => {
     setDrawerOpen(false);
-    requestAnimationFrame(() => menuButtonRef.current?.focus());
+    requestAnimationFrame(() => (navigationTriggerRef.current ?? menuButtonRef.current)?.focus());
   };
   useEffect(() => {
     if (!drawerOpen) return;
@@ -334,8 +335,20 @@ export function AppShell({ children }: { children: ReactNode }) {
           <header className="sticky top-3 z-30 mx-auto mt-3 max-w-7xl px-3 sm:px-8 lg:px-10">
             {section !== null && (
               <div className="mb-2 h-[46.4px] w-fit [--title-scale:1.45] sm:[--title-scale:1.16] md:absolute md:top-[5.8px] md:mb-0">
-                <h1 className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
-                  <span className="scale-[calc(1/var(--title-scale))]">{sideSections[section].title}</span>
+                <h1 className="w-fit text-lg font-semibold tracking-tight sm:text-xl">
+                  <button
+                    type="button"
+                    aria-expanded={drawerOpen}
+                    aria-controls="app-sidebar-drawer"
+                    data-testid="title-navigation-button"
+                    className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 sm:h-10"
+                    onClick={(event) => {
+                      navigationTriggerRef.current = event.currentTarget;
+                      setDrawerOpen((open) => !open);
+                    }}
+                  >
+                    <span className="scale-[calc(1/var(--title-scale))]">{sideSections[section].title}</span>
+                  </button>
                 </h1>
               </div>
             )}
@@ -350,7 +363,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                     aria-controls="app-sidebar-drawer"
                     data-testid="navigation-menu-button"
                     className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground transition hover:bg-foreground/10"
-                    onClick={() => setDrawerOpen((open) => !open)}
+                    onClick={(event) => {
+                      navigationTriggerRef.current = event.currentTarget;
+                      setDrawerOpen((open) => !open);
+                    }}
                   >
                     <SidebarSimple aria-hidden className="h-6 w-6" weight="regular" />
                   </button>
@@ -531,7 +547,7 @@ function SidebarDrawer({
         <div className="mb-4 flex shrink-0 flex-col items-start gap-3">
           <div
             data-testid="mobile-menu-title"
-            className="h-[46.4px] w-fit [--title-scale:1.45] sm:[--title-scale:1.16]"
+            className="h-[46.4px] w-fit text-left [--title-scale:1.45] sm:[--title-scale:1.16]"
           >
             <span className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
               <span className="scale-[calc(1/var(--title-scale))]">{sidebar.title}</span>
