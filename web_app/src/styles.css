@@ -188,6 +188,12 @@ html.wr-kit {
   border-radius: 999px;
   box-shadow: var(--app-menu-dock-shadow), inset 0 1px rgb(255 255 255 / .2);
 }
+@media (max-width: 639px) {
+  /* Keep controls at their current size; trim the glass shells' vertical space. */
+  .muzio-topbar { padding-block: 1.65px; } /* 58px → 49.3px (-15%). */
+  .muzio-dock { padding-block: 8.2px; } /* 76px → 68.4px (-10%). */
+  .muzio-settings-button { top: 1.45px; }
+}
 .wr-kit .muzio-drawer { border-radius: 0 14px 14px 0; }
 .wr-kit .muzio-search {
   border-radius: 999px;
