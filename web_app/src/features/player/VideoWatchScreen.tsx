@@ -157,10 +157,10 @@ export function VideoWatchScreen({
           data-testid="video-watch-layout"
           data-theater-mode={theaterMode}
           style={{ '--video-summary-height': `${summaryHeight}px` } as CSSProperties}
-          className={`mx-auto h-full min-h-0 w-full overflow-y-auto overscroll-contain ${
+          className={`scrollbar-none mx-auto h-full min-h-0 w-full overflow-y-auto overscroll-contain ${
             theaterMode
               ? 'max-w-none [--video-watch-top:0px]'
-              : 'grid grid-cols-1 auto-rows-min content-start gap-5 px-0 pb-5 [--video-watch-top:0px] sm:px-5 sm:pt-5 sm:[--video-watch-top:1.25rem] max-w-none lg:gap-[var(--video-watch-gutter)] lg:grid-cols-[minmax(0,1fr)_var(--video-watch-sidebar-width)] lg:items-start lg:px-6 lg:pt-6 lg:[--video-watch-top:1.5rem] lg:pb-6'
+              : 'grid grid-cols-1 auto-rows-min content-start gap-5 px-0 pb-[18px] [--video-watch-top:0px] sm:px-[18px] sm:pt-[18px] sm:[--video-watch-top:18px] max-w-none lg:gap-[var(--video-watch-gutter)] lg:grid-cols-[minmax(0,1fr)_var(--video-watch-sidebar-width)] lg:items-start lg:px-[22px] lg:pt-[22px] lg:[--video-watch-top:22px] lg:pb-[22px]'
           }`}
         >
           <section
@@ -502,7 +502,7 @@ function VideoUpNextList({
       data-testid="video-side-list"
       data-no-dismiss-gesture
       aria-label="Video list"
-      className={`mt-4 min-w-0 rounded-[var(--video-watch-radius)] bg-[color-mix(in_srgb,var(--color-fg)_4%,var(--color-bg))] p-2 touch-pan-y ${theaterMode ? '' : 'lg:sticky lg:top-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:mt-0 lg:flex lg:h-[calc(100svh-var(--video-watch-top)-1.5rem)] lg:min-h-0 lg:flex-col'}`}
+      className={`mt-4 min-w-0 rounded-[var(--video-watch-radius)] bg-[color-mix(in_srgb,var(--color-fg)_4%,var(--color-bg))] p-2 touch-pan-y ${theaterMode ? '' : 'lg:sticky lg:top-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:mt-0 lg:flex lg:h-[calc(100svh-var(--video-watch-top)-var(--video-watch-top))] lg:min-h-0 lg:flex-col'}`}
     >
       <div
         data-testid="video-side-scrollport"

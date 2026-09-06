@@ -29,7 +29,7 @@
   --color-accent-surface: rgb(var(--accent) / 0.12);
   --color-border: rgb(var(--foreground) / 0.18);
   --video-watch-max-width: 96rem;
-  --video-watch-sidebar-width: 24.5rem;
+  --video-watch-sidebar-width: 396px;
   --video-watch-gutter: 1.25rem;
   --video-watch-thumb-width: 9rem;
   --video-watch-thumb-height: 5.0625rem;
