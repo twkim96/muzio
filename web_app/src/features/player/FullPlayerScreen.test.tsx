@@ -274,7 +274,11 @@ describe('FullPlayerScreen', () => {
     });
     renderScreen(store);
     expect(screen.getByTestId('now-playing-art')).toBeInTheDocument();
-    expect(screen.queryByTestId('player-close')).not.toBeInTheDocument();
+    const close = screen.getByTestId('player-close');
+    expect(close).toHaveAccessibleName('Collapse music player');
+    expect(close).not.toHaveTextContent('×');
+    fireEvent.click(close);
+    expect(screen.getByTestId('location')).toHaveTextContent('/library/music');
     expect(screen.queryByTestId('video-viewport')).not.toBeInTheDocument();
   });
 
@@ -873,7 +877,7 @@ describe('FullPlayerScreen', () => {
     renderScreen(store);
     expect(await screen.findByTestId('video-mount')).toBeInTheDocument();
     expect(screen.getByTestId('player-screen')).toHaveClass(
-      'h-[var(--media-view-height,100dvh)]',
+      'h-[100svh]',
       'touch-auto',
     );
     expect(screen.getByTestId('video-watch-layout')).toHaveClass(
@@ -958,7 +962,9 @@ describe('FullPlayerScreen', () => {
           Node.DOCUMENT_POSITION_FOLLOWING,
       ),
     ).toBe(true);
-    expect(screen.queryByTestId('player-close')).not.toBeInTheDocument();
+    expect(screen.getByTestId('player-close')).toHaveAccessibleName(
+      'Collapse video player',
+    );
     expect(screen.queryByTestId('now-playing-art')).not.toBeInTheDocument();
   });
 
@@ -1156,7 +1162,7 @@ describe('FullPlayerScreen', () => {
     expect(layout).not.toHaveClass('max-w-[var(--video-watch-max-width)]');
     expect(primaryColumn).toHaveClass('lg:col-span-full');
     expect(viewport).toHaveClass('aspect-video', 'w-full',
-      'max-h-[max(0px,calc(var(--media-view-height,100dvh)-var(--video-summary-height)-var(--video-watch-top)-1rem))]');
+      'max-h-[max(0px,calc(100svh-var(--video-summary-height)-var(--video-watch-top)-1rem))]');
     expect(viewport).not.toHaveClass('h-[100svh]');
     expect(mount).toHaveClass('aspect-auto', '[&_video]:h-full', '[&_video]:object-contain');
     expect(mount).toHaveStyle({ display: 'flex', border: '0px' });
@@ -1165,7 +1171,7 @@ describe('FullPlayerScreen', () => {
     layout.scrollTop = 300;
     fireEvent.click(toggle);
     expect(layout.scrollTop).toBe(0);
-    expect(layout).toHaveClass('w-full', 'max-w-none', '[--video-watch-top:0px]');
+    expect(layout).toHaveClass('w-full', 'max-w-none', 'pt-14');
     expect(viewport).toHaveClass('aspect-video');
     expect(screen.getByTestId('video-mount')).toBe(mount);
   });
@@ -1918,13 +1924,7 @@ describe('FullPlayerScreen', () => {
     });
     expect(screen.getByTestId('video-mount')).toBeInTheDocument();
 
-    const title = screen.getByTestId('video-player-title');
-    fireEvent.touchStart(title, { touches: [{ clientX: 100, clientY: 40 }] });
-    fireEvent.touchMove(title, { touches: [{ clientX: 100, clientY: 240 }] });
-    fireEvent.touchEnd(title, { changedTouches: [{ clientX: 100, clientY: 240 }] });
-    await waitFor(() => {
-      expect(screen.getByTestId('collapsed-target')).toBeInTheDocument();
-    });
+    fireEvent.click(screen.getByTestId('player-close'));
 
     expect(screen.getByTestId('collapsed-target')).toBeInTheDocument();
     expect(store.getState().active).toBe('video');

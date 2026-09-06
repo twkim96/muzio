@@ -75,13 +75,13 @@ function RoutedContent() {
         <div
           data-testid="player-overlay"
           data-no-menu-swipe
-          className="muzio-media-overlay fixed inset-x-0 bottom-0 z-40 overflow-y-auto"
+          className="fixed inset-0 z-50"
         >
           <FullPlayerScreen onCollapse={close} />
         </div>
       )}
       {showImageViewerOverlay && (
-        <div data-testid="image-viewer-overlay" className="muzio-media-overlay fixed inset-x-0 bottom-0 z-40 overflow-y-auto">
+        <div data-testid="image-viewer-overlay" className="fixed inset-0 z-50">
           <ImageViewerScreen
             mediaIdOverride={imageViewerMediaId}
             onCollapse={() => navigate(-1)}

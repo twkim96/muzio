@@ -180,22 +180,6 @@ describe('App routes', () => {
     expect(screen.getByTestId('open-full-player')).toBeInTheDocument();
   });
 
-  test('shared media navigation highlights only the viewed media and switches back to its library', async () => {
-    const { playerStore } = renderApp('/library/music');
-    await screen.findByText('song.mp3');
-    act(() => {
-      playerStore.getState().seedSource({ kind: 'remote', mediaId: 'v1', mediaType: 'video', url: '/api/media/v1', name: 'clip.mp4' });
-    });
-    fireEvent.click(screen.getByTestId('open-full-player'));
-    const tabs = screen.getByRole('navigation', { name: 'Primary' });
-    expect(within(tabs).getByRole('link', { name: 'Video' })).toHaveAttribute('aria-current', 'page');
-    expect(within(tabs).getByRole('link', { name: 'Music' })).not.toHaveAttribute('aria-current');
-    expect(screen.queryByTestId('player-close')).not.toBeInTheDocument();
-    fireEvent.click(within(tabs).getByRole('link', { name: 'Video' }));
-    expect(screen.queryByTestId('player-overlay')).not.toBeInTheDocument();
-    expect(window.location.pathname).toBe('/library/video');
-  });
-
   test('redirects the root route to the music library', async () => {
     renderApp('/');
 
@@ -315,8 +299,7 @@ describe('App routes', () => {
     expect(screen.queryByTestId('player-library-backdrop')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('library-list')).getByText('song.mp3')).toBeInTheDocument();
 
-    expect(screen.queryByTestId('player-close')).not.toBeInTheDocument();
-    fireEvent.click(within(screen.getByRole('navigation', { name: 'Primary' })).getByRole('link', { name: 'Music' }));
+    fireEvent.click(screen.getByTestId('player-close'));
 
     expect(window.location.pathname).toBe('/library/music');
     expect(screen.queryByTestId('player-overlay')).not.toBeInTheDocument();
@@ -351,8 +334,7 @@ describe('App routes', () => {
 
     expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
 
-    expect(screen.queryByTestId('player-close')).not.toBeInTheDocument();
-    fireEvent.click(within(screen.getByRole('navigation', { name: 'Primary' })).getByRole('link', { name: 'Music' }));
+    fireEvent.click(screen.getByTestId('player-close'));
 
     expect(screen.queryByTestId('player-overlay')).not.toBeInTheDocument();
     expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
@@ -737,8 +719,6 @@ describe('App routes', () => {
       });
     });
 
-    expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
-    expect(screen.getByTestId('navigation-menu-button')).toBeInTheDocument();
     expect(screen.queryByTestId('player-overlay')).not.toBeInTheDocument();
     expect(screen.getByTestId('player-screen')).toHaveTextContent(
       'song.mp3',
@@ -782,8 +762,7 @@ describe('App routes', () => {
     expect(screen.queryByTestId('mini-player')).not.toBeInTheDocument();
     expect(selectActiveState(playerStore.getState()).source?.mediaId).toBe('a1');
 
-    expect(screen.queryByTestId('image-viewer-close')).not.toBeInTheDocument();
-    fireEvent.click(within(screen.getByRole('navigation', { name: 'Primary' })).getByRole('link', { name: 'Image' }));
+    fireEvent.click(screen.getByTestId('image-viewer-close'));
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/library/image');

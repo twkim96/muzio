@@ -393,13 +393,3 @@ html:has(.muzio-side-sheet, .muzio-modal-backdrop) { overflow: hidden; }
     color: rgb(var(--muted) / .4);
   }
 }
-
-/* Media views share the existing floating navigation above their viewport. */
-.muzio-app-shell {
-  --media-view-top: 82px;
-  --media-view-height: calc(100dvh - var(--media-view-top));
-}
-.muzio-media-overlay { top: var(--media-view-top); }
-@media (max-width: 639px) {
-  .muzio-app-shell { --media-view-top: 73.3px; }
-}
