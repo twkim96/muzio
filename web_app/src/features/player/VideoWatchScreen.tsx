@@ -158,7 +158,7 @@ export function VideoWatchScreen({
           className={`mx-auto h-full min-h-0 w-full overflow-y-auto overscroll-contain ${
             theaterMode
               ? 'max-w-none [--video-watch-top:0px]'
-              : 'grid grid-cols-1 auto-rows-min content-start gap-5 px-0 pb-6 [--video-watch-top:0px] sm:px-6 max-w-none lg:gap-[var(--video-watch-gutter)] lg:grid-cols-[minmax(0,1fr)_var(--video-watch-sidebar-width)] lg:items-start lg:px-8 lg:pb-8'
+              : 'grid grid-cols-1 auto-rows-min content-start gap-5 px-0 pb-6 [--video-watch-top:0px] sm:px-6 sm:pt-6 sm:[--video-watch-top:1.5rem] max-w-none lg:gap-[var(--video-watch-gutter)] lg:grid-cols-[minmax(0,1fr)_var(--video-watch-sidebar-width)] lg:items-start lg:px-8 lg:pt-8 lg:[--video-watch-top:2rem] lg:pb-8'
           }`}
         >
           <section
