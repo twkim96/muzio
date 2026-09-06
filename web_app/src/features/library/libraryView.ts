@@ -2,11 +2,18 @@ import type { LibraryItem, LibraryMediaType } from '../../core/api/libraryClient
 
 export type LibrarySortKey =
   | 'latest'
-  | 'name';
+  | 'name'
+  | 'artist'
+  | 'size'
+  | 'modified'
+  | 'library';
+
+export type LibrarySortDirection = 'asc' | 'desc';
 
 export interface LibraryViewOptions {
   query: string;
   sortKey: LibrarySortKey;
+  sortDirection?: LibrarySortDirection;
 }
 
 const searchTextCache = new WeakMap<LibraryItem, string>();
@@ -29,11 +36,37 @@ export function filterAndSortLibraryItems(
   if (options.sortKey === 'latest') {
     return filtered;
   }
-  return [...filtered].sort(byTitle);
+  const direction = options.sortDirection === 'desc' ? -1 : 1;
+  return [...filtered].sort((a, b) => {
+    const left = sortValue(a, options.sortKey);
+    const right = sortValue(b, options.sortKey);
+    if (left === undefined && right !== undefined) return 1;
+    if (right === undefined && left !== undefined) return -1;
+    const comparison = left === undefined || right === undefined
+      ? 0
+      : typeof left === 'number' && typeof right === 'number'
+        ? left - right
+        : titleCollator.compare(String(left), String(right));
+    return comparison * direction || byTitle(a, b) || a.id.localeCompare(b.id);
+  });
+}
+
+function sortValue(item: LibraryItem, key: LibrarySortKey): string | number | undefined {
+  if (key === 'size') {
+    return typeof item.sizeBytes === 'number' && Number.isFinite(item.sizeBytes) && item.sizeBytes >= 0
+      ? item.sizeBytes
+      : undefined;
+  }
+  if (key === 'modified') {
+    const timestamp = typeof item.modifiedAt === 'string' ? Date.parse(item.modifiedAt) : NaN;
+    return Number.isFinite(timestamp) ? timestamp : undefined;
+  }
+  const value = key === 'artist' ? item.metadata?.artist : key === 'library' ? item.rootName : titleFor(item);
+  return typeof value === 'string' && value.trim() !== '' ? value : undefined;
 }
 
 function byTitle(a: LibraryItem, b: LibraryItem): number {
-  return titleCollator.compare(titleFor(a), titleFor(b));
+  return titleCollator.compare(titleFor(a) ?? '', titleFor(b) ?? '');
 }
 
 function searchText(item: LibraryItem): string {

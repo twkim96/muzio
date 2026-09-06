@@ -297,7 +297,7 @@ function LibraryItemRowComponent({
                   {item.type === 'video' && progressLabel !== '' && (
                     <>
                       <span>{progressLabel}</span>
-                      <span aria-hidden> · </span>
+                      <span aria-hidden className="text-[10px] text-muted/40"> | </span>
                     </>
                   )}
                   {item.type === 'video' && details !== '' && (
@@ -309,11 +309,11 @@ function LibraryItemRowComponent({
                   {item.type === 'image' && (
                     <>
                       <span>{item.rootName}</span>
-                      <span aria-hidden> · </span>
+                      <span aria-hidden className="text-[10px] text-muted/40"> | </span>
                     </>
                   )}
                   <span>{formatSize(item.sizeBytes)}</span>
-                  <span aria-hidden> · </span>
+                  <span aria-hidden className="text-[10px] text-muted/40"> | </span>
                   <span>{formatModified(item.modifiedAt)}</span>
                 </p>
               </div>
@@ -360,27 +360,27 @@ function LibraryItemRowComponent({
                 {metadata?.artist && (
                   <>
                     <span>{metadata.artist}</span>
-                    <span aria-hidden> · </span>
+                    <span aria-hidden className="text-[10px] text-muted/40"> | </span>
                   </>
                 )}
                 <span>{formatSize(item.sizeBytes)}</span>
-                <span aria-hidden> · </span>
+                <span aria-hidden className="text-[10px] text-muted/40"> | </span>
                 <span>{formatModified(item.modifiedAt)}</span>
-                <span aria-hidden> · </span>
+                <span aria-hidden className="text-[10px] text-muted/40"> | </span>
                 <span>{item.rootName}</span>
               </p>
             </div>
-            <p className="hidden min-w-0 truncate text-sm text-muted xl:block">
-              {metadata?.artist}
+            <p className="library-column hidden min-w-0 text-left text-sm text-muted xl:block">
+              <span className="block truncate">{metadata?.artist}</span>
             </p>
-            <p className="hidden min-w-0 text-right text-sm tabular-nums text-muted xl:block">
+            <p className="library-column hidden min-w-0 text-left text-sm tabular-nums text-muted xl:block">
               {formatSize(item.sizeBytes)}
             </p>
-            <p className="hidden min-w-0 text-right text-sm tabular-nums text-muted xl:block">
+            <p className="library-column hidden min-w-0 text-left text-sm tabular-nums text-muted xl:block">
               {formatModified(item.modifiedAt)}
             </p>
-            <p className="hidden min-w-0 truncate text-sm text-muted xl:block">
-              {item.rootName}
+            <p className="library-column hidden min-w-0 text-left text-sm text-muted xl:block">
+              <span className="block truncate">{item.rootName}</span>
             </p>
           </button>
         )}

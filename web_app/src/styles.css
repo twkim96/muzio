@@ -265,3 +265,16 @@ html.wr-kit {
 @media (prefers-reduced-motion: reduce) {
   .wr-kit *, .wr-kit *::before { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+@media (min-width: 1280px) {
+  .library-column { position: relative; overflow: visible; }
+  .library-column::before {
+    content: '|';
+    position: absolute;
+    left: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    color: rgb(var(--muted) / .4);
+  }
+}

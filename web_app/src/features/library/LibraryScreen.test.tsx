@@ -262,7 +262,7 @@ describe('LibraryScreen', () => {
     expect(screen.getByText('Album/')).toBeInTheDocument();
   });
 
-  test('filters and toggles latest/name sorting', async () => {
+  test('sorts by column text in both directions and preserves filtering', async () => {
     const { stores } = renderScreen('audio', {
       kind: 'ok',
       revision: 1,
@@ -270,20 +270,20 @@ describe('LibraryScreen', () => {
         {
           id: 'b',
           type: 'audio',
-          rootName: 'music',
+          rootName: 'z-music',
           relativePath: 'b.mp3',
           name: 'b.mp3',
-          sizeBytes: 1,
+          sizeBytes: 20,
           modifiedAt: '2025-02-01T00:00:00Z',
           metadata: { title: 'Beta', artist: 'Zoo' },
         },
         {
           id: 'a',
           type: 'audio',
-          rootName: 'music',
+          rootName: 'a-music',
           relativePath: 'a.mp3',
           name: 'a.mp3',
-          sizeBytes: 1,
+          sizeBytes: 10,
           modifiedAt: '2025-01-01T00:00:00Z',
           metadata: { title: 'Alpha', artist: 'Aster' },
         },
@@ -295,8 +295,25 @@ describe('LibraryScreen', () => {
     });
     expect(screen.getAllByTestId('library-item')[0]).toHaveTextContent('Beta');
 
-    fireEvent.click(screen.getByTestId('sort-toggle'));
+    fireEvent.click(screen.getByRole('button', { name: 'Sort by Song' }));
     expect(screen.getAllByTestId('library-item')[0]).toHaveTextContent('Alpha');
+
+    for (const [column, first, second] of [
+      ['Artist', 'Alpha', 'Beta'],
+      ['Size', 'Beta', 'Alpha'],
+      ['Modified', 'Beta', 'Alpha'],
+      ['Library', 'Alpha', 'Beta'],
+    ]) {
+      const button = screen.getByRole('button', { name: `Sort by ${column}` });
+      fireEvent.click(button);
+      expect(screen.getAllByTestId('library-item')[0]).toHaveTextContent(first);
+      fireEvent.click(button);
+      expect(screen.getAllByTestId('library-item')[0]).toHaveTextContent(second);
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Sort by Song' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sort by Song' }));
+    expect(screen.getAllByTestId('library-item')[0]).toHaveTextContent('Beta');
+    fireEvent.click(screen.getByRole('button', { name: 'Sort by Song' }));
 
     fireEvent.change(screen.getByLabelText('Filter Music'), {
       target: { value: 'zoo' },
@@ -326,10 +343,8 @@ describe('LibraryScreen', () => {
     });
 
     expect(screen.getByLabelText('Filter Music')).toHaveValue('zoo');
-    expect(screen.getByTestId('sort-toggle')).toHaveAccessibleName(
-      'Sort Music: Name order',
-    );
-    expect(screen.getByTestId('sort-toggle').querySelector('svg')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Sort by Song' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByTestId('sort-toggle')).not.toBeInTheDocument();
     expect(screen.getAllByTestId('library-item')).toHaveLength(2);
     expect(screen.getAllByTestId('library-item')[0]).toHaveTextContent('Beta');
   });
@@ -532,7 +547,7 @@ describe('LibraryScreen', () => {
     });
     expect(screen.getByTestId('library-item')).toHaveStyle({ height: '54px' });
     expect(screen.getByTestId('audio-mobile-metadata')).toHaveTextContent(
-      'Artist · 1.0 KB · 2026-08-10 · music',
+      'Artist | 1.0 KB | 2026-08-10 | music',
     );
     expect(
       screen.getByTestId('audio-mobile-metadata'),
@@ -614,7 +629,7 @@ describe('LibraryScreen', () => {
       'whitespace-normal',
     );
     expect(screen.getByTestId('image-row-metadata')).toHaveTextContent(
-      'downloads · 2.0 KB',
+      'downloads | 2.0 KB',
     );
   });
 

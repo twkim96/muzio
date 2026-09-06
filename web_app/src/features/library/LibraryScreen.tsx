@@ -9,7 +9,7 @@ import type {
 } from '../../core/api/libraryClient';
 import { contentKeyForLibraryItem } from '../../core/media/contentIdentity';
 import type { PlaylistRecord } from '../../core/storage/playlistRepository';
-import { CloseGlyph, SortGlyph } from '../../core/ui/AppIcons';
+import { CloseGlyph } from '../../core/ui/AppIcons';
 import { useSearchHost } from '../../app/SearchHostContext';
 import { usePlaylists } from '../playlists/PlaylistContext';
 import { useLibraryStores } from './LibraryContext';
@@ -19,6 +19,7 @@ import { describeLibraryError } from './libraryMessage';
 import {
   filterAndSortLibraryItems,
   type LibrarySortKey,
+  type LibrarySortDirection,
 } from './libraryView';
 
 const labels: Record<LibraryMediaType, { title: string; emptyHint: string }> = {
@@ -50,7 +51,8 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   const playlists = usePlaylists();
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
-  const [sortKey, setSortKey] = useState<LibrarySortKey>('latest');
+  const [sort, setSort] = useState<{ key: LibrarySortKey; direction: LibrarySortDirection }>({ key: 'latest', direction: 'desc' });
+  const { key: sortKey, direction: sortDirection } = sort;
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [addModalItems, setAddModalItems] = useState<LibraryItem[] | null>(null);
@@ -71,22 +73,27 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   }, [load, result, stale, status]);
 
   const meta = labels[type];
-  const sortLabel = sortKey === 'latest' ? 'Newest first' : 'Name order';
   const rawItems = result?.kind === 'ok' ? result.items : [];
   const visibleItems = useMemo(
     () =>
       filterAndSortLibraryItems(rawItems, type, {
         query: deferredQuery,
         sortKey,
+        sortDirection,
       }),
-    [deferredQuery, rawItems, sortKey, type],
+    [deferredQuery, rawItems, sortKey, sortDirection, type],
   );
   const selectedItems = useMemo(
     () => rawItems.filter((item) => selectedIds.has(item.id)),
     [rawItems, selectedIds],
   );
-  const toggleSort = () => {
-    setSortKey((current) => (current === 'latest' ? 'name' : 'latest'));
+  const selectSort = (key: LibrarySortKey) => {
+    setSort((current) => ({
+      key,
+      direction: (current.key === key || (current.key === 'latest' && key === 'modified'))
+        ? current.direction === 'asc' ? 'desc' : 'asc'
+        : key === 'size' || key === 'modified' ? 'desc' : 'asc',
+    }));
   };
   const clearSelection = () => {
     setSelectionMode(false);
@@ -140,7 +147,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-8 lg:px-10">
-      <header className="mb-4 flex items-center justify-end gap-4">
+      <header className="mb-4 flex min-h-10 items-center justify-end gap-4">
         {searchHost === null && (
           <div className="mr-auto min-w-0">
             <h1 className="truncate text-xl font-semibold tracking-tight">
@@ -169,16 +176,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
               </button>
             </>
           )}
-          <button
-            type="button"
-            data-testid="sort-toggle"
-            aria-label={`Sort ${meta.title}: ${sortLabel}`}
-            title={sortLabel}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-lg font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
-            onClick={toggleSort}
-          >
-            <SortGlyph className="h-5 w-5" />
-          </button>
+
         </div>
       </header>
       {searchHost === null ? (
@@ -199,6 +197,9 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
       )}
 
       <LibraryBody
+        sortKey={sortKey}
+        sortDirection={sortDirection}
+        onSort={selectSort}
         type={type}
         status={status}
         result={result}
@@ -253,6 +254,9 @@ function StandaloneLibrarySearch({
 }
 
 function LibraryBody({
+  sortKey,
+  sortDirection,
+  onSort,
   type,
   status,
   result,
@@ -264,6 +268,9 @@ function LibraryBody({
   selectedIds,
   selectionMode,
 }: {
+  sortKey: LibrarySortKey;
+  sortDirection: LibrarySortDirection;
+  onSort: (key: LibrarySortKey) => void;
   type: LibraryMediaType;
   status: LibraryStatus;
   result: LibraryFetchResult | null;
@@ -314,20 +321,37 @@ function LibraryBody({
     return (
       <>
         <div className="border-y border-zinc-200/70 dark:border-white/10">
-          <div
-            aria-hidden
-            className={
-              type !== 'audio'
-                ? 'hidden'
-                : 'hidden h-[54px] grid-cols-[minmax(16rem,1.35fr)_minmax(8rem,0.72fr)_6rem_7.5rem_minmax(6rem,0.6fr)_6.75rem] items-center gap-4 border-b border-zinc-200/70 px-5 text-sm font-medium text-muted dark:border-white/10 xl:grid'
-            }
-          >
-            <span>Song</span>
-            <span>Artist</span>
-            <span className="text-right">Size</span>
-            <span className="text-right">Modified</span>
-            <span>Library</span>
-            <span className="sr-only">Actions</span>
+          <div className={`border-b border-zinc-200/70 px-3 text-sm font-medium text-muted dark:border-white/10 sm:px-5 ${type === 'audio' ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_6.75rem] xl:gap-2' : ''}`}>
+            <div
+              role="group"
+              aria-label="Sort library"
+              className={`flex min-h-[54px] flex-wrap items-center gap-x-4 ${type === 'audio' ? 'xl:grid xl:grid-cols-[2.75rem_minmax(11rem,1fr)_minmax(8rem,0.72fr)_6rem_7.5rem_minmax(6rem,0.6fr)] xl:gap-3' : ''}`}
+            >
+              {([
+                { key: 'name', label: type === 'audio' ? 'Song' : type === 'video' ? 'Video' : 'Image' },
+                ...(type === 'audio' ? [{ key: 'artist', label: 'Artist' }] : []),
+                { key: 'size', label: 'Size' },
+                { key: 'modified', label: 'Modified' },
+                { key: 'library', label: 'Library' },
+              ] as { key: LibrarySortKey; label: string }[]).map(({ key, label }, index) => {
+                const active = sortKey === key || (sortKey === 'latest' && key === 'modified');
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-label={`Sort by ${label}`}
+                    aria-pressed={active}
+                    title={active ? `${label}: ${sortDirection === 'asc' ? 'ascending' : 'descending'}` : `Sort by ${label}`}
+                    onClick={() => onSort(key)}
+                    className={`relative inline-flex min-h-10 items-center justify-start gap-1 text-left hover:text-foreground ${active ? 'text-foreground' : ''} ${index === 0 && type === 'audio' ? 'xl:col-span-2' : ''}`}
+                  >
+                    {index > 0 && <span aria-hidden className="pointer-events-none absolute -left-2 text-[10px] font-normal text-muted/40">|</span>}
+                    <span>{label}</span>
+                    {active && <span aria-hidden className="text-[10px] text-muted">{sortDirection === 'asc' ? '↑' : '↓'}</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <VirtualizedLibraryList
             items={visibleItems}
