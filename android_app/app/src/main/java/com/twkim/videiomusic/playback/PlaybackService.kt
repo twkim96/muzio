@@ -203,10 +203,10 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
 
     private fun sync(sample: ProgressSample?) {
         sample ?: return
-        val targetBaseUrl = sample.baseUrl.takeIf { it.isNotBlank() } ?: return
+        val targetBaseUrl = sample.baseUrl.takeIf { it.startsWith("http://") || it.startsWith("https://") }
         lastSyncedAtMs = System.currentTimeMillis()
         scope.launch(Dispatchers.IO) {
-            runCatching {
+            if (targetBaseUrl != null) runCatching {
                 api.putProgress(
                     baseUrl = targetBaseUrl,
                     mediaId = sample.mediaId,

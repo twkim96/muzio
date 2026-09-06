@@ -25,6 +25,7 @@ class NativePlaybackBridge(
     serverBaseUrl: String,
     private val emit: (JSONObject) -> Unit,
 ) {
+    private val localLibrary = com.twkim.videiomusic.data.LocalLibraryManager(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var origin = serverOrigin(serverBaseUrl)
     private var disposed = false
@@ -67,10 +68,16 @@ class NativePlaybackBridge(
         scope.launch {
             val result = runCatching {
                 val player = withTimeout(15_000) { ready.await() }
+                val localIds = mutableSetOf<String>()
+                payload.optJSONObject("source")?.takeIf { it.optString("location") == "local" }?.let { localIds.add(it.getString("mediaId")) }
+                payload.optJSONArray("queue")?.let { entries ->
+                    for (i in 0 until entries.length()) entries.getJSONObject(i).takeIf { it.optString("location") == "local" }?.let { localIds.add(it.getString("mediaId")) }
+                }
+                val localUris = if (localIds.isEmpty()) emptyMap() else localLibrary.resolveAll(localIds)
                 when (command) {
                     "playback.snapshot" -> Unit
-                    "playback.load" -> load(player, payload)
-                    "playback.queue" -> updateQueue(player, payload)
+                    "playback.load" -> load(player, payload, localUris)
+                    "playback.queue" -> updateQueue(player, payload, localUris)
                     "playback.play" -> {
                         if (player.playbackState == Player.STATE_ENDED) player.seekToDefaultPosition()
                         if (player.playbackState == Player.STATE_IDLE) player.prepare()
@@ -97,7 +104,7 @@ class NativePlaybackBridge(
         controller = null
     }
 
-    private fun load(player: MediaController, payload: JSONObject) {
+    private fun load(player: MediaController, payload: JSONObject, localUris: Map<String, Uri>) {
         val source = payload.getJSONObject("source")
         val queue = payload.optJSONArray("queue")?.takeIf { it.length() > 0 } ?: JSONArray().put(source)
         val index = payload.optInt("index", 0)
@@ -106,15 +113,15 @@ class NativePlaybackBridge(
         val resolved = JSONObject(source.toString()).apply {
             selected.queueEntryId?.let { put("queueEntryId", it) }
         }
-        val items = (0 until queue.length()).map { mediaItem(if (it == index) resolved else queue.getJSONObject(it)) }
+        val items = (0 until queue.length()).map { mediaItem(if (it == index) resolved else queue.getJSONObject(it), localUris) }
         player.pause()
         player.setMediaItems(items, index, if (payload.has("positionSec")) seconds(payload, "positionSec") else 0L)
         player.prepare()
     }
 
-    private fun updateQueue(player: MediaController, payload: JSONObject) {
+    private fun updateQueue(player: MediaController, payload: JSONObject, localUris: Map<String, Uri>) {
         val entries = payload.getJSONArray("queue")
-        val next = items(entries)
+        val next = items(entries, localUris)
         if (next.isEmpty()) { player.pause(); player.stop(); player.clearMediaItems(); return }
         val existingIndex = NativePlaybackPolicy.retainedIndex(
             source(player.currentMediaItem)?.let(::identity),
@@ -165,12 +172,13 @@ class NativePlaybackBridge(
         }
     }
 
-    private fun items(queue: JSONArray): List<MediaItem> = (0 until queue.length()).map { mediaItem(queue.getJSONObject(it)) }
+    private fun items(queue: JSONArray, localUris: Map<String, Uri>): List<MediaItem> = (0 until queue.length()).map { mediaItem(queue.getJSONObject(it), localUris) }
 
-    private fun mediaItem(source: JSONObject): MediaItem {
+    private fun mediaItem(source: JSONObject, localUris: Map<String, Uri>): MediaItem {
         require(source.getString("kind") == "remote" && source.getString("mediaType") == "audio") { "Only remote audio is supported" }
         val mediaId = source.getString("mediaId").also { require(it.isNotBlank()) }
-        val url = mediaUri(source.getString("url"))
+        val local = source.optString("location") == "local"
+        val url = if (local) localUris[mediaId] ?: error("Local audio is not authorized") else mediaUri(source.getString("url"))
         val name = source.getString("name")
         val title = source.optString("title", name)
         val artist = source.optString("artist").takeIf { it.isNotBlank() }
@@ -179,12 +187,12 @@ class NativePlaybackBridge(
         val identity = LibraryItem(mediaId, MediaType.Audio, root, path, name, null, 0, "",
             LibraryMetadata(source.optString("title"), artist, source.optString("album")), thumbnail = null).contentKey()
         val extras = PlaybackService.sourceExtras(MediaType.Audio, name, root, path, identity, artist).apply {
-            putString(PlaybackService.EXTRA_SERVER_ORIGIN, origin)
+            putString(PlaybackService.EXTRA_SERVER_ORIGIN, if (local) "" else origin)
             putString(PlaybackService.EXTRA_WEB_SOURCE, source.toString())
         }
         val metadata = MediaMetadata.Builder().setTitle(title).setArtist(artist).setAlbumTitle(source.optString("album"))
             .setExtras(extras)
-        source.optString("artworkUrl").takeIf { it.isNotBlank() }?.let { metadata.setArtworkUri(mediaUri(it, artwork = true)) }
+        if (!local) source.optString("artworkUrl").takeIf { it.isNotBlank() }?.let { metadata.setArtworkUri(mediaUri(it, artwork = true)) }
         return MediaItem.Builder().setMediaId(mediaId).setUri(url)
             .setMimeType(source.optString("mimeType").takeIf { it.isNotBlank() })
             .setMediaMetadata(metadata.build()).build()

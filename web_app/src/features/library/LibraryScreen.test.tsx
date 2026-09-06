@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -1400,5 +1400,54 @@ describe('LibraryScreen', () => {
 
     expect(screen.queryByTestId('refresh-button')).not.toBeInTheDocument();
     expect(screen.queryByTestId('library-refresh-status')).not.toBeInTheDocument();
+  });
+});
+
+
+describe('library filter panel', () => {
+  const items: LibraryItem[] = Array.from({ length: 32 }, (_, index) => ({
+    id: `filter-${index}`, type: 'audio', name: `Track ${index}.mp3`, relativePath: `Track ${index}.mp3`,
+    rootName: index % 2 === 0 ? 'Device' : 'Server', location: index % 2 === 0 ? 'local' : 'network',
+    storageId: index % 2 === 0 ? 'phone' : undefined, sizeBytes: index + 1, modifiedAt: '2026-06-01T00:00:00Z',
+    metadata: { artist: `Artist ${String(index).padStart(2, '0')}`, title: `Track ${index}` },
+  }));
+  test('pages full-library artist tags by 15 and applies storage/source facets', async () => {
+    renderScreen('audio', { kind: 'ok', items });
+    await screen.findByTestId('library-list');
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter library' }));
+    const panel = screen.getByTestId('library-filter-panel');
+    expect(within(screen.getByTestId('visible-artist-tags')).getAllByTestId('artist-filter-tag')).toHaveLength(15);
+    fireEvent.click(within(panel).getByText('More artists (15)'));
+    expect(within(screen.getByTestId('visible-artist-tags')).getAllByTestId('artist-filter-tag')).toHaveLength(30);
+    fireEvent.click(within(panel).getByText('More artists (15)'));
+    expect(within(screen.getByTestId('visible-artist-tags')).getAllByTestId('artist-filter-tag')).toHaveLength(32);
+    expect(within(panel).queryByText('More artists (15)')).not.toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Storage Device (Offline)' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Offline source' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Show 16 items' }));
+    expect(screen.getAllByTestId('library-item').every((row) => Number(row.getAttribute('data-media-id')?.split('-')[1]) % 2 === 0)).toBe(true);
+    expect(screen.getByRole('button', { name: 'Remove Offline source' })).toBeInTheDocument();
+  });
+  test('synchronizes panel sorting, query artist tags, chips and reset', async () => {
+    renderScreen('audio', { kind: 'ok', items });
+    await screen.findByTestId('library-list');
+    const search = screen.getByRole('textbox', { name: 'Filter Music' });
+    fireEvent.change(search, { target: { value: 'Track #Artist 02' } });
+    await waitFor(() => expect(screen.getAllByTestId('library-item')).toHaveLength(1));
+    expect(screen.getByRole('button', { name: 'Remove artist Artist 02' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter library' }));
+    const panel = screen.getByTestId('library-filter-panel');
+    expect(within(panel).getByRole('button', { name: 'Artist Artist 02' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Panel sort by Size' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Show 1 items' }));
+    expect(screen.getByRole('button', { name: 'Sort by Size' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove artist Artist 02' }));
+    expect(search).toHaveValue('Track');
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter library' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show 32 items' }));
+    expect(search).toHaveValue('');
+    expect(screen.queryByRole('button', { name: /Remove artist/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sort by Modified' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

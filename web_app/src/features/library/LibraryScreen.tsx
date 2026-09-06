@@ -11,13 +11,17 @@ import { contentKeyForLibraryItem } from '../../core/media/contentIdentity';
 import type { PlaylistRecord } from '../../core/storage/playlistRepository';
 import { CloseGlyph } from '../../core/ui/AppIcons';
 import { GlassModal } from '../../core/ui/GlassModal';
-import { useSearchHost } from '../../app/SearchHostContext';
+import { FunnelSimple } from '@phosphor-icons/react/dist/csr/FunnelSimple';
+import { LibraryFilterPanel } from './LibraryFilterPanel';
+import { useFilterHost, useSearchHost } from '../../app/SearchHostContext';
 import { usePlaylists } from '../playlists/PlaylistContext';
 import { useLibraryStores } from './LibraryContext';
 import { VirtualizedLibraryList } from './VirtualizedLibraryList';
 import type { LibraryStatus } from './libraryStore';
 import { describeLibraryError } from './libraryMessage';
 import {
+  EMPTY_LIBRARY_FILTERS, libraryFacets, libraryQueryWithArtists, parseLibraryQuery,
+  type LibraryFilters,
   filterAndSortLibraryItems,
   type LibrarySortKey,
   type LibrarySortDirection,
@@ -50,6 +54,9 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   const stale = useStore((state) => state.stale);
   const load = useStore((state) => state.load);
   const playlists = usePlaylists();
+  const filterHost = useFilterHost();
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filters, setFilters] = useState<LibraryFilters>(EMPTY_LIBRARY_FILTERS);
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
   const [sort, setSort] = useState<{ key: LibrarySortKey; direction: LibrarySortDirection }>({ key: 'latest', direction: 'desc' });
@@ -75,14 +82,24 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
 
   const meta = labels[type];
   const rawItems = result?.kind === 'ok' ? result.items : [];
+  const facets = useMemo(() => libraryFacets(rawItems), [rawItems]);
+  const parsedQuery = useMemo(() => parseLibraryQuery(query, facets.artists), [query, facets.artists]);
+  const selectedFilters = { ...filters, artists: parsedQuery.artists };
+  const filterCount = filters.storageIds.length + filters.locations.length + parsedQuery.artists.length;
+  const clearFilters = () => { setFilters(EMPTY_LIBRARY_FILTERS); setQuery(''); };
+  const filterButton = <button type="button" data-testid="library-filter-toggle" aria-label="Sort and filter library" aria-expanded={filterOpen}
+    aria-pressed={filterCount > 0 || sortKey !== 'latest'} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-foreground/10 aria-pressed:text-accent" onClick={() => setFilterOpen(true)}>
+    <FunnelSimple aria-hidden className="h-6 w-6" />
+  </button>;
   const visibleItems = useMemo(
     () =>
       filterAndSortLibraryItems(rawItems, type, {
         query: deferredQuery,
         sortKey,
         sortDirection,
+        filters,
       }),
-    [deferredQuery, rawItems, sortKey, sortDirection, type],
+    [deferredQuery, filters, rawItems, sortKey, sortDirection, type],
   );
   const selectedItems = useMemo(
     () => rawItems.filter((item) => selectedIds.has(item.id)),
@@ -196,6 +213,26 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
           searchHost,
         )
       )}
+
+      {filterHost ? createPortal(filterButton, filterHost) : <div className="mb-2 flex justify-end">{filterButton}</div>}
+      {filterCount > 0 && <div className="mb-3 flex flex-wrap items-center gap-2" aria-label="Active library filters">
+        {filters.storageIds.map((id) => <button key={id} type="button" className="muzio-glass-action muzio-glass-action-secondary" aria-label={`Remove storage ${facets.storage.find((entry) => entry.id === id)?.label ?? id}`}
+          onClick={() => setFilters((current) => ({ ...current, storageIds: current.storageIds.filter((value) => value !== id) }))}>{facets.storage.find((entry) => entry.id === id)?.label ?? id} ×</button>)}
+        {filters.locations.map((location) => <button key={location} type="button" className="muzio-glass-action muzio-glass-action-secondary" aria-label={`Remove ${location === 'local' ? 'Offline' : 'Online'} source`}
+          onClick={() => setFilters((current) => ({ ...current, locations: current.locations.filter((value) => value !== location) }))}>{location === 'local' ? 'Offline' : 'Online'} ×</button>)}
+        {parsedQuery.artists.map((id) => {
+          const label = facets.artists.find((artist) => artist.id === id)?.label ?? id;
+          return <button key={id} type="button" className="muzio-glass-action muzio-glass-action-secondary" aria-label={`Remove artist ${label}`}
+            onClick={() => setQuery(libraryQueryWithArtists(parsedQuery.text, parsedQuery.artists.filter((artist) => artist !== id), facets.artists))}>#{label} ×</button>;
+        })}
+        <button type="button" className="text-xs text-muted" onClick={clearFilters}>Clear filters</button>
+      </div>}
+      {filterOpen && <LibraryFilterPanel items={rawItems} type={type} selection={{ filters: selectedFilters, sortKey, sortDirection, text: parsedQuery.text }} onClose={() => setFilterOpen(false)} onApply={(selection) => {
+        setSort({ key: selection.sortKey, direction: selection.sortDirection });
+        setFilters({ ...selection.filters, artists: [] });
+        setQuery(libraryQueryWithArtists(selection.text, selection.filters.artists, facets.artists));
+        setFilterOpen(false);
+      }} />}
 
       <LibraryBody
         sortKey={sortKey}

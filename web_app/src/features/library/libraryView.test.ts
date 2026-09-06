@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 
 import type { LibraryItem } from '../../core/api/libraryClient';
-import { filterAndSortLibraryItems, type LibrarySortKey } from './libraryView';
+import { EMPTY_LIBRARY_FILTERS, libraryFacets, parseLibraryQuery, libraryQueryWithArtists, filterAndSortLibraryItems, type LibrarySortKey } from './libraryView';
 
 function item(patch: Partial<LibraryItem>): LibraryItem {
   return {
@@ -15,6 +15,8 @@ function item(patch: Partial<LibraryItem>): LibraryItem {
     metadata: patch.metadata,
     thumbnail: patch.thumbnail,
     subtitles: patch.subtitles,
+    location: patch.location,
+    storageId: patch.storageId,
   };
 }
 
@@ -121,5 +123,37 @@ describe('column sorting', () => {
     for (const sortDirection of ['asc', 'desc'] as const) {
       expect(filterAndSortLibraryItems(entries, 'audio', { query: '', sortKey: 'size', sortDirection })[0].id).toBe('zero');
     }
+  });
+});
+
+
+describe('library facets and artist search', () => {
+  const entries = [
+    item({ id: 'a', rootName: 'Shared', location: 'local', storageId: 'phone', metadata: { artist: 'The Beatles', title: 'Rain' } }),
+    item({ id: 'b', rootName: 'Shared', metadata: { artist: 'The Beatles', title: 'Sun' } }),
+    item({ id: 'c', rootName: 'Other', metadata: { artist: 'Lamp', title: 'Rain' } }),
+    item({ id: 'd', rootName: 'Other', location: 'local', storageId: 'sd', metadata: { artist: 'Other', title: 'Rain' } }),
+  ];
+  test('uses stable storage identities and full input artist counts', () => {
+    const facets = libraryFacets(entries);
+    expect(facets.storage.map((entry) => entry.id).sort()).toEqual(['local:phone', 'local:sd', 'network:Other', 'network:Shared']);
+    expect(facets.artists[0]).toEqual({ id: 'the beatles', label: 'The Beatles', count: 2 });
+    expect(facets.locations).toEqual({ local: 2, network: 2 });
+  });
+  test('combines OR within facets and AND across facets with text and sorting', () => {
+    const result = filterAndSortLibraryItems(entries, 'audio', { query: 'Rain', sortKey: 'artist', filters: {
+      storageIds: ['local:phone', 'network:Other'], locations: ['local', 'network'], artists: ['the beatles', 'lamp'],
+    } });
+    expect(result.map((entry) => entry.id)).toEqual(['c', 'a']);
+    expect(filterAndSortLibraryItems(entries, 'audio', { query: '', sortKey: 'latest', filters: { ...EMPTY_LIBRARY_FILTERS, locations: ['network'] } }).map((entry) => entry.id)).toEqual(['b', 'c']);
+  });
+  test('recognizes quoted and known multiword tags alongside ordinary search text', () => {
+    const known = libraryFacets(entries).artists;
+    expect(parseLibraryQuery('Rain #The Beatles #Lamp', known)).toEqual({ text: 'Rain', artists: ['the beatles', 'lamp'] });
+    expect(parseLibraryQuery('#"The Beatles" rain #Lamp', known)).toEqual({ text: 'rain', artists: ['the beatles', 'lamp'] });
+    expect(filterAndSortLibraryItems(entries, 'audio', { query: 'Rain #The Beatles #Lamp', sortKey: 'name' }).map((entry) => entry.id)).toEqual(['a', 'c']);
+    const query = libraryQueryWithArtists('Sun', ['the beatles'], known);
+    expect(parseLibraryQuery(query, known)).toEqual({ text: 'Sun', artists: ['the beatles'] });
+    expect(parseLibraryQuery('#Unknown trailing words', known)).toEqual({ text: 'trailing words', artists: ['unknown'] });
   });
 });

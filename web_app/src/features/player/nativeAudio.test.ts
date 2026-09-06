@@ -25,7 +25,7 @@ async function setup(initial = snapshot) {
   request.mockClear();
   return { store, request, bridge, dispose, setNative: (value: NativePlaybackSnapshot) => { native = value; }, emit: (state: NativePlaybackSnapshot) => listener({ type: 'playback', state }) };
 }
-const drain = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
+const drain = async () => { for (let i = 0; i < 20; i++) await new Promise((resolve) => setTimeout(resolve, 1)); };
 describe('native audio ownership', () => {
   it('restores a running service without loading or playing again', async () => {
     const { store, request, dispose } = await setup();
@@ -47,7 +47,8 @@ describe('native audio ownership', () => {
     store.getState().setVolume(0.7);
     store.getState().removeQueueTrack('q-b');
     await store.getState().playSource({ ...b, mediaType: 'video' });
-    expect(request.mock.calls.map(([command]) => command).filter((command) => command !== 'playback.snapshot')).toEqual(['playback.settings', 'playback.queue', 'playback.pause']);
+    await drain();
+    expect(request.mock.calls.map(([command]) => command).filter((command) => command !== 'playback.snapshot')).toEqual(['playback.settings', 'playback.pause', 'playback.queue']);
     expect(store.getState().active).toBe('video'); dispose();
   });
   it('loads an explicitly selected duplicate queue row with its identity', async () => {
@@ -76,7 +77,7 @@ it('keeps pending edits through old events then reconciles authoritative service
   let finish!: () => void;
   request.mockImplementationOnce(() => new Promise((resolve) => { finish = () => resolve(undefined); }));
   store.getState().setVolume(0.8);
-  await Promise.resolve();
+  await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
   emit(snapshot);
   expect(store.getState().volume).toBe(0.8);
   setNative({ ...snapshot, volume: 0.8 });
@@ -127,9 +128,10 @@ it('does not play the previous source after a native load failure', async () => 
 it('does not revert a newly selected queue row while native commands are in flight', async () => {
   const { store, request, emit, dispose } = await setup();
   let finish!: () => void;
-  request.mockImplementationOnce(() => new Promise((resolve) => { finish = () => resolve(undefined); }));
+  const normal = request.getMockImplementation()!;
+  request.mockImplementationOnce((command, payload) => new Promise((resolve) => { finish = () => { void normal(command, payload).then(resolve); }; }));
   const playing = store.getState().playQueueTrack('q-b');
-  await Promise.resolve();
+  await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
   emit({ ...snapshot, status: { kind: 'paused' } });
   expect(store.getState().audio.source?.mediaId).toBe('b');
   expect(store.getState().musicQueueIndex).toBe(1);
@@ -162,5 +164,21 @@ it('reserves supplied queue IDs before assigning IDs to other rows in a batch', 
   await store.getState().playMusicQueue([librarySource, { ...a, queueEntryId: 'queue-1-a' }, librarySource], 'a');
   await drain();
   expect(store.getState().musicQueue.map((item) => item.queueEntryId)).toEqual(['queue-2-a', 'queue-1-a', 'queue-3-a']);
+  dispose();
+});
+
+it('selects loading immediately before bridge work and only plays the latest rapid selection', async () => {
+  const { store, request, emit, dispose } = await setup();
+  const first = store.getState().playQueueTrack('q-b');
+  expect(store.getState().audio).toMatchObject({ source: { mediaId: 'b' }, status: { kind: 'loading' } });
+  expect(request).not.toHaveBeenCalled();
+  const second = store.getState().playQueueTrack('q-a');
+  expect(store.getState().audio).toMatchObject({ source: { mediaId: 'a' }, status: { kind: 'loading' } });
+  emit({ ...snapshot, source: b, index: 1, status: { kind: 'paused' } });
+  expect(store.getState().audio.source?.mediaId).toBe('a');
+  await Promise.all([first, second]); await drain();
+  expect(store.getState().audio.source?.mediaId).toBe('a');
+  expect(request.mock.calls.filter(([command]) => command === 'playback.play')).toHaveLength(1);
+  expect(request.mock.calls.filter(([command]) => command === 'playback.queue')).toHaveLength(0);
   dispose();
 });

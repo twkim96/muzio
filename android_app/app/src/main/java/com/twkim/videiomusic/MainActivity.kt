@@ -56,6 +56,21 @@ class MainActivity : ComponentActivity() {
     private var fullScreenView: View? = null
     private var fullScreenCallback: WebChromeClient.CustomViewCallback? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private val localLibrary by lazy { com.twkim.videiomusic.data.LocalLibraryManager(applicationContext) }
+    private var folderReply: ((Result<JSONObject>) -> Unit)? = null
+    private var folderPickerOpen = false
+    private val folderPicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        folderPickerOpen = false
+        val respond = folderReply
+        folderReply = null
+        lifecycleScope.launch {
+            val snapshot = runCatching {
+                val uri = result.data?.data.takeIf { result.resultCode == RESULT_OK }
+                if (uri == null) localLibrary.list() else localLibrary.add(uri)
+            }
+            respond?.invoke(snapshot)
+        }
+    }
     private val permission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
     private val filePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         fileCallback?.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data))
@@ -238,10 +253,23 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleShell(command: String, payload: JSONObject, respond: (Result<JSONObject>) -> Unit) {
+        if (command == "localLibrary.add") {
+            if (folderPickerOpen) { respond(Result.failure(IllegalStateException("Folder picker is already open"))); return }
+            folderPickerOpen = true
+            folderReply = respond
+            runCatching {
+                folderPicker.launch(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).putExtra(Intent.EXTRA_LOCAL_ONLY, true).addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION))
+            }.onFailure { folderPickerOpen = false; folderReply = null; respond(Result.failure(it)) }
+            return
+        }
         val requestingView = web
         lifecycleScope.launch {
             val result = runCatching {
                 when (command) {
+                    "localLibrary.list" -> localLibrary.list()
+                    "localLibrary.refresh" -> localLibrary.refresh()
+                    "localLibrary.remove" -> localLibrary.remove(payload.getString("id"))
                     "shell.videoState" -> {
                         videoPlaying = !setup && payload.optBoolean("playing", false)
                         val width = payload.optInt("width", 16)

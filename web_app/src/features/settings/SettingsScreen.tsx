@@ -1,4 +1,5 @@
 import { androidShellBridge } from '../../core/platform/androidShell';
+import { LocalMusicFolders } from './LocalMusicFolders';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FloatingSearchControl } from '../../app/FloatingSearchControl';
@@ -80,6 +81,7 @@ const themeColorFields: Array<{
 const settingsSearchTerms = {
   appearance: 'Appearance theme dark light custom surface text muted accent color reset 외관 테마 색상 화면 어두운 밝은 초기화',
   'backend-status': 'Backend Status connection health test server 백엔드 상태 연결 서버 테스트',
+  'local-music': 'local music folders offline storage device 로컬 음악 폴더 오프라인 저장소 기기',
   'media-folders': 'Media Folders music video image roots refresh save 미디어 폴더 음악 영상 이미지 경로 새로고침 저장',
   'runtime-notes': 'Runtime Notes deployment web app backend service version 런타임 배포 버전 서비스',
 };
@@ -88,7 +90,7 @@ export function SettingsScreen() {
   const searchHost = useSearchHost();
   const [query, setQuery] = useState('');
   const matchesSection = (id: keyof typeof settingsSearchTerms) =>
-    query.trim().toLocaleLowerCase().split(/\s+/).every((term) =>
+    (id !== 'local-music' || androidShellBridge() !== null) && query.trim().toLocaleLowerCase().split(/\s+/).every((term) =>
       settingsSearchTerms[id].toLocaleLowerCase().includes(term));
   const showServerConnection = androidShellBridge() !== null && query.trim().toLocaleLowerCase().split(/\s+/).every((term) => 'server connection address change 서버 연결 주소 변경'.includes(term));
   const [serverError, setServerError] = useState('');
@@ -404,6 +406,7 @@ export function SettingsScreen() {
           )}
         </section>
 
+        <LocalMusicFolders query={query} />
         <section
           id="media-folders"
           hidden={!matchesSection('media-folders')}

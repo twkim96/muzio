@@ -12,6 +12,8 @@ export type PlaybackSource = RemotePlaybackSource;
 
 export interface RemotePlaybackSource {
   kind: 'remote';
+  /** Local items use an opaque Android library handle, never an arbitrary URI. */
+  location?: 'local' | 'network';
   /** Stable media id from the backend; useful as a cache key. */
   mediaId: string;
   /** Stable identity for one Queue row; allows the same media id to repeat. */
@@ -68,7 +70,7 @@ export function buildStreamingUrl(
   if (trimmed === '') {
     throw new Error('buildStreamingUrl: mediaId must not be empty');
   }
-  const base = `${STREAM_BASE_PATH}${encodeURIComponent(trimmed)}`;
+  const base = `${trimmed.startsWith('local:') ? '/__muzio_local/media/' : STREAM_BASE_PATH}${encodeURIComponent(trimmed)}`;
   const start = options.startSec;
   if (
     start === undefined ||
@@ -95,6 +97,7 @@ export function remoteSourceFromLibraryItem(
   const artworkUrl = playbackArtworkUrl(item);
   return {
     kind: 'remote',
+    ...(item.location === 'local' ? { location: 'local' as const } : {}),
     mediaId: item.id,
     mediaType: item.type,
     url: buildStreamingUrl(item.id),

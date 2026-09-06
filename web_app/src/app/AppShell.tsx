@@ -131,6 +131,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     else if (playlistDrawer !== null) setPlaylistDrawer(null);
     else setDrawerOpen(false);
   }, 50);
+  const [filterHost, setFilterHost] = useState<HTMLElement | null>(null);
   const [searchHost, setSearchHost] = useState<HTMLElement | null>(null);
   const [searchPopoverHost, setSearchPopoverHost] = useState<HTMLElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -356,7 +357,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   return (
-    <SearchHostProvider host={searchHost} popoverHost={searchPopoverHost}>
+    <SearchHostProvider filterHost={filterHost} host={searchHost} popoverHost={searchPopoverHost}>
       <div
         data-testid="library-swipe-surface"
         onClickCapture={librarySwipeHandlers.onClickCapture}
@@ -414,6 +415,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     <span className="h-10 w-10 shrink-0" aria-hidden />
                   )}
                   <SegmentedTabs onNavigate={closeDrawer} />
+                  <div ref={setFilterHost} data-testid="filter-host" className="flex h-10 w-10 shrink-0 items-center" />
                   <div
                     ref={setSearchHost}
                     data-testid="search-host"
@@ -784,8 +786,8 @@ function SegmentedTabs({ onNavigate }: { onNavigate?: () => void }) {
             onClick={onNavigate}
             className={
               active
-                ? 'rounded-full bg-white/62 px-3 py-2 max-[359px]:px-2.5 text-base font-medium leading-5 text-zinc-950 shadow-sm sm:px-5 dark:bg-white/[0.10] dark:text-foreground'
-                : 'rounded-full px-3 py-2 max-[359px]:px-2.5 text-base font-medium leading-5 text-zinc-500 hover:text-zinc-950 sm:px-5 dark:text-muted dark:hover:text-foreground'
+                ? 'rounded-full bg-white/62 px-2 py-2 max-[359px]:px-1.5 text-base max-[359px]:text-sm font-medium leading-5 text-zinc-950 shadow-sm sm:px-5 dark:bg-white/[0.10] dark:text-foreground'
+                : 'rounded-full px-2 py-2 max-[359px]:px-1.5 text-base max-[359px]:text-sm font-medium leading-5 text-zinc-500 hover:text-zinc-950 sm:px-5 dark:text-muted dark:hover:text-foreground'
             }
           >
             {tab.label}

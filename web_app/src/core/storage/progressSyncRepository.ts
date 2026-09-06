@@ -47,11 +47,11 @@ export function createSyncedProgressRepository(
     },
     write(mediaId, record) {
       local.write(mediaId, record);
-      void client.put(mediaId, record).catch(() => {});
+      if (!mediaId.startsWith('local:')) void client.put(mediaId, record).catch(() => {});
     },
     clear(mediaId) {
       local.clear(mediaId);
-      void client.delete(mediaId).catch(() => {});
+      if (!mediaId.startsWith('local:')) void client.delete(mediaId).catch(() => {});
     },
     entries() {
       return local.entries();
@@ -78,6 +78,7 @@ export function createSyncedProgressRepository(
       }
       const updates: Array<readonly [string, ProgressRecord]> = [];
       for (const record of records) {
+        if (record.mediaId.startsWith('local:')) continue;
         const localRecord = local.read(record.mediaId);
         if (isNewer(record, localRecord)) {
           updates.push([record.mediaId, toLocalRecord(record)]);

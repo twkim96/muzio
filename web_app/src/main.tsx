@@ -27,6 +27,7 @@ import { videoOptimizationService } from './features/player/videoOptimizationSer
 
 import { createNativeBridge } from './core/platform/nativeBridge';
 import { configureAndroidShell, migrateNativePreferences } from './core/platform/androidShell';
+import { createLocalAwareLibraryStore, useNativeLocalLibrary } from './features/library/nativeLocalLibrary';
 import { AndroidServerSetup } from './core/platform/AndroidServerSetup';
 import { connectNativeAudio } from './features/player/nativeAudio';
 
@@ -67,6 +68,10 @@ async function startApp() {
     video: createLibraryStore({ type: 'video' }),
     image: createLibraryStore({ type: 'image' }),
   };
+  if (bridge) {
+    libraryStores.audio = createLocalAwareLibraryStore(libraryStores.audio);
+    void useNativeLocalLibrary.getState().run('list');
+  }
   const localProgressRepository = createLocalStorageProgressRepository();
   const progressRepository = createSyncedProgressRepository(localProgressRepository);
   const progressService = createProgressService(progressRepository);
@@ -91,6 +96,7 @@ async function startApp() {
     }
     const source = {
       kind: 'remote' as const,
+      ...(recent.mediaId.startsWith('local:') ? { location: 'local' as const } : {}),
       mediaId: recent.mediaId,
       mediaType: recent.record.source.mediaType,
       name: recent.record.source.name,

@@ -14,6 +14,66 @@ export interface LibraryViewOptions {
   query: string;
   sortKey: LibrarySortKey;
   sortDirection?: LibrarySortDirection;
+  filters?: LibraryFilters;
+}
+
+export interface LibraryFilters {
+  storageIds: readonly string[];
+  locations: readonly ('local' | 'network')[];
+  artists: readonly string[];
+}
+
+export const EMPTY_LIBRARY_FILTERS: LibraryFilters = { storageIds: [], locations: [], artists: [] };
+export interface LibraryFacet { id: string; label: string; count: number }
+export function libraryStorageId(item: LibraryItem): string {
+  return item.location === 'local' ? `local:${item.storageId ?? item.rootName}` : `network:${item.rootName}`;
+}
+
+export function libraryFacets(items: readonly LibraryItem[]) {
+  const storage = new Map<string, LibraryFacet>();
+  const artists = new Map<string, LibraryFacet>();
+  const locations = { local: 0, network: 0 };
+  const add = (map: Map<string, LibraryFacet>, id: string, label: string) => {
+    const entry = map.get(id);
+    if (entry) entry.count++;
+    else map.set(id, { id, label, count: 1 });
+  };
+  for (const item of items) {
+    add(storage, libraryStorageId(item), item.rootName);
+    locations[item.location ?? 'network']++;
+    const artist = item.metadata?.artist?.trim();
+    if (artist) add(artists, normalize(artist), artist);
+  }
+  return {
+    storage: [...storage.values()].sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id)),
+    artists: [...artists.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),
+    locations,
+  };
+}
+
+/** Quoted tags or longest known artist names; remaining text stays a normal search. */
+export function parseLibraryQuery(query: string, knownArtists: readonly LibraryFacet[] = []) {
+  const known = [...knownArtists].sort((a, b) => b.label.length - a.label.length);
+  const artists: string[] = [];
+  const text = query.replace(/(?<!\S)#(?:"([^"\n]+)"|'([^'\n]+)'|([^#\n]+))/g, (match, double: string, single: string, rest: string) => {
+    if (double || single) {
+      artists.push(normalize(double || single));
+      return '';
+    }
+    const candidate = known.find((artist) => normalize(rest).startsWith(artist.id) && (rest.length === artist.label.length || /\s/.test(rest[artist.label.length] ?? '')));
+    const label = candidate?.label ?? rest.match(/^\S+/)?.[0] ?? '';
+    if (!label) return match;
+    artists.push(candidate?.id ?? normalize(label));
+    return rest.slice(label.length);
+  }).replace(/\s+/g, ' ').trim();
+  return { text, artists: [...new Set(artists)] };
+}
+
+export function libraryQueryWithArtists(text: string, artists: readonly string[], known: readonly LibraryFacet[]) {
+  return [text, ...artists.map((id) => {
+    const label = known.find((artist) => artist.id === id)?.label ?? id;
+    return `#"${label.replace(/"/g, '')}"`;
+  })].filter(Boolean).join(' ');
 }
 
 const searchTextCache = new WeakMap<LibraryItem, string>();
@@ -28,11 +88,17 @@ export function filterAndSortLibraryItems(
   _type: LibraryMediaType,
   options: LibraryViewOptions,
 ): readonly LibraryItem[] {
-  const query = normalize(options.query);
-  const filtered =
-    query === ''
-      ? items
-      : items.filter((item) => searchText(item).includes(query));
+  const parsed = options.query.includes('#') ? parseLibraryQuery(options.query, libraryFacets(items).artists) : { text: options.query, artists: [] };
+  const query = normalize(parsed.text);
+  const filters = options.filters ?? EMPTY_LIBRARY_FILTERS;
+  const artists = [...new Set([...filters.artists.map(normalize), ...parsed.artists])];
+  const hasFilters = query !== '' || artists.length > 0 || filters.storageIds.length > 0 || filters.locations.length > 0;
+  const filtered = hasFilters ? items.filter((item) =>
+    (query === '' || searchText(item).includes(query)) &&
+    (artists.length === 0 || artists.includes(normalize(item.metadata?.artist))) &&
+    (filters.storageIds.length === 0 || filters.storageIds.includes(libraryStorageId(item))) &&
+    (filters.locations.length === 0 || filters.locations.includes(item.location ?? 'network')),
+  ) : items;
   if (options.sortKey === 'latest') {
     return filtered;
   }

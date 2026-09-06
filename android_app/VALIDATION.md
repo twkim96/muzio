@@ -94,3 +94,30 @@ SHA-256: `03834f3f93339756abb1c004bc0f8283e716ae155e1694583710e5d3118433ec`
   PiP/gesture acceptance and Android 8–11 fallback remain device checks.
 - Artifact: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev.apk`
 - SHA-256: `ed885d978a52326f278b493212af38f6e13cfedb8534af25129453c16bcf6a78`
+
+
+## Local music, immediate selection and library filters — 2026-09-07 / versionCode 8
+
+- Full web suite: 57 files / 605 tests. Android JVM: 10 tests. Corrected a
+  TypeScript test fixture's required `completed` field; the affected progress
+  suite passed 7 tests and TypeScript/Vite/APK assembly then passed. The final
+  320px tab font adjustment passed App's 32 tests and APK rebuild.
+- Actual Android SAF UI on API 36 added a synthetic Music/MuzioLocalQA folder.
+  One local MP3 appeared alongside three network items. Offline source filtering
+  selected only the local item. After stopping the isolated backend and cold
+  restarting the app, the persisted local item played in ExoPlayer (50.413s).
+- Removing the folder removed its library row while the original 720,652-byte
+  MP3 remained on disk. No personal phone folders were added or removed.
+- Search `#Sample artist` selected the artist chip and returned both matching
+  local and network rows. The filter modal rendered top sorting, lower facets
+  and a scrollable glass surface. At 320px, Image ended at 213.96px and the filter
+  button began at 215.96px; document width stayed 320px.
+- A synthetic four-item queue tap painted the selected/loading UI at 27.4ms,
+  before native load dispatch at 48.3ms, with no duplicate queue command.
+  This is emulator evidence, not a large personal-library latency benchmark.
+- Samsung SM-S936N: update install succeeded, Activity and running process
+  confirmed, versionCode 8 / 1.4.5-web-dev. Personal-library responsiveness and
+  folder-provider/device power behavior remain user acceptance.
+- Artifact: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc8.apk`
+- Size: 23,157,603 bytes.
+- SHA-256: `32d657ec20bcd532c4336e39dd23e2503d679f52e1a80654096240f3fdd2e0fa`

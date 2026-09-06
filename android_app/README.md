@@ -14,7 +14,7 @@ and progress metadata. The old Compose screens remain as reference code but
 `MainActivity` no longer launches them. `FEATURE_PARITY.md` describes that old
 Compose implementation, not acceptance evidence for this host.
 
-Version: `1.4.5-web-dev`, versionCode `7`; minimum Android 8 / SDK 26, target SDK 36.
+Version: `1.4.5-web-dev`, versionCode `8`; minimum Android 8 / SDK 26, target SDK 36.
 
 ## Architecture
 
@@ -98,5 +98,19 @@ and full process-death queue recovery remain follow-up work. Server playback
 progress continues to be written by the native service.
 
 After this shared-UI foundation is accepted, add native capabilities through the
-bridge: local media/library access, widgets, richer notifications and persistent
+bridge: local video/image access, widgets, richer notifications and persistent
 playback recovery. These are not included in the initial UI migration.
+
+
+## Local music folders
+
+Settings → Local Music opens Android's local folder picker. Persisted read grants
+and the cached audio catalog live on the device; only opaque IDs enter the shared
+web list. Device music and server music share sorting, search, playlists and
+artist/storage filters. Source filters label device files Offline and server
+files Online. Server disconnection does not hide authorized local tracks.
+
+Folder removal forgets the catalog/grant without deleting files. Re-scan after
+changing folder contents; unavailable permissions are shown in settings. Local
+progress is stored on the device and is not uploaded to the server. Local video,
+images, embedded artwork and automatic filesystem watching are later work.

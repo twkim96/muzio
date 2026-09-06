@@ -6,7 +6,7 @@
 - 기준: 1.4.4 최종 웹 UI `c283d52` (PWA r32). 1.4.4 마감 유지.
 - 작업 브랜치: `codex/android-shared-web-ui`
 - 상태: 개발 브랜치 구현·자동 검증·에뮬레이터 동작 검증 완료. Samsung 설치/실행 완료. 운영 웹 배포 및 실제 개인 라이브러리 사용성 검증은 별도.
-- 제품/Web 버전: 1.4.5. Android 개발 APK: 1.4.5-web-dev / versionCode 7.
+- 제품/Web 버전: 1.4.5. Android 개발 APK: 1.4.5-web-dev / versionCode 8 (아래 추가 패치 포함).
 
 ## 이번 세션의 변경
 
@@ -59,6 +59,24 @@
 
 ## 후속 범위
 
-- 로컬 미디어 재생/접근, 위젯, 더 풍부한 알림 제어, 네이티브 영상 surface, 완전한 process-death 복구는 후속 작업이다.
+- 로컬 영상/이미지 재생·커버·자동 감시, 위젯, 더 풍부한 알림 제어, 네이티브 영상 surface, 완전한 process-death 복구는 후속 작업이다.
 - 실제 개인 라이브러리의 장시간 재생/배터리 정책/헤드셋·Bluetooth/HLS·seek 사용성은 별도 기기 점검으로 남긴다.
 - 이 문서는 현재 세션의 개발 브랜치와 Android APK를 기록한다. main 병합/원격 push/운영 웹 배포 완료를 의미하지 않는다.
+
+
+## 추가 패치 - 빠른 곡 선택, 로컬 음악 및 통합 필터 (1.4.5-r2)
+
+- Android 큐 선택 시 전체 큐를 queue/load 명령으로 두 번 보내던 경로를 한 번으로 합친다. 선택한 곡/loading UI를 먼저 반영하고 브라우저의 paint 기회를 준 뒤 native 준비를 시작한다. 빠르게 다른 곡을 누른 경우 오래된 play/error가 최신 선택을 덮지 않도록 selection generation을 확인한다.
+- 앱 설정 Local Music에서 로컬 전용 SAF 폴더 선택기로 음악 위치를 추가하고 재스캔/제거할 수 있다. 권한과 목록 cache는 기기에 보관하고 메타데이터 스캔은 IO thread에서 수행한다. 파일 삭제 없이 위치만 제거하며 권한 해제/접근 불가 상태를 표시한다.
+- 네트워크 snapshot/revision/delta/cache와 로컬 목록을 분리한 뒤 화면에서 합친다. 서버 연결 실패/새로고침 중에도 로컬 목록은 남는다. 기기 파일은 native registry의 ID로만 재생하고 임의 URI를 신뢰하지 않는다. 로컬 진행 상태를 서버 API로 전송하지 않는다.
+- Web Reader `src/components/shelf/ShelfFilterModal.tsx`를 읽기 전용 레퍼런스로 사용한다. 정렬을 위쪽, 저장소 그룹/Online·Offline/Artist 태그를 아래쪽에 배치하고 초기화/결과 수 적용 footer를 제공한다.
+- Song·Artist·Size·Modified·Library 열 버튼은 보조 정렬/활성 정렬 표시로 유지하고 새 패널과 같은 상태를 사용한다. 같은 facet 안에서는 OR, 서로 다른 facet 간에는 AND를 적용한다. Online은 서버 음악, Offline은 기기 음악이다.
+- Artist 태그는 전체 목록을 기준으로 만들고 15개씩 더보기로 확장한다. 검색의 `#Artist`, 알려진 여러 단어 가수명 또는 `#"공백 있는 가수"`를 태그 필터로 해석하며 패널/chip 수정과 동기화한다.
+- PWA shell cache 1.4.5-r2, Android versionCode8 / 1.4.5-web-dev. 위젯·로컬 영상/이미지·로컬 커버/자동 감시는 후속 범위로 유지한다.
+- 검증: 웹 57 files / 605 tests, Android JVM 10 tests 통과. 진행 상태 test fixture의 TypeScript 필수 필드를 보완한 뒤 해당 7 tests 및 TypeScript/Vite 포함 APK build 통과. 마지막 320px 탭 글자 보정은 App 32 tests와 APK rebuild로 확인했다.
+- API 36 에뮬레이터에서 실제 SAF 폴더 추가 → 네트워크 3곡/로컬 1곡 통합 표시 → Offline 필터 → 서버 종료/앱 재시작 후 로컬 재생을 확인했다. 폴더 제거 후 목록에서만 빠지고 원본 MP3는 유지됐다. `#Sample artist` 검색은 해당 로컬/서버 2곡과 Artist 선택 chip에 동기화됐다.
+- 합성 4곡 큐의 터치 측정에서 loading UI가 27.4ms, native load 전달이 48.3ms에 발생했고 중복 queue 전달은 없었다. 이는 에뮬레이터 테스트 수치이며 개인 대형 라이브러리의 실측 성능을 뜻하지 않는다.
+- 최종 320px 화면에서 Image 탭 끝 213.96px / 필터 버튼 시작 215.96px로 겹침이 없고 문서 폭은 320px이었다.
+- Samsung SM-S936N에 최종 APK 업데이트 설치/Activity 실행/프로세스 및 versionCode8을 확인했다. 개인 폴더 선택과 실제 라이브러리 반응 속도는 사용자 기기 사용성 확인으로 남긴다.
+- 추가 패치 산출물: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc8.apk` (23,157,603 bytes).
+- SHA-256: `32d657ec20bcd532c4336e39dd23e2503d679f52e1a80654096240f3fdd2e0fa`.

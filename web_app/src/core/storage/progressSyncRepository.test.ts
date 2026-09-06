@@ -153,3 +153,17 @@ describe('createSyncedProgressRepository', () => {
     expect(local.entries()).toHaveLength(1_000);
   });
 });
+
+test('local device progress is retained locally and never uploaded or overwritten remotely', async () => {
+  const record = { positionSec: 3, durationSec: 90, lastPlayedAt: '2026-09-07T00:00:00Z' };
+  const local = { read: vi.fn(() => record), write: vi.fn(), clear: vi.fn(), entries: vi.fn(() => []), mostRecent: vi.fn(() => null), mergeMany: vi.fn() };
+  const client = { list: vi.fn(async () => [{ ...record, completed: false, mediaId: 'local:one', lastPlayedAt: '2027-01-01T00:00:00Z' }]), put: vi.fn(async () => {}), delete: vi.fn(async () => {}) };
+  const repository = createSyncedProgressRepository(local, client);
+  repository.write('local:one', record);
+  expect(local.write).toHaveBeenCalledWith('local:one', record);
+  repository.clear('local:one');
+  expect(local.clear).toHaveBeenCalledWith('local:one');
+  await repository.syncFromRemote();
+  expect(client.put).not.toHaveBeenCalled(); expect(client.delete).not.toHaveBeenCalled();
+  expect(local.mergeMany).not.toHaveBeenCalled();
+});

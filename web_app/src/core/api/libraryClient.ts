@@ -11,6 +11,9 @@ export type LibraryMediaType = 'video' | 'audio' | 'image';
 
 export interface LibraryItem {
   id: string;
+  /** Android-authorized local music; absent for server items. */
+  location?: 'local' | 'network';
+  storageId?: string;
   type: LibraryMediaType;
   rootName: string;
   relativePath: string;

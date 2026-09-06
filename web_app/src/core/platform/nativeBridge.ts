@@ -37,7 +37,9 @@ export function createNativeBridge(port = nativeMessagePort()): NativeBridge | n
     request<T>(command: string, payload?: object) {
       const id = `web-${Date.now()}-${++sequence}`;
       return new Promise<T>((resolve, reject) => {
-        const timer = setTimeout(() => { pending.delete(id); reject(new Error(`Native command timed out: ${command}`)); }, 15000);
+        // Folder selection waits for a person, and large SAF scans can take longer.
+        const timeoutMs = command.startsWith('localLibrary.') ? 300000 : 15000;
+        const timer = setTimeout(() => { pending.delete(id); reject(new Error(`Native command timed out: ${command}`)); }, timeoutMs);
         pending.set(id, { resolve: (value) => resolve(value as T), reject, timer });
         try { port.postMessage(JSON.stringify({ id, command, payload })); }
         catch (error) { clearTimeout(timer); pending.delete(id); reject(error); }
