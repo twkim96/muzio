@@ -27,6 +27,7 @@ import { useDocumentHorizontalDrag } from './controls/useDocumentHorizontalDrag'
 import { formatTime } from './formatTime';
 import { usePlaybackNetworkHint } from './playbackNetworkStatus';
 import {
+  CloseGlyph,
   LikeGlyph,
   MoreGlyph,
   MusicGlyph,
@@ -322,7 +323,7 @@ export function FullPlayerScreen({
                 </ActionButton>
               </div>
             {openPopover === 'timer' && (
-              <ActionPopoverPanel>
+              <ActionPopoverPanel onClose={() => setOpenPopover(null)}>
                 <SleepTimerPopover
                   customMinutes={customMinutes}
                   sleepTimer={snapshot.sleepTimer}
@@ -333,7 +334,7 @@ export function FullPlayerScreen({
               </ActionPopoverPanel>
             )}
             {openPopover === 'volume' && (
-              <ActionPopoverPanel>
+              <ActionPopoverPanel onClose={() => setOpenPopover(null)}>
                 <VolumePopover
                   muted={snapshot.muted}
                   volume={snapshot.volume}
@@ -343,7 +344,7 @@ export function FullPlayerScreen({
               </ActionPopoverPanel>
             )}
             {openPopover === 'more' && source !== null && (
-              <ActionPopoverPanel>
+              <ActionPopoverPanel onClose={() => setOpenPopover(null)}>
                 <div data-testid="player-more-menu" className="grid gap-2 text-sm">
                   <p className="font-semibold">More actions</p>
                   {(playlists?.playlists.length ?? 0) > 0 ? (
@@ -576,7 +577,7 @@ function ActionButton({
   );
 }
 
-function ActionPopoverPanel({ children }: { children: ReactNode }) {
+function ActionPopoverPanel({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   return (
     <div
       data-glass
@@ -586,7 +587,10 @@ function ActionPopoverPanel({ children }: { children: ReactNode }) {
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.10),rgba(255,255,255,0.025))] opacity-90 blur-3xl"
       />
-      <div className="relative">{children}</div>
+      <div className="relative">
+        <div className="mb-2 flex justify-end"><button type="button" aria-label="Close player panel" onClick={onClose} className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/10"><CloseGlyph className="h-5 w-5" /></button></div>
+        {children}
+      </div>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   type TouchEvent as ReactTouchEvent,
 } from 'react';
@@ -40,7 +41,7 @@ import {
 } from '../features/playlists/smartCollections';
 import { backgroundLocationFrom } from './backgroundLocation';
 import { GlassModal } from '../core/ui/GlassModal';
-import { QueueGlyph } from '../core/ui/AppIcons';
+import { CloseGlyph, QueueGlyph } from '../core/ui/AppIcons';
 import { SearchHostProvider } from './SearchHostContext';
 
 const primaryTabs = [
@@ -247,9 +248,13 @@ export function AppShell({ children }: { children: ReactNode }) {
       }),
     ];
   }, [imageCollections, playableItemIndex, playlists.playlists, section, smartCollections]);
-  const menuSwipeHandlers = useLeftToRightMenuSwipe({
-    enabled: hasMobileMenu && !isImmersiveRoute && !drawerOpen,
-    onOpen: () => setDrawerOpen(true),
+  const activeTabIndex = primaryTabs.findIndex((tab) => shellLocation.pathname === tab.to);
+  const librarySwipeHandlers = useLibrarySwipe({
+    enabled: activeTabIndex >= 0 && location.pathname === shellLocation.pathname && !playerOverlay.isOpen && !drawerOpen && !queueOpen && playlistDrawer === null,
+    onSwipe: (direction) => {
+      const nextTab = primaryTabs[activeTabIndex + direction];
+      if (nextTab) navigate(nextTab.to);
+    },
   });
 
   const openPlaylist = (entry: PlaylistMenuEntry) => {
@@ -430,14 +435,15 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <main
           data-testid="app-main"
-          onPointerCancel={menuSwipeHandlers.onPointerCancel}
-          onPointerDown={menuSwipeHandlers.onPointerDown}
-          onPointerMove={menuSwipeHandlers.onPointerMove}
-          onPointerUp={menuSwipeHandlers.onPointerUp}
-          onTouchCancel={menuSwipeHandlers.onTouchCancel}
-          onTouchEnd={menuSwipeHandlers.onTouchEnd}
-          onTouchMove={menuSwipeHandlers.onTouchMove}
-          onTouchStart={menuSwipeHandlers.onTouchStart}
+          onClickCapture={librarySwipeHandlers.onClickCapture}
+          onPointerCancel={librarySwipeHandlers.onPointerCancel}
+          onPointerDown={librarySwipeHandlers.onPointerDown}
+          onPointerMove={librarySwipeHandlers.onPointerMove}
+          onPointerUp={librarySwipeHandlers.onPointerUp}
+          onTouchCancel={librarySwipeHandlers.onTouchCancel}
+          onTouchEnd={librarySwipeHandlers.onTouchEnd}
+          onTouchMove={librarySwipeHandlers.onTouchMove}
+          onTouchStart={librarySwipeHandlers.onTouchStart}
           className={isImmersiveRoute ? 'min-h-screen' : 'min-h-screen touch-pan-y pb-24'}
         >
           {children}
@@ -565,17 +571,19 @@ function SidebarDrawer({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-1 flex shrink-0 flex-col items-start gap-3">
-          <button
-            type="button"
-            aria-label="Close navigation"
-            onClick={onClose}
-            data-testid="mobile-menu-title"
-            className="h-[46.4px] w-fit text-left [--title-scale:1.45] sm:[--title-scale:1.16]"
-          >
-            <span className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
-              <span className="scale-[calc(1/var(--title-scale))]">{sidebar.title}</span>
-            </span>
-          </button>
+          <div className="flex w-full items-start justify-between gap-3">
+            <h2
+              data-testid="mobile-menu-title"
+              className="h-[46.4px] w-fit text-left [--title-scale:1.45] sm:[--title-scale:1.16]"
+            >
+              <span className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
+                <span className="scale-[calc(1/var(--title-scale))]">{sidebar.title}</span>
+              </span>
+            </h2>
+            <button type="button" aria-label="Close navigation" onClick={onClose} className="muzio-settings-button flex h-[46.4px] w-[46.4px] shrink-0 items-center justify-center">
+              <CloseGlyph aria-hidden className="h-[21.1px] w-[21.1px]" />
+            </button>
+          </div>
           <div className="flex h-12 shrink-0 items-center gap-2 self-end">
             {canCreatePlaylist && (
               <button
@@ -620,39 +628,47 @@ function SidebarDrawer({
   );
 }
 
-const MENU_SWIPE_BLOCK_SELECTOR =
-  'input,select,textarea,video,[data-no-menu-swipe],[data-allow-scroll]';
+const LIBRARY_SWIPE_BLOCK_SELECTOR =
+  'input,select,textarea,video,audio,[role="slider"],[contenteditable="true"],[data-no-menu-swipe],[data-allow-scroll],[data-row-action],[data-row-options-shell]';
 
-function useLeftToRightMenuSwipe({
+function useLibrarySwipe({
   enabled,
-  onOpen,
+  onSwipe,
 }: {
   enabled: boolean;
-  onOpen: () => void;
+  onSwipe: (direction: -1 | 1) => void;
 }) {
   const swipeRef = useRef<{ startX: number; startY: number } | null>(null);
+  const suppressClickUntilRef = useRef(0);
   const beginSwipe = (clientX: number, clientY: number, target: EventTarget | null) => {
+    swipeRef.current = null;
+    suppressClickUntilRef.current = 0;
     if (!enabled) return;
-    if (target instanceof Element && target.closest(MENU_SWIPE_BLOCK_SELECTOR)) {
-      return;
+    if (target instanceof Element) {
+      if (target.closest(LIBRARY_SWIPE_BLOCK_SELECTOR)) return;
+      const control = target.closest('button,a,[role="button"]');
+      // Row primary actions are the library's swipe surface; auxiliary actions stay isolated.
+      if (control && !control.matches('[data-testid="library-item"] button:not([data-row-action])')) return;
     }
     swipeRef.current = { startX: clientX, startY: clientY };
   };
-  const moveSwipe = (clientX: number, clientY: number): 'none' | 'horizontal' | 'opened' => {
+  const moveSwipe = (clientX: number, clientY: number): 'none' | 'horizontal' | 'navigated' => {
     const swipe = swipeRef.current;
-    if (swipe === null) return 'none';
+    if (!enabled || swipe === null) return 'none';
     const dx = clientX - swipe.startX;
     const dy = clientY - swipe.startY;
     const absDy = Math.abs(dy);
-    if (dx > 52 && dx > absDy * 1.2) {
+    const absDx = Math.abs(dx);
+    if (absDx > 52 && absDx > absDy * 1.2) {
       swipeRef.current = null;
-      onOpen();
-      return 'opened';
+      suppressClickUntilRef.current = Date.now() + 800;
+      onSwipe(dx < 0 ? 1 : -1);
+      return 'navigated';
     }
-    if (absDy > 36 && absDy > dx) {
+    if (absDy > 36 && absDy > absDx) {
       swipeRef.current = null;
     }
-    if (dx > 18 && dx > absDy * 1.2) {
+    if (absDx > 18 && absDx > absDy * 1.2) {
       return 'horizontal';
     }
     return 'none';
@@ -662,11 +678,17 @@ function useLeftToRightMenuSwipe({
   };
 
   return {
+    onClickCapture(event: ReactMouseEvent<HTMLElement>) {
+      if (event.detail === 0 || Date.now() > suppressClickUntilRef.current) return;
+      suppressClickUntilRef.current = 0;
+      event.preventDefault();
+      event.stopPropagation();
+    },
     onPointerDown(event: ReactPointerEvent<HTMLElement>) {
+      suppressClickUntilRef.current = 0;
       if (!enabled) return;
       if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
       beginSwipe(event.clientX, event.clientY, event.target);
-      event.currentTarget.setPointerCapture?.(event.pointerId);
     },
     onPointerMove(event: ReactPointerEvent<HTMLElement>) {
       moveSwipe(event.clientX, event.clientY);
@@ -675,12 +697,18 @@ function useLeftToRightMenuSwipe({
     onPointerCancel: endSwipe,
     onTouchStart(event: ReactTouchEvent<HTMLElement>) {
       const touch = event.touches[0];
-      if (!touch) return;
+      if (event.touches.length !== 1 || !touch) {
+        endSwipe();
+        return;
+      }
       beginSwipe(touch.clientX, touch.clientY, event.target);
     },
     onTouchMove(event: ReactTouchEvent<HTMLElement>) {
       const touch = event.touches[0];
-      if (!touch) return;
+      if (event.touches.length !== 1 || !touch) {
+        endSwipe();
+        return;
+      }
       const swipeState = moveSwipe(touch.clientX, touch.clientY);
       if (swipeState !== 'none' && event.cancelable) {
         event.preventDefault();

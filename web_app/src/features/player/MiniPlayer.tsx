@@ -13,8 +13,10 @@ import { selectActiveState, type SleepTimerState } from './playerStore';
 import { describePlaybackStatus } from './playerMessage';
 import { usePlaybackNetworkHint } from './playbackNetworkStatus';
 import { formatTime } from './formatTime';
+import { useAndroidBack } from '../../core/platform/androidShell';
 import { useDocumentHorizontalDrag } from './controls/useDocumentHorizontalDrag';
 import {
+  CloseGlyph,
   LikeGlyph,
   MusicGlyph,
   PauseGlyph,
@@ -40,6 +42,7 @@ export function MiniPlayer() {
   const state = selectActiveState(snapshot);
   const [timerOpen, setTimerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
+  useAndroidBack(timerOpen, () => setTimerOpen(false), 50);
   const [scrubValueSec, setScrubValueSec] = useState<number | null>(null);
   const [scrubPreviewSec, setScrubPreviewSec] = useState<number | null>(null);
   const [customMinutes, setCustomMinutes] = useState('45');
@@ -220,7 +223,7 @@ export function MiniPlayer() {
       data-no-menu-swipe
       className="fixed inset-x-0 bottom-0 z-40 px-3 pb-3 sm:px-6"
     >
-      <div data-glass className="muzio-dock mx-auto grid max-w-4xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-full border border-zinc-200/35 bg-surface/88 px-4 py-3 shadow-2xl shadow-black/10 backdrop-blur-xl dark:border-white/[0.045] dark:shadow-black/35 max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:rounded-2xl">
+      <div data-glass className="muzio-dock mx-auto grid max-w-4xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 max-sm:gap-1.5 rounded-full border border-zinc-200/35 bg-surface/88 px-4 py-3 max-sm:px-2.5 shadow-2xl shadow-black/10 backdrop-blur-xl dark:border-white/[0.045] dark:shadow-black/35 max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:rounded-2xl">
         <div className="flex items-center gap-1.5 max-sm:hidden">
           <MiniIconButton
             label="Shuffle"
@@ -274,11 +277,11 @@ export function MiniPlayer() {
           </MiniIconButton>
         </div>
 
-        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 max-sm:gap-2">
           <button
             type="button"
             aria-label="Open full player"
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-zinc-200/80 text-lg text-muted shadow-sm hover:ring-2 hover:ring-accent/55 dark:bg-white/[0.08]"
+            className="flex h-12 w-12 max-sm:h-10 max-sm:w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-200/80 text-lg text-muted shadow-sm hover:ring-2 hover:ring-accent/55 dark:bg-white/[0.08]"
             data-testid="open-full-player"
             onClick={open}
           >
@@ -297,8 +300,8 @@ export function MiniPlayer() {
             )}
           </button>
           <span className="min-w-0" data-testid="mini-player-details">
-            <span className="block truncate text-sm font-semibold text-zinc-950 dark:text-foreground">
-              {state.source.name}
+            <span data-testid="mini-player-title" className="block truncate text-sm max-sm:text-[15px] max-sm:leading-5 font-semibold text-zinc-950 dark:text-foreground">
+              {miniPlayerTitle(state.source)}
             </span>
             <span
               data-testid="mini-player-time"
@@ -316,7 +319,7 @@ export function MiniPlayer() {
               aria-valuenow={displayedPositionValue}
               aria-disabled={!durationIsKnown}
               aria-label="Mini player seek"
-              className={`mt-1 flex h-2.5 w-full touch-none items-center ${
+              className={`mt-1 flex h-2.5 max-sm:h-3 w-full touch-none items-center ${
                 durationIsKnown ? '' : 'opacity-50'
               }`}
               onMouseDown={(event) => beginScrubbing(event.clientX)}
@@ -355,7 +358,7 @@ export function MiniPlayer() {
                 if (touch) beginScrubbing(touch.clientX);
               }}
             >
-              <span className="relative block h-1 w-full rounded-full bg-zinc-300/70 dark:bg-white/12">
+              <span className="relative block h-1 max-sm:h-1.5 w-full rounded-full bg-zinc-300/70 dark:bg-white/12">
                 <span
                   className="absolute left-0 top-0 h-full rounded-full bg-white/80 dark:bg-white"
                   style={{
@@ -399,7 +402,7 @@ export function MiniPlayer() {
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div data-testid="mini-actions" className="flex items-center gap-1.5 max-sm:gap-0">
           {banner !== '' && (
             <span
               data-testid="mini-status"
@@ -416,6 +419,7 @@ export function MiniPlayer() {
               {timerLabel}
             </span>
           )}
+          <span className="hidden sm:contents">
           <MiniIconButton
             label={liked ? 'Unlike current track' : 'Like current track'}
             active={liked}
@@ -426,15 +430,16 @@ export function MiniPlayer() {
           >
             <LikeGlyph liked={liked} className="h-6 w-6" />
           </MiniIconButton>
+          </span>
           <div className="relative" ref={timerShellRef}>
             <button
               type="button"
               aria-label="Sleep timer"
               aria-expanded={timerOpen}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-zinc-800 dark:text-white hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
+              className="inline-flex h-10 w-10 max-sm:w-8 items-center justify-center rounded-full text-zinc-800 dark:text-white hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
               onClick={() => setTimerOpen((open) => !open)}
             >
-              <SleepTimerGlyph className="h-7 w-7" />
+              <SleepTimerGlyph className="h-7 w-7 max-sm:h-5 max-sm:w-5" />
             </button>
             {timerOpen && (
               <div
@@ -451,6 +456,7 @@ export function MiniPlayer() {
                   <MiniTimerPopover
                     customMinutes={customMinutes}
                     sleepTimer={sleepTimer}
+                    onClose={() => setTimerOpen(false)}
                     onCancel={snapshot.cancelSleepTimer}
                     onCustomMinutes={setCustomMinutes}
                     onStart={snapshot.startSleepTimer}
@@ -464,24 +470,30 @@ export function MiniPlayer() {
             aria-label="Open queue"
             aria-expanded={queueOpen}
             data-testid="mini-queue-button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-xl leading-none text-zinc-800 dark:text-white hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
+            className="inline-flex h-10 w-10 max-sm:w-8 items-center justify-center rounded-full text-xl leading-none text-zinc-800 dark:text-white hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
             onClick={() => setQueueOpen(true)}
           >
-            <QueueGlyph className="h-6 w-6" />
+            <QueueGlyph className="h-6 w-6 max-sm:h-5 max-sm:w-5" />
+          </button>
+          <button type="button" data-testid="mini-next-mobile" aria-label="Next"
+            disabled={!canPlayNext} onClick={() => { void snapshot.playNextQueueItem(); }}
+            className="inline-flex h-10 w-8 items-center justify-center rounded-full text-zinc-800 dark:text-white disabled:opacity-40 sm:hidden">
+            <SkipGlyph direction="forward" className="h-5 w-5" />
           </button>
           <button
             type="button"
             data-status={state.status.kind}
             aria-label={playLabel}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-950 hover:bg-zinc-200/60 dark:text-white dark:hover:bg-white/[0.06] sm:hidden"
+            data-testid="mini-play-mobile"
+            className="inline-flex h-10 w-8 items-center justify-center rounded-xl text-zinc-950 hover:bg-zinc-200/60 dark:text-white dark:hover:bg-white/[0.06] sm:hidden"
             onClick={() => {
               void togglePlayPause();
             }}
           >
             {isInFlight ? (
-              <PauseGlyph className="h-7 w-7" />
+              <PauseGlyph className="h-6 w-6" />
             ) : (
-              <PlayGlyph className="h-7 w-7" />
+              <PlayGlyph className="h-6 w-6" />
             )}
           </button>
         </div>
@@ -544,12 +556,14 @@ function MiniTimerPopover({
   customMinutes,
   sleepTimer,
   onCancel,
+  onClose,
   onCustomMinutes,
   onStart,
 }: {
   customMinutes: string;
   sleepTimer: SleepTimerState;
   onCancel: () => void;
+  onClose: () => void;
   onCustomMinutes: (value: string) => void;
   onStart: (minutes: number) => void;
 }) {
@@ -573,6 +587,9 @@ function MiniTimerPopover({
               ? 'Paused'
               : 'Off'}
         </span>
+        <button type="button" aria-label="Close sleep timer" onClick={onClose} className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/10">
+          <CloseGlyph className="h-5 w-5" />
+        </button>
       </div>
       <div className="flex flex-wrap gap-2">
         {[15, 30, 60].map((minutes) => (
@@ -613,4 +630,19 @@ function MiniTimerPopover({
       </div>
     </section>
   );
+}
+
+/** Prefer actual title metadata; strip only a known artist prefix, never guess
+ * arbitrary hyphens in a title or filename. */
+function miniPlayerTitle(source: { title?: string; artist?: string; name: string }) {
+  const title = source.title?.trim() || source.name;
+  const artist = source.artist?.trim();
+  if (!artist) return title;
+  for (const separator of [' - ', ' – ', ' — ']) {
+    const prefix = artist + separator;
+    if (title.toLocaleLowerCase().startsWith(prefix.toLocaleLowerCase())) {
+      return title.slice(prefix.length).trim() || title;
+    }
+  }
+  return title;
 }

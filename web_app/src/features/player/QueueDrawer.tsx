@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { ArrowLeft } from '@phosphor-icons/react';
 
 import type { PlaybackSource } from '../../core/playback/source/source';
-import { PlayGlyph } from '../../core/ui/AppIcons';
+import { CloseGlyph, PlayGlyph } from '../../core/ui/AppIcons';
 import { currentQueueTrack, queueTrackKey } from './musicQueue';
 import { usePlayerStore } from './PlayerContext';
 
@@ -148,16 +148,14 @@ export function QueueDrawer({
                 <span className="scale-[calc(1/var(--title-scale))]">Queue</span>
               </span>
             </h2>
-            {onBack && (
-              <button
-                type="button"
-                aria-label="Back to sidebar"
-                className="muzio-settings-button h-[46.4px] w-[46.4px] shrink-0 flex items-center justify-center"
-                onClick={onBack}
-              >
-                <ArrowLeft className="h-[21.1px] w-[21.1px]" />
-              </button>
-            )}
+            <button
+              type="button"
+              aria-label={onBack ? 'Back to sidebar' : 'Close queue'}
+              className="muzio-settings-button h-[46.4px] w-[46.4px] shrink-0 flex items-center justify-center"
+              onClick={onBack ?? onClose}
+            >
+              {onBack ? <ArrowLeft aria-hidden className="h-[21.1px] w-[21.1px]" /> : <CloseGlyph aria-hidden className="h-[21.1px] w-[21.1px]" />}
+            </button>
           </div>
           <div className="flex h-12 w-full min-w-0 items-center justify-between gap-2">
             <p className="min-w-0 truncate text-sm text-muted">

@@ -11,8 +11,8 @@ android {
         applicationId = "com.twkim.videiomusic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.2.0-web-dev"
+        versionCode = 6
+        versionName = "1.2.1-web-dev"
     }
 
     buildFeatures {

@@ -165,15 +165,15 @@ export function VideoWatchScreen({
         >
           <section
             data-testid="video-primary-column"
-            className={`min-w-0 ${theaterMode ? 'lg:col-span-full' : ''}`}
+            className={`contents min-w-0 lg:block ${theaterMode ? 'lg:col-span-full' : ''}`}
             ref={watchGesture.setPrimaryHost}
           >
             <div
               data-testid="video-viewport-shell"
-              className="relative"
+              className="sticky top-[var(--video-watch-top)] z-20 self-start bg-black lg:relative lg:top-auto lg:z-auto"
             >
               <VideoViewport
-                className={`aspect-video w-full max-h-[max(0px,calc(100svh-var(--video-summary-height)-var(--video-watch-top)-1rem))] touch-none overflow-hidden rounded-none bg-black ${
+                className={`aspect-video w-full max-h-[calc(100svh-6rem)] lg:max-h-[max(0px,calc(100svh-var(--video-summary-height)-var(--video-watch-top)-1rem))] touch-none overflow-hidden rounded-none bg-black ${
                   theaterMode
                     ? ''
                     : 'sm:rounded-[var(--video-watch-radius)]'
@@ -183,7 +183,7 @@ export function VideoWatchScreen({
             </div>
             <section
               data-testid="video-info"
-              className={`px-4 ${theaterMode ? 'sm:px-8' : 'sm:px-0'}`}
+              className={`px-4 ${theaterMode ? 'sm:px-8' : '-mt-5 sm:px-0 lg:mt-0'}`}
               aria-label="Video information"
             >
               <div ref={summaryRef} data-testid="video-summary" className="pt-4">
@@ -956,8 +956,15 @@ function useVideoWatchGesture({
           !start.allowFullscreen &&
           !isLargeViewport() &&
           deltaY < 0;
+        // Let the browser own an upward info drag from its first movement.
+        // Mixing manual scrollTop writes with native panning loses the initial
+        // swipe when WebView cancels pointer events to begin scrolling.
+        if (isPrimaryInfoScroll && Math.abs(deltaY) > deltaX * 1.2) {
+          startRef.current = null;
+          setOffset(0);
+          return;
+        }
         const shouldOwnVerticalGesture =
-          isPrimaryInfoScroll ||
           deltaY > 0 ||
           (start.allowFullscreen && deltaY < 0);
         if (

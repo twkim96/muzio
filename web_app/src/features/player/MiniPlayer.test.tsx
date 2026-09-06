@@ -354,7 +354,7 @@ describe('MiniPlayer', () => {
     expect(screen.getByTestId('play-pause')).toBeInTheDocument();
   });
 
-  test('shows the mini action rail without volume or mobile next controls', async () => {
+  test('orders mobile timer, queue, next and play actions without volume', async () => {
     const store = createPlayerStore();
     store.getState().attachElement('audio', fakeElement());
     await store.getState().playSource(audioSource);
@@ -365,10 +365,15 @@ describe('MiniPlayer', () => {
     const queue = screen.getByTestId('mini-queue-button');
     expect(like.compareDocumentPosition(timer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(timer.compareDocumentPosition(queue) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const next = screen.getByTestId('mini-next-mobile');
+    const play = screen.getByTestId('mini-play-mobile');
+    expect(queue.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(next.compareDocumentPosition(play) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(like.parentElement).toHaveClass('hidden', 'sm:contents');
     expect(screen.queryByLabelText('Volume')).not.toBeInTheDocument();
     expect(screen.queryByTestId('mini-volume-control')).not.toBeInTheDocument();
     expect(screen.queryByTestId('mini-volume-popover')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('mini-next-mobile')).not.toBeInTheDocument();
+    expect(screen.getByTestId('mini-next-mobile')).toHaveClass('sm:hidden');
     expect(screen.getAllByRole('button', { name: 'Pause' })).toHaveLength(2);
   });
 
@@ -423,7 +428,7 @@ describe('MiniPlayer', () => {
     );
   });
 
-  test('keeps desktop queue transport while removing the mobile next action', async () => {
+  test('keeps desktop transport and advances the queue from mobile next', async () => {
     const store = createPlayerStore();
     store.getState().attachElement('audio', fakeElement());
     await store.getState().playMusicQueue(
@@ -440,8 +445,10 @@ describe('MiniPlayer', () => {
     );
     renderWithStore(store);
 
-    expect(screen.getByLabelText('Next')).toBeInTheDocument();
-    expect(screen.queryByTestId('mini-next-mobile')).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText('Next')).toHaveLength(2);
+    await act(async () => { fireEvent.click(screen.getByTestId('mini-next-mobile')); });
+    expect(store.getState().musicQueueIndex).toBe(1);
+    expect(screen.getByTestId('mini-next-mobile')).toBeDisabled();
   });
 
   test('opens the full player only from the cover button', async () => {
@@ -654,11 +661,11 @@ describe('MiniPlayer', () => {
     renderWithStore(store);
 
     expect(screen.getByLabelText('Previous')).toHaveClass('dark:text-white');
-    expect(screen.getByLabelText('Next')).toHaveClass('dark:text-white');
+    expect(screen.getAllByLabelText('Next')[0]).toHaveClass('dark:text-white');
     expect(screen.getByLabelText('Previous').querySelector('svg')).toHaveClass(
       'h-6',
     );
-    expect(screen.getByLabelText('Next').querySelector('svg')).toHaveClass(
+    expect(screen.getAllByLabelText('Next')[0].querySelector('svg')).toHaveClass(
       'h-6',
     );
 
@@ -678,10 +685,34 @@ describe('MiniPlayer', () => {
       'text-[0.38em]',
     );
 
-    fireEvent.click(screen.getByLabelText('Next'));
+    fireEvent.click(screen.getAllByLabelText('Next')[0]);
     expect(store.getState().musicQueueIndex).toBe(1);
 
     fireEvent.click(screen.getByLabelText('Previous'));
     expect(store.getState().musicQueueIndex).toBe(0);
+  });
+});
+
+
+describe('mini title presentation', () => {
+  test.each([
+    [{ title: 'Actual song', artist: 'Artist', name: 'Artist - Actual song.mp3' }, 'Actual song'],
+    [{ title: 'Artist - Actual song', artist: 'Artist', name: 'file.mp3' }, 'Actual song'],
+    [{ title: 'Part one - Part two', artist: 'Artist', name: 'file.mp3' }, 'Part one - Part two'],
+  ])('uses title metadata without a known artist prefix', (metadata, expected) => {
+    const store = createPlayerStore();
+    store.getState().setSessionForTests('audio', fakeSession({ status: { kind: 'paused' }, source: { ...audioSource, ...metadata }, positionSec: 0, durationSec: 100 }));
+    renderWithStore(store);
+    expect(screen.getByTestId('mini-player-title')).toHaveTextContent(expected);
+  });
+  test('closes a primary timer panel without cancelling its timer', () => {
+    const store = createPlayerStore();
+    store.getState().setSessionForTests('audio', fakeSession({ status: { kind: 'paused' }, source: audioSource, positionSec: 0, durationSec: 100 }));
+    renderWithStore(store);
+    fireEvent.click(screen.getByRole('button', { name: 'Sleep timer' }));
+    fireEvent.click(screen.getByRole('button', { name: '15m' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close sleep timer' }));
+    expect(screen.queryByTestId('mini-timer-popover')).not.toBeInTheDocument();
+    expect(store.getState().sleepTimer.kind).toBe('running');
   });
 });

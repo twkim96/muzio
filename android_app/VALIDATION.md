@@ -49,3 +49,27 @@ device acceptance. Migration safety is covered by unit tests, not by modifying a
 personal installed app. Native video/PiP, local playback, widgets, richer system
 notifications, full process-death recovery and continuous background activity
 history reconciliation are outside this initial migration.
+
+## Mobile UI follow-up — 1.2.1-web-dev / versionCode 6
+
+- Full web suite passed: 54 files / 584 tests. After the final row-swipe
+  refinement, the affected App suite passed 28 tests. Final APK assembly passed,
+  including TypeScript and the embedded Vite build. Native code was unchanged.
+- The same isolated Android emulator loaded bundled `assets/index-DLn6vJBi.js`.
+  A first upward touch drag starting on video information moved the page from
+  scrollTop 0 to 133.71px. Video top remained 0px while title top moved from
+  247.86px to 114.14px; only the video stays sticky.
+- Actual touch swipes over music/video rows switched Music → Video → Image
+  and back without starting playback or opening navigation.
+- At 412 × 815 CSS px, the mini title/progress had 185px width with no horizontal
+  overflow. Visible actions were timer, queue, next, pause; button widths were
+  32px and icons 20/20/20/24px. The primary Queue panel showed its close action.
+- Updated the connected Samsung SM-S936N using `adb install -r`: Success.
+  Package inspection confirmed versionCode 6 / 1.2.1-web-dev, and Activity launch
+  and running process were verified. This update did not uninstall the app.
+  Gesture behavior was checked on the emulator; personal-library touch feel on
+  the Samsung device remains user acceptance.
+
+Artifact: `dist/android-shared-web-ui/Muzio-1.2.1-web-dev.apk`
+
+SHA-256: `03834f3f93339756abb1c004bc0f8283e716ae155e1694583710e5d3118433ec`

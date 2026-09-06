@@ -530,25 +530,68 @@ describe('App routes', () => {
     expect(screen.getByTestId('mobile-navigation')).toBeInTheDocument();
   });
 
-  test('opens mobile navigation from a horizontal swipe on library content', async () => {
+  test('switches library tabs with horizontal swipes, clamps endpoints and ignores vertical scrolling', () => {
     renderApp('/library/music');
-
-    await waitFor(() => {
-      expect(screen.getByTestId('app-main')).toBeInTheDocument();
-    });
-
     const main = screen.getByTestId('app-main');
-    fireEvent.touchStart(main, {
-      touches: [{ clientX: 240, clientY: 260 }],
-    });
-    fireEvent.touchMove(main, {
-      touches: [{ clientX: 330, clientY: 270 }],
-    });
+    const swipe = (dx: number, dy = 5) => {
+      fireEvent.touchStart(main, { touches: [{ clientX: 200, clientY: 200 }] });
+      fireEvent.touchMove(main, { touches: [{ clientX: 200 + dx, clientY: 200 + dy }] });
+      fireEvent.touchEnd(main);
+    };
+    const expectTab = (name: string) => {
+      expect(within(screen.getByRole('navigation', { name: 'Primary' })).getByRole('link', { name })).toHaveAttribute('aria-current', 'page');
+      expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
+    };
+    swipe(90); expectTab('Music');
+    swipe(-90); expectTab('Video');
+    swipe(-90); expectTab('Image');
+    swipe(-90); expectTab('Image');
+    swipe(90); expectTab('Video');
+    swipe(90); expectTab('Music');
+    swipe(-10, 90); expectTab('Music');
+    fireEvent.touchStart(main, { touches: [{ clientX: 200, clientY: 200 }] });
+    fireEvent.touchMove(main, { touches: [{ clientX: 190, clientY: 280 }] });
+    fireEvent.touchMove(main, { touches: [{ clientX: 50, clientY: 280 }] });
     fireEvent.touchEnd(main);
+    expectTab('Music');
+  });
 
-    await waitFor(() => {
-      expect(screen.getByTestId('mobile-navigation')).toBeInTheDocument();
-    });
+  test('swipes from actual music and video row titles without triggering playback', async () => {
+    const { playerStore } = renderApp('/library/music');
+    const swipe = (target: Element, dx: number, dy = 0) => {
+      fireEvent.touchStart(target, { touches: [{ clientX: 200, clientY: 200 }] });
+      fireEvent.touchMove(target, { touches: [{ clientX: 200 + dx, clientY: 200 + dy }] });
+      fireEvent.touchEnd(target);
+    };
+    const music = await screen.findByLabelText('Play song.mp3');
+    // Endpoint swipe still consumes its synthetic click rather than playing the row.
+    swipe(music, 90);
+    fireEvent.click(music, { detail: 1 });
+    expect(playerStore.getState().audio.source).toBeNull();
+    swipe(music.querySelector('p')!, -90);
+    const video = await screen.findByLabelText('Play newer.mp4');
+    expect(screen.getByRole('link', { name: 'Video' })).toHaveAttribute('aria-current', 'page');
+    swipe(video.querySelector('p')!, 90);
+    const musicAgain = await screen.findByLabelText('Play song.mp3');
+    expect(screen.getByRole('link', { name: 'Music' })).toHaveAttribute('aria-current', 'page');
+    expect(playerStore.getState().video.source).toBeNull();
+    swipe(musicAgain, -10, 90);
+    expect(screen.getByRole('link', { name: 'Music' })).toHaveAttribute('aria-current', 'page');
+    // A new short tap retains the row's ordinary primary action.
+    fireEvent.touchStart(musicAgain, { touches: [{ clientX: 200, clientY: 200 }] });
+    fireEvent.touchEnd(musicAgain);
+    fireEvent.click(musicAgain, { detail: 1 });
+    expect(playerStore.getState().audio.source?.mediaId).toBe('a1');
+  });
+
+  test('touch gestures on library controls do not switch library tabs', async () => {
+    renderApp('/library/music');
+    const button = await screen.findByLabelText('Like song.mp3');
+    fireEvent.touchStart(button, { touches: [{ clientX: 250, clientY: 250 }] });
+    fireEvent.touchMove(button, { touches: [{ clientX: 100, clientY: 250 }] });
+    fireEvent.touchEnd(button);
+    expect(within(screen.getByRole('navigation', { name: 'Primary' })).getByRole('link', { name: 'Music' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
   });
 
   test('does not open mobile navigation from a mini player swipe', async () => {
@@ -601,7 +644,7 @@ describe('App routes', () => {
     expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
   });
 
-  test('opens settings mobile navigation from a horizontal swipe', async () => {
+  test('settings horizontal swipes do not open navigation', async () => {
     renderApp('/settings');
 
     await waitFor(() => {
@@ -617,13 +660,7 @@ describe('App routes', () => {
     });
     fireEvent.touchEnd(main);
 
-    await waitFor(() => {
-      expect(screen.getByTestId('mobile-navigation')).toBeInTheDocument();
-    });
-    const navigation = screen.getByTestId('mobile-navigation');
-    expect(within(navigation).getByText('Backend Status')).toBeInTheDocument();
-    expect(within(navigation).getByTestId('menu-settings-button')).toBeInTheDocument();
-    expect(within(navigation).getByTestId('menu-queue-button')).toBeInTheDocument();
+    expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
   });
 
   test('video mobile menu exposes the recently watching playlist', async () => {

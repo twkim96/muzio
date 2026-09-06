@@ -1157,7 +1157,7 @@ describe('FullPlayerScreen', () => {
     expect(layout).not.toHaveClass('max-w-[var(--video-watch-max-width)]');
     expect(primaryColumn).toHaveClass('lg:col-span-full');
     expect(viewport).toHaveClass('aspect-video', 'w-full',
-      'max-h-[max(0px,calc(100svh-var(--video-summary-height)-var(--video-watch-top)-1rem))]');
+      'lg:max-h-[max(0px,calc(100svh-var(--video-summary-height)-var(--video-watch-top)-1rem))]');
     expect(viewport).not.toHaveClass('h-[100svh]');
     expect(mount).toHaveClass('aspect-auto', '[&_video]:h-full', '[&_video]:object-contain');
     expect(mount).toHaveStyle({ display: 'flex', border: '0px' });
@@ -1192,7 +1192,7 @@ describe('FullPlayerScreen', () => {
     expect(screen.queryByRole('button', { name: 'Load more videos' })).not.toBeInTheDocument();
   });
 
-  test('video title upward swipe scrolls the whole mobile watch page', async () => {
+  test.each(['video-player-title', 'video-info'])('mobile %s leaves the first upward drag and reversal to native scrolling', async (targetId) => {
     const originalInnerWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
@@ -1224,17 +1224,30 @@ describe('FullPlayerScreen', () => {
       const pageScrollport = screen.getByTestId('video-watch-layout');
       expect(pageScrollport.scrollTop).toBe(0);
 
-      fireEvent.touchStart(screen.getByTestId('video-player-title'), {
+      const target = screen.getByTestId(targetId);
+      fireEvent.touchStart(target, {
         touches: [{ clientX: 120, clientY: 320 }],
       });
-      fireEvent.touchMove(screen.getByTestId('video-player-title'), {
-        touches: [{ clientX: 122, clientY: 220 }],
-      });
-      fireEvent.touchEnd(screen.getByTestId('video-player-title'), {
-        changedTouches: [{ clientX: 122, clientY: 220 }],
+      // Include the small first move, before the browser's pan threshold,
+      // then a full upward drag and a reversal past the starting point.
+      for (const clientY of [317, 220, 520]) {
+        const move = new Event('touchmove', { bubbles: true, cancelable: true });
+        Object.defineProperty(move, 'touches', {
+          value: [{ clientX: 120, clientY }],
+        });
+        fireEvent(target, move);
+        expect(move.defaultPrevented).toBe(false);
+      }
+      fireEvent.touchEnd(target, {
+        changedTouches: [{ clientX: 120, clientY: 520 }],
       });
 
-      expect(pageScrollport.scrollTop).toBe(100);
+      // jsdom does not pan; JS must leave scrollTop untouched and must not
+      // turn the native scroll's reversal into a dismiss animation.
+      expect(pageScrollport.scrollTop).toBe(0);
+      expect(screen.getByTestId('player-motion-layer')).toHaveStyle({
+        transform: 'translateY(0px)',
+      });
       expect(screen.getByTestId('location')).toHaveTextContent('/player');
     } finally {
       Object.defineProperty(window, 'innerWidth', {

@@ -44,6 +44,14 @@ describe('QueueDrawer', () => {
     expect(screen.queryByTestId('queue-drawer')).not.toBeInTheDocument();
   });
 
+  test('provides a close action when opened directly', () => {
+    const store = createPlayerStore({ activityRepository: null, likedRepository: null });
+    const onClose = vi.fn();
+    render(<PlayerProvider store={store}><QueueDrawer open onClose={onClose} /></PlayerProvider>);
+    fireEvent.click(screen.getByRole('button', { name: 'Close queue' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   test('returns to the sidebar through the optional back action', () => {
     const store = createPlayerStore({ activityRepository: null, likedRepository: null });
     const onBack = vi.fn();
@@ -54,6 +62,7 @@ describe('QueueDrawer', () => {
       </PlayerProvider>,
     );
 
+    expect(screen.queryByRole('button', { name: 'Close queue' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Back to sidebar' }));
     expect(onBack).toHaveBeenCalledTimes(1);
     expect(onClose).not.toHaveBeenCalled();
@@ -74,11 +83,11 @@ describe('QueueDrawer', () => {
 
     expect(screen.getByRole('dialog', { name: 'Queue' })).toHaveFocus();
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(screen.getByTestId('clear-music-queue')).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Close queue' })).toHaveFocus();
     fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
     expect(screen.getByRole('button', { name: 'Play Track 1' })).toHaveFocus();
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(screen.getByTestId('clear-music-queue')).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Close queue' })).toHaveFocus();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
     fireEvent.pointerDown(screen.getByTestId('queue-drawer-backdrop'));
