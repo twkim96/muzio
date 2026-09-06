@@ -13,6 +13,15 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -28,9 +37,21 @@ class LocalLibraryManager(context: Context) {
 
     suspend fun list(): JSONObject = withContext(Dispatchers.IO) { mutations.withLock {
         val data = read()
+        if (!data.optBoolean("incrementalScanMigrated", false)) {
+            val existingItems = data.getJSONArray("items")
+            val populatedRoots = (0 until existingItems.length()).map { existingItems.getJSONObject(it).getString("storageId") }.toSet()
+            val legacyRoots = data.getJSONArray("roots")
+            for (i in 0 until legacyRoots.length()) {
+                val root = legacyRoots.getJSONObject(i)
+                if (root.getString("id") !in populatedRoots && !root.has("needsScan")) root.put("needsScan", true)
+            }
+            data.put("incrementalScanMigrated", true)
+            save(data)
+        }
         validateRoots(data)
-        save(data)
-        publicSnapshot(data)
+        val snapshot = publicSnapshot(data)
+        startEnrichment()
+        snapshot
     } }
 
     suspend fun add(uri: Uri): JSONObject = withContext(Dispatchers.IO) { mutations.withLock {
@@ -43,22 +64,30 @@ class LocalLibraryManager(context: Context) {
         val existing = (0 until roots.length()).map { roots.getJSONObject(it) }.firstOrNull { it.getString("id") == id }
         if (existing == null) {
             roots.put(JSONObject().put("id", id).put("uri", uri.toString())
-                .put("name", "Music folder").put("available", true).put("ownsGrant", !alreadyOwned))
+                .put("name", "Music folder").put("available", true).put("ownsGrant", !alreadyOwned).put("needsScan", true))
             // Persist the grant registration before potentially slow provider scanning.
             save(data)
         } else if (!alreadyOwned) {
             existing.put("ownsGrant", true)
             save(data)
         }
-        scan(data)
+        val root = (0 until roots.length()).map { roots.getJSONObject(it) }.first { it.getString("id") == id }
+        root.put("needsScan", true)
         save(data)
+        scan(data, setOf(id))
+        save(data)
+        startEnrichment()
         publicSnapshot(data)
     } }
 
     suspend fun refresh(): JSONObject = withContext(Dispatchers.IO) { mutations.withLock {
         val data = read()
+        val roots = data.getJSONArray("roots")
+        for (i in 0 until roots.length()) roots.getJSONObject(i).put("needsScan", true)
+        save(data)
         scan(data)
         save(data)
+        startEnrichment()
         publicSnapshot(data)
     } }
 
@@ -98,25 +127,32 @@ class LocalLibraryManager(context: Context) {
     } }
 
     /** WebView calls this on its request worker; paths are derived solely from registry records. */
-    fun openArtwork(id: String): java.io.InputStream? = runBlocking(Dispatchers.IO) { mutations.withLock {
+    fun openArtwork(id: String): java.io.InputStream? = runBlocking(Dispatchers.IO) {
         LocalLibraryPolicy.requireId(id)
-        val item = authorizedItems()[id] ?: return@withLock null
-        val file = artworkFile(item)
-        if (!file.exists()) extractArtwork(item)
-        file.takeIf { it.isFile }?.inputStream()
-    } }
+        val item = mutations.withLock { authorizedItems()[id] } ?: return@runBlocking null
+        artworkExtraction.withLock { if (!artworkFile(item).exists()) extractArtwork(item) }
+        mutations.withLock {
+            val current = authorizedItems()[id] ?: return@withLock null
+            if (artworkKey(current) != artworkKey(item)) return@withLock null
+            artworkFile(current).takeIf { it.isFile }?.inputStream()
+        }
+    }
 
     /** Extract only the selected item; large queues never trigger a startup metadata rescan. */
-    suspend fun artworkUris(ids: Set<String>, selectedId: String?): Map<String, Uri> = withContext(Dispatchers.IO) { mutations.withLock {
-        val authorized = authorizedItems()
-        ids.mapNotNull { id ->
-            LocalLibraryPolicy.requireId(id)
-            val item = authorized[id] ?: return@mapNotNull null
-            val file = artworkFile(item)
-            if (id == selectedId && !file.exists()) extractArtwork(item)
-            file.takeIf { it.isFile }?.let { id to Uri.fromFile(it) }
-        }.toMap()
-    } }
+    suspend fun artworkUris(ids: Set<String>, selectedId: String?): Map<String, Uri> = withContext(Dispatchers.IO) {
+        ids.forEach(LocalLibraryPolicy::requireId)
+        val selected = mutations.withLock { selectedId?.takeIf { it in ids }?.let { authorizedItems()[it] } }
+        if (selected != null) artworkExtraction.withLock {
+            if (!artworkFile(selected).exists()) extractArtwork(selected)
+        }
+        mutations.withLock {
+            val authorized = authorizedItems()
+            ids.mapNotNull { id ->
+                val item = authorized[id] ?: return@mapNotNull null
+                artworkFile(item).takeIf { it.isFile }?.let { id to Uri.fromFile(it) }
+            }.toMap()
+        }
+    }
 
     private fun authorizedItems(): Map<String, JSONObject> {
         val data = read()
@@ -140,7 +176,8 @@ class LocalLibraryManager(context: Context) {
         try {
             reader.setDataSource(app, Uri.parse(item.getString("documentUri")))
             cacheArtwork(item, reader.embeddedPicture)
-        } catch (_: Exception) { /* Provider failures are retryable on the next request. */ }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { /* Provider failures are retryable on the next request. */ }
         finally { runCatching { reader.release() } }
     }
 
@@ -173,15 +210,15 @@ class LocalLibraryManager(context: Context) {
         val unavailable = mutableSetOf<String>()
         for (index in 0 until roots.length()) {
             val root = roots.getJSONObject(index)
-            runCatching {
-                check(hasGrant(root)) { "Folder permission was revoked. Select the folder again." }
-                root.put("name", folderName(Uri.parse(root.getString("uri"))))
-            }.onFailure {
-                root.put("available", false).put("error", it.message ?: "Folder unavailable")
+            if (!hasGrant(root)) {
+                root.put("available", false).put("error", "Folder permission was revoked. Select the folder again.")
                 unavailable.add(root.getString("id"))
             }
         }
-        filterItems(data) { it.getString("storageId") !in unavailable }
+        if (unavailable.isNotEmpty()) {
+            filterItems(data) { it.getString("storageId") !in unavailable }
+            save(data)
+        }
     }
 
     private fun folderName(tree: Uri): String {
@@ -193,26 +230,33 @@ class LocalLibraryManager(context: Context) {
         error("Folder unavailable")
     }
 
-    private fun scan(data: JSONObject) {
+    private suspend fun scan(data: JSONObject, selectedRoots: Set<String>? = null) {
         val old = data.getJSONArray("items")
         val cached = (0 until old.length()).associate { val item = old.getJSONObject(it); item.getString("id") to item }
-        val items = JSONArray()
+        val items = JSONArray((0 until old.length()).map { old.getJSONObject(it) }
+            .filter { selectedRoots != null && it.getString("storageId") !in selectedRoots })
         val roots = data.getJSONArray("roots")
         for (index in 0 until roots.length()) {
             val root = roots.getJSONObject(index)
-            runCatching {
+            if (selectedRoots != null && root.getString("id") !in selectedRoots) continue
+            currentCoroutineContext().ensureActive()
+            try {
                 check(hasGrant(root)) { "Folder permission was revoked. Select the folder again." }
                 val tree = Uri.parse(root.getString("uri"))
                 root.put("name", folderName(tree))
                 val scanned = scanTree(tree, root, cached)
                 scanned.forEach { items.put(it) }
                 root.put("available", true).remove("error")
-            }.onFailure { root.put("available", false).put("error", it.message ?: "Folder unavailable") }
+                root.put("needsScan", false)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                root.put("available", false).put("needsScan", false).put("error", error.message ?: "Folder unavailable")
+            }
         }
         data.put("items", items)
     }
 
-    private fun scanTree(tree: Uri, root: JSONObject, cached: Map<String, JSONObject>): List<JSONObject> {
+    private suspend fun scanTree(tree: Uri, root: JSONObject, cached: Map<String, JSONObject>): List<JSONObject> {
         val queue = ArrayDeque<Pair<String, String>>()
         queue.add(DocumentsContract.getTreeDocumentId(tree) to "")
         val seen = mutableSetOf<String>()
@@ -220,12 +264,14 @@ class LocalLibraryManager(context: Context) {
         val columns = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME,
             DocumentsContract.Document.COLUMN_MIME_TYPE, DocumentsContract.Document.COLUMN_SIZE, DocumentsContract.Document.COLUMN_LAST_MODIFIED)
         while (queue.isNotEmpty()) {
+            currentCoroutineContext().ensureActive()
             val (parent, path) = queue.removeFirst()
             if (!seen.add(parent)) continue
             val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parent)
             val cursor = resolver.query(children, columns, null, null, null) ?: error("Cannot read folder contents")
             cursor.use {
                 while (it.moveToNext()) {
+                    currentCoroutineContext().ensureActive()
                     val docId = it.getString(0)
                     val name = it.getString(1) ?: docId
                     val mime = it.getString(2).orEmpty()
@@ -237,33 +283,91 @@ class LocalLibraryManager(context: Context) {
                     val size = it.getLong(3)
                     val modified = it.getLong(4)
                     val previous = cached[id]
-                    val metadata = if (previous != null && previous.optLong("modifiedMs") == modified && previous.optLong("sizeBytes") == size)
-                        previous.getJSONObject("metadata") else metadata(uri, name, JSONObject().put("id", id).put("modifiedMs", modified).put("sizeBytes", size))
+                    val unchanged = previous != null && previous.optLong("modifiedMs") == modified && previous.optLong("sizeBytes") == size
+                    val metadata = if (unchanged) previous!!.getJSONObject("metadata") else basicMetadata(name)
                     result.add(JSONObject().put("id", id).put("type", "audio").put("location", "local")
                         .put("storageId", root.getString("id")).put("rootName", root.getString("name"))
                         .put("relativePath", relative).put("name", name).put("mimeType", mime)
                         .put("sizeBytes", size).put("modifiedAt", Instant.ofEpochMilli(modified).toString())
-                        .put("modifiedMs", modified).put("documentUri", uri.toString()).put("metadata", metadata))
+                        .put("modifiedMs", modified).put("documentUri", uri.toString()).put("metadata", metadata)
+                        .put("metadataPending", !unchanged || previous!!.optBoolean("metadataPending", false))
+                        .put("revision", UUID.randomUUID().toString()))
                 }
             }
         }
         return result
     }
 
-    private fun metadata(uri: Uri, name: String, item: JSONObject): JSONObject {
-        val result = JSONObject().put("title", name.substringBeforeLast('.', name))
+    private fun basicMetadata(name: String) = JSONObject().put("title", name.substringBeforeLast('.', name))
+
+    private fun metadata(uri: Uri, name: String): JSONObject {
+        val result = basicMetadata(name)
         val reader = MediaMetadataRetriever()
         try {
             reader.setDataSource(app, uri)
-            runCatching { cacheArtwork(item, reader.embeddedPicture) }
             listOf("title" to MediaMetadataRetriever.METADATA_KEY_TITLE, "artist" to MediaMetadataRetriever.METADATA_KEY_ARTIST,
                 "album" to MediaMetadataRetriever.METADATA_KEY_ALBUM).forEach { (key, tag) ->
                 reader.extractMetadata(tag)?.takeIf { it.isNotBlank() }?.let { result.put(key, it) }
             }
             reader.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toDoubleOrNull()?.takeIf { it > 0 }?.let { result.put("durationSec", it / 1000) }
-        } catch (_: Exception) { /* Unsupported metadata leaves the playable file's basic fields intact. */ }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { /* Unsupported metadata leaves the playable file's basic fields intact. */ }
         finally { runCatching { reader.release() } }
         return result
+    }
+
+    /** Process-owned work survives Activity recreation; the durable flags resume after process death. */
+    private fun startEnrichment(): Unit = synchronized(workerLock) {
+        if (worker?.isActive == true) return@synchronized
+        worker = enrichmentScope.launch {
+            try {
+                while (true) {
+                    val batch = mutations.withLock {
+                        val data = read()
+                        val roots = data.getJSONArray("roots")
+                        val pendingRoots = (0 until roots.length()).map { roots.getJSONObject(it) }
+                            .filter { it.optBoolean("needsScan", false) }.map { it.getString("id") }.toSet()
+                        if (pendingRoots.isNotEmpty()) { scan(data, pendingRoots); save(data) }
+                        authorizedItems().values.filter { it.optBoolean("metadataPending", false) }.take(8)
+                    }
+                    if (batch.isEmpty()) {
+                        // Serialize the idle transition with callers scheduling new work.
+                        synchronized(workerLock) { worker = null }
+                        // Recheck under the mutation lock: add/list may have raced the idle transition.
+                        mutations.withLock {
+                            if (authorizedItems().values.any { it.optBoolean("metadataPending", false) }) startEnrichment()
+                        }
+                        return@launch
+                    }
+                    val enriched = batch.map { item ->
+                        currentCoroutineContext().ensureActive()
+                        val result = metadata(Uri.parse(item.getString("documentUri")), item.getString("name"))
+                        delay(25) // Yield between provider reads instead of saturating storage.
+                        item to result
+                    }
+                    mutations.withLock {
+                        val data = read()
+                        val roots = data.getJSONArray("roots")
+                        val grants = (0 until roots.length()).map { roots.getJSONObject(it) }
+                            .filter { it.optBoolean("available", false) && hasGrant(it) }.map { it.getString("id") }.toSet()
+                        val items = data.getJSONArray("items")
+                        val current = (0 until items.length()).map { items.getJSONObject(it) }.associateBy { it.getString("id") }
+                        var changed = false
+                        for ((source, result) in enriched) {
+                            val target = current[source.getString("id")] ?: continue
+                            if (!LocalEnrichmentPolicy.canCommit(
+                                    source.getString("id"), source.getString("storageId"), source.optString("revision"),
+                                    target.getString("id"), target.getString("storageId"), target.optString("revision"),
+                                    target.getString("storageId") in grants)) continue
+                            target.put("metadata", result).put("metadataPending", false)
+                            changed = true
+                        }
+                        if (changed) save(data)
+                    }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { android.util.Log.w("LocalLibrary", "Metadata enrichment paused; next list resumes it", error) }
+        }
     }
 
     private fun read(): JSONObject = synchronized(lock) {
@@ -290,11 +394,20 @@ class LocalLibraryManager(context: Context) {
 
     private fun publicSnapshot(data: JSONObject): JSONObject {
         val copy = JSONObject(data.toString())
+        copy.remove("incrementalScanMigrated")
+        val scanningRoots = data.getJSONArray("roots")
+        val scanning = (0 until scanningRoots.length()).any { scanningRoots.getJSONObject(it).optBoolean("needsScan", false) }
         val roots = copy.getJSONArray("roots")
-        for (i in 0 until roots.length()) roots.getJSONObject(i).remove("ownsGrant")
+        for (i in 0 until roots.length()) {
+            roots.getJSONObject(i).remove("ownsGrant")
+            roots.getJSONObject(i).remove("needsScan")
+        }
         val items = copy.getJSONArray("items")
+        copy.put("enrichment", JSONObject().put("pending", (0 until items.length()).count { items.getJSONObject(it).optBoolean("metadataPending", false) }).put("total", items.length()).put("scanning", scanning))
         for (i in 0 until items.length()) {
             val item = items.getJSONObject(i)
+            item.remove("metadataPending")
+            item.remove("revision")
             val key = artworkKey(item)
             item.put("thumbnail", JSONObject().put("url", "/__muzio_local/artwork/" + item.getString("id") + "?v=" + key)
                 .put("kind", "embedded-artwork").put("status", "ready").put("cacheKey", key))
@@ -304,5 +417,12 @@ class LocalLibraryManager(context: Context) {
         return copy
     }
 
-    companion object { private val lock = Any(); private val mutations = Mutex() }
+    companion object {
+        private val lock = Any()
+        private val mutations = Mutex()
+        private val artworkExtraction = Mutex()
+        private val workerLock = Any()
+        private val enrichmentScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        private var worker: Job? = null
+    }
 }

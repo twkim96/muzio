@@ -186,3 +186,26 @@ SHA-256: `03834f3f93339756abb1c004bc0f8283e716ae155e1694583710e5d3118433ec`
   remain pending. Last installed Samsung version is11.
 - Artifact: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc12.apk`
 - SHA-256: `155bd8fd127e57ca0e34f291d6a5256ee7477539499ce02ba601df5220391208`
+
+
+## Incremental local catalog — versionCode 13 / 2026-09-07
+
+- Filename catalog precedes metadata; add scans selected root only. Process-owned
+  background enrichment persists pending flags and validates revisions/grants
+  before commits. Interrupted enumeration and legacy empty-root recovery supported.
+- Native JVM 13 tests and local-library/settings 9 web tests pass. Web/Android
+  TypeScript/Vite builds, web deployment, APK assembly and version checks pass.
+- API36 emulator: 1,001 synthetic MP3 files registered via real SAF permission.
+  Catalog persisted 1.221s after Allow input, pending1001/artist0. This measures
+  persistence, not phone UI paint latency. After Home4s, artist56/pending945.
+- Force-stop preserved945 pending. Reopen resumed it; all1,001 artists completed
+  at73.011s including shutdown/relaunch. Local MediaSession showed PLAYING with
+  advancing position while233 entries remained pending, without test server access.
+- Progress poll stops at completion; delayed polls cannot resurrect removed roots.
+  Read-only integration review found no additional blocking concurrency issue.
+- PWA1.4.5-r8 served JS/CSS match deployed build. Emulator versionCode13 installed.
+  Personal phone installation deferred until user reconnects after work.
+- Enumeration can still wait on a slow DocumentsProvider; process death resumes
+  on next app startup rather than promising execution while force-stopped.
+- Artifact: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc13.apk`
+- SHA-256: `975cd09f0bcb28f64d6ec9dde08083bed99822cf25461c0aa28fbee958c9b1d8`
