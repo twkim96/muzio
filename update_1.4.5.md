@@ -5,8 +5,8 @@
 - 작성일: 2026-09-07
 - 기준: 1.4.4 최종 웹 UI `c283d52` (PWA r32). 1.4.4 마감 유지.
 - 작업 브랜치: `codex/android-shared-web-ui`
-- 상태: 개발 브랜치 구현·자동 검증·에뮬레이터 동작 검증 완료. Samsung 설치/실행 및 운영 웹 배포 완료. 실제 개인 라이브러리 사용성 검증은 별도.
-- 제품/Web 버전: 1.4.5. Android 개발 APK: 1.4.5-web-dev / versionCode 11 (아래 추가 패치 포함).
+- 상태: 개발 브랜치 구현·자동 검증·에뮬레이터 동작 검증 완료. Samsung versionCode11 설치/실행 및 운영 웹 배포 완료. 최신 versionCode12는 기기 미연결로 APK만 생성. 실제 개인 라이브러리 사용성 검증은 별도.
+- 제품/Web 버전: 1.4.5. Android 개발 APK: 1.4.5-web-dev / versionCode 12 (아래 추가 패치 포함).
 
 ## 이번 세션의 변경
 
@@ -116,3 +116,14 @@
 - 실제 웹1280×900 미니바: panel x837..1173px, button 중심x1005px, 수직 간격12px. 모바일412px 전체 플레이어: panel x12..348px, 수직 간격12px, Escape 후 전체 플레이어 유지. 배경/blur와 반투명 Set 버튼을 computed style 및 화면으로 확인했다.
 - 웹 cache1.4.5-r6와 제공 JS/CSS 산출물 일치 확인. Samsung versionCode11 업데이트 설치/Activity 실행 확인.
 - 산출물 `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc11.apk`, SHA-256 `d2948d0e90953f656f8668cd0a94427e1a5e4d7ee456c8c5f3e1c05778aa9a8d`.
+
+
+## 필터 헤더 통일 및 한 줄 정렬 아이콘 (1.4.5-r7)
+
+- 필터 상단 제목을 Queue와 같은 둥근 글래스 `Sort` 타이틀과 원형 X 버튼으로 통일했다. 기존 모바일 헤더20% 축소 규칙도 공유한다.
+- Latest/Song(또는 Video·Image)/Artist/Size/Modified/Library를 작은 아이콘6개로 바꾸고 오름·내림차순은 같은 줄의 단일 토글 아이콘으로 합쳤다. 선택된 기준은 강조색, 각 아이콘은 접근성 이름과 툴팁을 제공한다. Latest의 최신순 고정 동작은 유지한다.
+- 저장소/Source/Artist 필터,15개 더보기, Reset/적용과 중앙 목록의 보조 정렬 표시는 유지한다. PC·모바일 웹 및 Android 번들에 같은 UI를 적용한다.
+- LibraryScreen/App68 tests 통과. 방향 토글의 실제 목록 오름/내림 결과와 패널 재진입을 회귀 검증했다. TypeScript/Vite, 운영 웹 배포, APK assembleDebug, 버전 표면 검사 통과.
+- 실제 웹412px 화면과 PC1280px 화면 확인.320px에서도7개 버튼의 y좌표가 같고 document 폭320px로 가로 넘침이 없었다. PC 모달576×635px. 웹 cache1.4.5-r7 및 제공 JS/CSS와 배포 산출물 일치 확인.
+- Android versionCode12 APK 생성 완료. 현재 adb 연결 기기가 없어 이번 APK의 Samsung 설치/터치 확인은 미실시. 기존 설정과 로컬 폴더는 변경하지 않았다.
+- 산출물 `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc12.apk`, SHA-256 `155bd8fd127e57ca0e34f291d6a5256ee7477539499ce02ba601df5220391208`.

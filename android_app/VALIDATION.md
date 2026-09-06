@@ -171,3 +171,18 @@ SHA-256: `03834f3f93339756abb1c004bc0f8283e716ae155e1694583710e5d3118433ec`
   versionCode11 confirmed; phone touch acceptance remains a separate check.
 - Artifact: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc11.apk`
 - SHA-256: `d2948d0e90953f656f8668cd0a94427e1a5e4d7ee456c8c5f3e1c05778aa9a8d`
+
+
+## Compact shared filter sorting — versionCode 12 / 2026-09-07
+
+- Queue-style Sort glass title and round close button; six icon sort criteria
+  and one ascending/descending toggle share a row on web and Android.
+- LibraryScreen/App68 tests pass, including applied ascending/descending order
+  and reopen behavior. Latest retains its fixed newest-first contract.
+- Web412px and1280px visually checked. At320px all seven controls share the same
+  y-coordinate with document width320px. Desktop modal576x635px.
+- TypeScript/Vite, deployed web assets/PWA1.4.5-r7, version check and APK build pass.
+- No adb devices connected: versionCode12 installation and phone touch acceptance
+  remain pending. Last installed Samsung version is11.
+- Artifact: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc12.apk`
+- SHA-256: `155bd8fd127e57ca0e34f291d6a5256ee7477539499ce02ba601df5220391208`

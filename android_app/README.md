@@ -14,7 +14,7 @@ and progress metadata. The old Compose screens remain as reference code but
 `MainActivity` no longer launches them. `FEATURE_PARITY.md` describes that old
 Compose implementation, not acceptance evidence for this host.
 
-Version: `1.4.5-web-dev`, versionCode `11`; minimum Android 8 / SDK 26, target SDK 36.
+Version: `1.4.5-web-dev`, versionCode `12`; minimum Android 8 / SDK 26, target SDK 36.
 
 ## Architecture
 

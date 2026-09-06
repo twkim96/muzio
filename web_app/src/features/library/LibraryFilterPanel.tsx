@@ -1,4 +1,12 @@
 import { useMemo, useState } from 'react';
+import { ClockClockwise } from '@phosphor-icons/react/dist/csr/ClockClockwise';
+import { TextAa } from '@phosphor-icons/react/dist/csr/TextAa';
+import { Microphone } from '@phosphor-icons/react/dist/csr/Microphone';
+import { File } from '@phosphor-icons/react/dist/csr/File';
+import { CalendarBlank } from '@phosphor-icons/react/dist/csr/CalendarBlank';
+import { HardDrives } from '@phosphor-icons/react/dist/csr/HardDrives';
+import { SortAscending } from '@phosphor-icons/react/dist/csr/SortAscending';
+import { SortDescending } from '@phosphor-icons/react/dist/csr/SortDescending';
 import type { LibraryItem, LibraryMediaType } from '../../core/api/libraryClient';
 import { GlassModal } from '../../core/ui/GlassModal';
 import {
@@ -38,7 +46,7 @@ export function LibraryFilterPanel({ items, type, selection, onApply, onClose }:
       onClick={() => updateFacet('artists', toggle(draft.filters.artists, id))}>#{label} <span className="text-muted">{count}</span></button>
   );
   return (
-    <GlassModal testId="library-filter-panel" title="Sort & filters" onClose={onClose} footer={<>
+    <GlassModal testId="library-filter-panel" title="Sort" pillTitle onClose={onClose} footer={<>
       <button type="button" className="muzio-glass-action muzio-glass-action-secondary" onClick={() => {
         setDraft({ filters: EMPTY_LIBRARY_FILTERS, sortKey: 'latest', sortDirection: 'desc', text: '' });
         setArtistCount(15);
@@ -47,17 +55,22 @@ export function LibraryFilterPanel({ items, type, selection, onApply, onClose }:
     </>}>
       <div className="space-y-5">
         <section aria-label="Sorting">
-          <h3 className="text-xs font-semibold text-muted">Sort</h3>
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {([{ key: 'latest', label: 'Latest' }, { key: 'name', label: type === 'audio' ? 'Song' : type === 'video' ? 'Video' : 'Image' },
-              { key: 'artist', label: 'Artist' }, { key: 'size', label: 'Size' }, { key: 'modified', label: 'Modified' }, { key: 'library', label: 'Library' }] as const).map(({ key, label }) => (
-              <button key={key} type="button" aria-label={`Panel sort by ${label}`} aria-pressed={draft.sortKey === key} className={`${chipClass} min-h-11 rounded-xl`}
-                onClick={() => setDraft((current) => ({ ...current, sortKey: key, sortDirection: key === 'latest' || key === 'modified' || key === 'size' ? 'desc' : 'asc' }))}>{label}</button>
+          <div className="muzio-sort-toolbar" role="group" aria-label="Sort controls">
+            {([{ key: 'latest', label: 'Latest', icon: ClockClockwise },
+              { key: 'name', label: type === 'audio' ? 'Song' : type === 'video' ? 'Video' : 'Image', icon: TextAa },
+              { key: 'artist', label: 'Artist', icon: Microphone }, { key: 'size', label: 'Size', icon: File },
+              { key: 'modified', label: 'Modified', icon: CalendarBlank }, { key: 'library', label: 'Library', icon: HardDrives }] as const).map(({ key, label, icon: Icon }) => (
+              <button key={key} type="button" title={label} aria-label={`Panel sort by ${label}`} aria-pressed={draft.sortKey === key} className={`${chipClass} muzio-sort-icon`}
+                onClick={() => setDraft((current) => ({ ...current, sortKey: key, sortDirection: key === 'latest' || key === 'modified' || key === 'size' ? 'desc' : 'asc' }))}>
+                <Icon aria-hidden size={20} />
+              </button>
             ))}
-          </div>
-          <div className="mt-2 flex gap-2">
-            {(['asc', 'desc'] as const).map((direction) => <button key={direction} type="button" className={chipClass} disabled={draft.sortKey === 'latest'} aria-pressed={draft.sortDirection === direction}
-              onClick={() => setDraft((current) => ({ ...current, sortDirection: direction }))}>{direction === 'asc' ? 'Ascending' : 'Descending'}</button>)}
+            <button type="button" className={`${chipClass} muzio-sort-icon`} disabled={draft.sortKey === 'latest'}
+              aria-label={draft.sortDirection === 'asc' ? 'Ascending: switch to descending' : 'Descending: switch to ascending'}
+              title={draft.sortKey === 'latest' ? 'Latest always shows newest first' : draft.sortDirection === 'asc' ? 'Ascending: switch to descending' : 'Descending: switch to ascending'}
+              onClick={() => setDraft((current) => ({ ...current, sortDirection: current.sortDirection === 'asc' ? 'desc' : 'asc' }))}>
+              {draft.sortDirection === 'asc' ? <SortAscending aria-hidden size={20} /> : <SortDescending aria-hidden size={20} />}
+            </button>
           </div>
         </section>
         <section aria-label="Storage groups">

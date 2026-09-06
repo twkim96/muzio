@@ -1428,6 +1428,21 @@ describe('library filter panel', () => {
     expect(screen.getAllByTestId('library-item').every((row) => Number(row.getAttribute('data-media-id')?.split('-')[1]) % 2 === 0)).toBe(true);
     expect(screen.getByRole('button', { name: 'Remove Offline source' })).toBeInTheDocument();
   });
+  test('toggles sort direction with one control and applies the selected order', async () => {
+    renderScreen('audio', { kind: 'ok', items: items.slice(0, 3) });
+    await screen.findByTestId('library-list');
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter library' }));
+    const panel = screen.getByTestId('library-filter-panel');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Panel sort by Size' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Descending: switch to ascending' }));
+    expect(within(panel).getByRole('button', { name: 'Ascending: switch to descending' })).toBeEnabled();
+    fireEvent.click(within(panel).getByRole('button', { name: 'Show 3 items' }));
+    expect(screen.getAllByTestId('library-item').map((row) => row.getAttribute('data-media-id'))).toEqual(['filter-0', 'filter-1', 'filter-2']);
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter library' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ascending: switch to descending' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show 3 items' }));
+    expect(screen.getAllByTestId('library-item').map((row) => row.getAttribute('data-media-id'))).toEqual(['filter-2', 'filter-1', 'filter-0']);
+  });
   test('synchronizes panel sorting, query artist tags, chips and reset', async () => {
     renderScreen('audio', { kind: 'ok', items });
     await screen.findByTestId('library-list');

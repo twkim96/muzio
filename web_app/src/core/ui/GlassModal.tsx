@@ -8,7 +8,7 @@ let previousOverflow = '';
 const focusableSelector = 'button, input, select, textarea, a[href], [tabindex]';
 
 export function GlassModal({
-  testId, title, onClose, children, footer, closeLabel = `Close ${title}`, alert = false,
+  testId, title, onClose, children, footer, closeLabel = `Close ${title}`, alert = false, pillTitle = false,
 }: {
   testId: string;
   title: string;
@@ -17,6 +17,7 @@ export function GlassModal({
   footer?: ReactNode;
   closeLabel?: string;
   alert?: boolean;
+  pillTitle?: boolean;
 }) {
   useAndroidBack(true, onClose, 100);
   const titleId = useId();
@@ -94,8 +95,14 @@ export function GlassModal({
         aria-labelledby={titleId} tabIndex={-1} className="muzio-dialog muzio-modal-sheet"
         onClick={(event) => event.stopPropagation()}>
         <header className="muzio-modal-header">
-          <h2 id={titleId} className="min-w-0 flex-1 text-lg font-semibold">{title}</h2>
-          <button type="button" aria-label={closeLabel} className="muzio-modal-close" onClick={onClose}>
+          {pillTitle ? (
+            <h2 id={titleId} className="muzio-sheet-title h-[46.4px] w-fit text-left [--title-scale:1.45] sm:[--title-scale:1.16]">
+              <span className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
+                <span className="scale-[calc(1/var(--title-scale))]">{title}</span>
+              </span>
+            </h2>
+          ) : <h2 id={titleId} className="min-w-0 flex-1 text-lg font-semibold">{title}</h2>}
+          <button type="button" aria-label={closeLabel} className={pillTitle ? "muzio-sheet-header-action muzio-settings-button h-[46.4px] w-[46.4px] shrink-0 flex items-center justify-center" : "muzio-modal-close"} onClick={onClose}>
             <CloseGlyph className="h-5 w-5" />
           </button>
         </header>
