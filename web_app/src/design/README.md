@@ -7,12 +7,11 @@ Muzio markup and icons. Catalog demo scripts and generic SVG rules are excluded.
 
 The theme scope lives on `html` so body portals inherit it. Muzio's saved surface,
 text, muted and accent colors remain authoritative. Grain appears on page
-backgrounds; overlays use denser glass for text legibility. Primary actions use
-the kit's 12% accent tint. Pretendard and its OFL license are under `public/fonts`.
+backgrounds; overlays use denser glass for text legibility. Individual controls retain their original unboxed styling. Pretendard and its OFL license are under `public/fonts`.
 
 | Surface | Integration |
 | --- | --- |
-| Music, Video, Image | Full-width library, topbar search and drawer navigation |
+| Music, Video, Image | Full-width library, centered floating navigation/search island and drawer navigation |
 | Player | Mini dock, full player, transport, volume, sleep timer, scrub preview |
 | Video watch | Information/actions, video list and Vidstack menus; contain sizing preserved |
 | Settings | Appearance, backend status, media folders, runtime notes |

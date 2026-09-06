@@ -242,7 +242,7 @@ export function MiniPlayer() {
             data-testid="play-pause"
             data-status={state.status.kind}
             aria-label={playLabel}
-            className="muzio-control muzio-primary inline-flex h-11 w-11 items-center justify-center rounded-xl text-zinc-950 transition hover:scale-[1.03] hover:bg-zinc-200/60 disabled:opacity-50 dark:text-white dark:hover:bg-white/[0.06]"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl text-zinc-950 transition hover:scale-[1.03] hover:bg-zinc-200/60 disabled:opacity-50 dark:text-white dark:hover:bg-white/[0.06]"
             onClick={() => {
               void togglePlayPause();
             }}
@@ -385,7 +385,7 @@ export function MiniPlayer() {
                 <span className="min-w-0 truncate">{networkHint.message}</span>
                 <button
                   type="button"
-                  className="muzio-control shrink-0 rounded-full border border-white/12 px-2 py-0.5 text-xs font-medium text-zinc-950 hover:bg-zinc-200/70 dark:text-white dark:hover:bg-white/10"
+                  className="shrink-0 rounded-full border border-white/12 px-2 py-0.5 text-xs font-medium text-zinc-950 hover:bg-zinc-200/70 dark:text-white dark:hover:bg-white/10"
                   onClick={() => {
                     void retryActivePlayback();
                   }}
@@ -419,7 +419,7 @@ export function MiniPlayer() {
             aria-label="Open queue"
             aria-expanded={queueOpen}
             data-testid="mini-queue-button"
-            className="muzio-control inline-flex h-10 w-10 items-center justify-center rounded-full text-xl leading-none text-muted hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-xl leading-none text-muted hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
             onClick={() => setQueueOpen(true)}
           >
             <QueueGlyph className="h-6 w-6" />
@@ -429,7 +429,7 @@ export function MiniPlayer() {
               type="button"
               aria-label="Sleep timer"
               aria-expanded={timerOpen}
-              className="muzio-control inline-flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
               onClick={() => setTimerOpen((open) => !open)}
             >
               <SleepTimerGlyph className="h-7 w-7" />
@@ -497,7 +497,7 @@ export function MiniPlayer() {
             data-testid="mini-next-mobile"
             aria-label="Next track"
             disabled={!canPlayNext}
-            className="muzio-control inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-950 hover:bg-zinc-200/60 disabled:opacity-35 dark:text-white dark:hover:bg-white/[0.06] sm:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-950 hover:bg-zinc-200/60 disabled:opacity-35 dark:text-white dark:hover:bg-white/[0.06] sm:hidden"
             onClick={() => {
               void snapshot.playNextQueueItem();
             }}
@@ -508,7 +508,7 @@ export function MiniPlayer() {
             type="button"
             data-status={state.status.kind}
             aria-label={playLabel}
-            className="muzio-control muzio-primary inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-950 hover:bg-zinc-200/60 dark:text-white dark:hover:bg-white/[0.06] sm:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-950 hover:bg-zinc-200/60 dark:text-white dark:hover:bg-white/[0.06] sm:hidden"
             onClick={() => {
               void togglePlayPause();
             }}
@@ -560,8 +560,8 @@ function MiniIconButton({
       disabled={disabled}
       className={
         variant === 'skip'
-          ? 'muzio-control inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-800 hover:bg-zinc-200/55 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-70 dark:text-white dark:hover:bg-white/[0.06] dark:hover:text-white'
-          : 'muzio-control inline-flex h-10 w-10 items-center justify-center rounded-xl text-2xl leading-none text-muted hover:bg-zinc-200/55 hover:text-zinc-950 aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-white/[0.06] dark:hover:text-foreground'
+          ? 'inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-800 hover:bg-zinc-200/55 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-70 dark:text-white dark:hover:bg-white/[0.06] dark:hover:text-white'
+          : 'inline-flex h-10 w-10 items-center justify-center rounded-xl text-2xl leading-none text-muted hover:bg-zinc-200/55 hover:text-zinc-950 aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-white/[0.06] dark:hover:text-foreground'
       }
       onClick={onClick}
     >
@@ -609,7 +609,7 @@ function MiniTimerPopover({
           <button
             key={minutes}
             type="button"
-            className="muzio-control rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/12"
+            className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/12"
             onClick={() => onStart(minutes)}
           >
             {minutes}m
@@ -617,7 +617,7 @@ function MiniTimerPopover({
         ))}
         <button
           type="button"
-          className="muzio-control rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/12"
+          className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/12"
           onClick={onCancel}
         >
           Cancel
@@ -631,11 +631,11 @@ function MiniTimerPopover({
           value={customMinutes}
           onChange={(event) => onCustomMinutes(event.target.value)}
           aria-label="Custom timer minutes"
-          className="muzio-control w-20 rounded-full border border-white/15 bg-transparent px-3 py-1 text-sm"
+          className="w-20 rounded-full border border-white/15 bg-transparent px-3 py-1 text-sm"
         />
         <button
           type="button"
-          className="muzio-control muzio-primary rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-white/85"
+          className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-white/85"
           onClick={applyCustom}
         >
           Set

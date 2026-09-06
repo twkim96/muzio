@@ -112,7 +112,7 @@ export function QueueDrawer({
               <button
                 type="button"
                 data-testid="clear-music-queue"
-                className="muzio-control muzio-danger rounded-full px-3 py-1 text-sm text-accent hover:bg-white/12"
+                className="rounded-full px-3 py-1 text-sm text-accent hover:bg-white/12"
                 onClick={clearMusicQueue}
               >
                 Clear
@@ -121,7 +121,7 @@ export function QueueDrawer({
             <button
               type="button"
               aria-label="Close queue"
-              className="muzio-control inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl leading-none text-muted hover:bg-white/12 hover:text-foreground"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl leading-none text-muted hover:bg-white/12 hover:text-foreground"
               onClick={onClose}
             >
               <CloseGlyph className="h-5 w-5" />

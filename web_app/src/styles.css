@@ -159,7 +159,7 @@ body {
 }
 .wr-kit .app-top-fade::before { display: none; }
 
-.wr-kit :is(.muzio-panel, .muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search) {
+.wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search) {
   background: var(--app-menu-surface);
   border: 1px solid var(--app-menu-border);
   border-radius: 14px;
@@ -169,13 +169,13 @@ body {
   backdrop-filter: var(--app-menu-filter);
   isolation: isolate;
 }
-.wr-kit :is(.muzio-panel, .muzio-dock) { position: relative; }
+.wr-kit .muzio-dock { position: relative; }
 .wr-kit .muzio-dialog:not(.absolute):not(.fixed):not(.relative) { position: relative; }
 .wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-sidebar, .muzio-search) {
   /* A little more ink behind dense overlay text keeps underlying rows legible. */
   background: var(--muzio-overlay-surface);
 }
-.wr-kit :is(.muzio-panel, .muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search, .muzio-control)::before {
+.wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search)::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -189,10 +189,11 @@ body {
   mask-composite: exclude;
 }
 .wr-kit .muzio-topbar {
-  border-radius: 0;
-  border-width: 0 0 1px;
-  box-shadow: 0 4px 16px rgb(0 0 0 / .08), inset 0 1px rgb(255 255 255 / .15);
+  border-radius: 999px;
+  background: var(--muzio-overlay-surface);
+  box-shadow: 0 6px 24px rgb(0 0 0 / .16), inset 0 1px rgb(255 255 255 / .12);
 }
+.wr-kit .muzio-topbar::before { display: none; }
 .wr-kit .muzio-dock {
   border-radius: 14px;
   box-shadow: var(--app-menu-dock-shadow), inset 0 1px rgb(255 255 255 / .2);
@@ -200,27 +201,6 @@ body {
 .wr-kit .muzio-drawer { border-radius: 0 14px 14px 0; }
 .wr-kit .muzio-search { border-radius: 20px; }
 .wr-kit .muzio-search > .muzio-dialog { border-radius: 20px; }
-.wr-kit :is(.muzio-control, .muzio-primary, .muzio-danger) {
-  border: 1px solid var(--app-menu-control-border);
-  border-radius: 8px;
-  color: var(--app-menu-ink);
-  background: var(--app-menu-control-surface);
-  box-shadow: var(--app-menu-control-shadow);
-  -webkit-backdrop-filter: var(--app-menu-filter);
-  backdrop-filter: var(--app-menu-filter);
-}
-.wr-kit .muzio-control { isolation: isolate; }
-.wr-kit .muzio-control:not(.absolute):not(.fixed):not(.relative) { position: relative; }
-.wr-kit :is(.muzio-primary, .muzio-control[aria-pressed='true']) {
-  background: color-mix(in srgb, var(--accent-500) 12%, var(--app-menu-control-surface));
-  border-color: color-mix(in srgb, var(--accent-500) 42%, var(--app-menu-control-border));
-  color: color-mix(in srgb, var(--accent-500) 68%, var(--viewer-theme-text));
-}
-.wr-kit .muzio-danger {
-  background: color-mix(in srgb, #ef4444 16%, var(--app-menu-control-surface));
-  border-color: color-mix(in srgb, #ef4444 42%, var(--app-menu-control-border));
-  color: color-mix(in srgb, #ef4444 78%, var(--viewer-theme-text));
-}
 .wr-kit :is(.muzio-dialog, .muzio-popover, .muzio-sidebar, .muzio-drawer, .muzio-search) :is(input:not([type='range']):not([type='checkbox']):not([type='color']), select, textarea) {
   border: 1px solid var(--app-menu-control-border);
   border-radius: 8px;
@@ -239,9 +219,9 @@ body {
   color: rgb(var(--muted));
 }
 .wr-kit :is(.muzio-dialog, .muzio-popover, .muzio-drawer) .text-white { color: var(--viewer-theme-text); }
-.wr-kit :is(.muzio-panel, .muzio-dialog, .muzio-drawer, .muzio-popover) [class*='border-white/'] { border-color: var(--viewer-theme-border); }
+.wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover) [class*='border-white/'] { border-color: var(--viewer-theme-border); }
 .wr-kit :is(.muzio-sidebar, .muzio-topbar) a[aria-current='page'] {
-  background: rgb(var(--accent) / .12);
+  background: rgb(var(--foreground) / .07);
   color: color-mix(in srgb, rgb(var(--accent)) 68%, rgb(var(--foreground)));
 }
 .wr-kit :is(.muzio-sidebar, .muzio-topbar) button[aria-pressed='true'] { color: rgb(var(--accent)); }
@@ -266,7 +246,6 @@ body {
   outline-offset: 3px;
 }
 @media (hover: hover) {
-  .wr-kit :is(.muzio-control, .muzio-primary, .muzio-danger):not(:disabled):hover { filter: brightness(1.12); }
   .wr-kit :is(.muzio-popover, .muzio-drawer, .muzio-sidebar) button:not(:disabled):hover { background-color: rgb(var(--foreground) / .08); }
 }
 @media (max-width: 639px) {
@@ -274,15 +253,15 @@ body {
   .wr-kit .muzio-dock { border-radius: 14px; }
 }
 @supports not (backdrop-filter: blur(1px)) {
-  .wr-kit :is(.muzio-panel, .muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search) { background-color: var(--viewer-theme-bg); }
+  .wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search) { background-color: var(--viewer-theme-bg); }
 }
-.no-glass :is([data-glass], .muzio-panel, .muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search, .muzio-control) {
+.no-glass :is([data-glass], .muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search) {
   background-color: rgb(var(--surface));
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 @media (prefers-reduced-transparency: reduce) {
-  .wr-kit :is(.muzio-panel, .muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search) { background-color: var(--viewer-theme-bg); backdrop-filter: none; }
+  .wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search) { background-color: var(--viewer-theme-bg); backdrop-filter: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .wr-kit *, .wr-kit *::before { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }

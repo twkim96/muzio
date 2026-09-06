@@ -351,7 +351,7 @@ export function FullPlayerScreen({
                         <button
                           key={playlist.id}
                           type="button"
-                          className="muzio-control rounded-lg px-3 py-2 text-left hover:bg-white/10"
+                          className="rounded-lg px-3 py-2 text-left hover:bg-white/10"
                           onClick={() => {
                             playlists.addItem(playlist.id, currentLikeKey);
                             setMoreMessage(`Added to ${playlist.name}.`);
@@ -364,12 +364,12 @@ export function FullPlayerScreen({
                   ) : (
                     <p className="text-xs text-muted">Create a playlist from the Music menu first.</p>
                   )}
-                  <button type="button" className="muzio-control rounded-lg px-3 py-2 text-left hover:bg-white/10" onClick={() => openPlaybackStream(source.url)}>
+                  <button type="button" className="rounded-lg px-3 py-2 text-left hover:bg-white/10" onClick={() => openPlaybackStream(source.url)}>
                     Open stream
                   </button>
                   <button
                     type="button"
-                    className="muzio-control rounded-lg px-3 py-2 text-left hover:bg-white/10"
+                    className="rounded-lg px-3 py-2 text-left hover:bg-white/10"
                     onClick={() => {
                       void shareOrCopyPlaybackStream(sourceName, source.url).then((result) => {
                         if (result === 'cancelled') return;
@@ -379,7 +379,7 @@ export function FullPlayerScreen({
                   >
                     Share or copy stream URL
                   </button>
-                  <button type="button" aria-expanded={showTrackInfo} className="muzio-control rounded-lg px-3 py-2 text-left hover:bg-white/10" onClick={() => setShowTrackInfo((current) => !current)}>
+                  <button type="button" aria-expanded={showTrackInfo} className="rounded-lg px-3 py-2 text-left hover:bg-white/10" onClick={() => setShowTrackInfo((current) => !current)}>
                     Track information
                   </button>
                   {showTrackInfo && (
@@ -431,12 +431,12 @@ export function FullPlayerScreen({
               <div
                 data-testid="full-network-hint"
                 role="status"
-                className="muzio-panel mt-2 flex min-h-8 items-center justify-between gap-2 rounded-xl border border-white/15 bg-zinc-950/72 px-2.5 py-1.5 text-sm text-foreground shadow-sm shadow-black/15 backdrop-blur max-sm:flex-col max-sm:items-stretch"
+                className="mt-2 flex min-h-8 items-center justify-between gap-2 rounded-xl border border-white/15 bg-zinc-950/72 px-2.5 py-1.5 text-sm text-foreground shadow-sm shadow-black/15 backdrop-blur max-sm:flex-col max-sm:items-stretch"
               >
                 <span className="min-w-0 truncate">{networkHint.message}</span>
                 <button
                   type="button"
-                  className="muzio-control shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-xs font-semibold text-foreground hover:bg-white/10 max-sm:self-start"
+                  className="shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-xs font-semibold text-foreground hover:bg-white/10 max-sm:self-start"
                   onClick={() => {
                     void retryActivePlayback();
                   }}
@@ -474,7 +474,7 @@ export function FullPlayerScreen({
               data-testid="play-pause"
               data-status={state.status.kind}
               aria-label={playLabel}
-              className="muzio-control muzio-primary inline-flex h-16 w-16 items-center justify-center text-white drop-shadow-[0_10px_24px_rgba(0,0,0,0.28)] transition hover:scale-[1.03] hover:text-white/90 disabled:opacity-50 sm:h-20 sm:w-20"
+              className="inline-flex h-16 w-16 items-center justify-center text-white drop-shadow-[0_10px_24px_rgba(0,0,0,0.28)] transition hover:scale-[1.03] hover:text-white/90 disabled:opacity-50 sm:h-20 sm:w-20"
               onClick={() => {
                 void snapshot.togglePlayPause();
               }}
@@ -553,7 +553,7 @@ function DismissButton({
       type="button"
       data-testid="player-close"
       aria-label={label}
-      className="muzio-control absolute left-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full text-white/88 transition hover:bg-white/10 hover:text-white sm:left-6 sm:top-6"
+      className="absolute left-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full text-white/88 transition hover:bg-white/10 hover:text-white sm:left-6 sm:top-6"
       onClick={onCollapse}
     >
       <DownChevronIcon />
@@ -586,7 +586,7 @@ function ActionButton({
       aria-expanded={expanded}
       data-testid={testId}
       disabled={disabled}
-      className="muzio-control inline-flex h-10 min-w-0 items-center justify-center rounded-full text-xl leading-none text-white/72 transition hover:bg-white/[0.055] hover:text-white aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-35 sm:h-12 sm:text-2xl"
+      className="inline-flex h-10 min-w-0 items-center justify-center rounded-full text-xl leading-none text-white/72 transition hover:bg-white/[0.055] hover:text-white aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-35 sm:h-12 sm:text-2xl"
       onClick={onClick}
     >
       {children}
@@ -635,8 +635,8 @@ function TransportButton({
       disabled={disabled}
       className={
         size === 'skip'
-          ? 'muzio-control inline-flex h-12 w-12 items-center justify-center rounded-xl text-white/64 transition hover:bg-white/[0.055] hover:text-white disabled:cursor-not-allowed disabled:opacity-45 sm:h-14 sm:w-14'
-          : 'muzio-control inline-flex h-10 w-10 items-center justify-center rounded-xl text-3xl leading-none text-white/56 transition hover:bg-white/[0.055] hover:text-white aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-45 sm:h-12 sm:w-12 sm:text-4xl'
+          ? 'inline-flex h-12 w-12 items-center justify-center rounded-xl text-white/64 transition hover:bg-white/[0.055] hover:text-white disabled:cursor-not-allowed disabled:opacity-45 sm:h-14 sm:w-14'
+          : 'inline-flex h-10 w-10 items-center justify-center rounded-xl text-3xl leading-none text-white/56 transition hover:bg-white/[0.055] hover:text-white aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-45 sm:h-12 sm:w-12 sm:text-4xl'
       }
       onClick={onClick}
     >
@@ -705,7 +705,7 @@ function VolumePopover({
         data-testid="mute-toggle"
         aria-label={muted ? 'Unmute' : 'Mute'}
         aria-pressed={muted}
-        className="muzio-control inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg leading-none text-white/80 hover:bg-white/10 aria-pressed:text-accent sm:h-9 sm:w-9"
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg leading-none text-white/80 hover:bg-white/10 aria-pressed:text-accent sm:h-9 sm:w-9"
         onClick={onMute}
       >
         <VolumeGlyph muted={muted} className="h-5 w-5" />
@@ -792,7 +792,7 @@ function SleepTimerPopover({
           <button
             key={minutes}
             type="button"
-            className="muzio-control rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10"
+            className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10"
             onClick={() => onStart(minutes)}
           >
             {minutes}m
@@ -800,7 +800,7 @@ function SleepTimerPopover({
         ))}
         <button
           type="button"
-          className="muzio-control rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10"
+          className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10"
           onClick={onCancel}
         >
           Cancel
@@ -814,11 +814,11 @@ function SleepTimerPopover({
           value={customMinutes}
           onChange={(event) => onCustomMinutes(event.target.value)}
           aria-label="Custom timer minutes"
-          className="muzio-control w-20 rounded-full border border-white/15 bg-transparent px-3 py-1 text-sm"
+          className="w-20 rounded-full border border-white/15 bg-transparent px-3 py-1 text-sm"
         />
         <button
           type="button"
-          className="muzio-control muzio-primary rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-white/80"
+          className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-white/80"
           onClick={applyCustom}
         >
           Set

@@ -152,7 +152,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
               <button
                 type="button"
                 data-testid="selection-add-to-playlist"
-                className="muzio-control inline-flex h-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-4 text-sm font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
+                className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-4 text-sm font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
                 onClick={() => openAddModal(selectedItems)}
               >
                 Add to Playlist
@@ -160,7 +160,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
               <button
                 type="button"
                 aria-label="Clear selection"
-                className="muzio-control inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-lg font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-lg font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
                 onClick={clearSelection}
               >
                 <CloseGlyph className="h-5 w-5" />
@@ -172,7 +172,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
             data-testid="sort-toggle"
             aria-label={`Sort ${meta.title}: ${sortLabel}`}
             title={sortLabel}
-            className="muzio-control inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-lg font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-lg font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
             onClick={toggleSort}
           >
             <SortGlyph className="h-5 w-5" />
@@ -262,7 +262,7 @@ function LibrarySearchControl({
   }, [open]);
 
   return (
-    <div ref={controlRef} className="muzio-search relative flex items-center">
+    <div ref={controlRef} className="relative flex items-center">
       <button
         ref={buttonRef}
         type="button"
@@ -271,10 +271,10 @@ function LibrarySearchControl({
         aria-expanded={open}
         aria-pressed={query.trim() !== ''}
         data-active={query.trim() !== '' ? 'true' : 'false'}
-        className="muzio-control inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-lg shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 aria-pressed:text-accent dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-full text-foreground transition hover:bg-foreground/10 aria-pressed:text-accent"
         onClick={() => setOpen((current) => !current)}
       >
-        <MagnifyingGlass aria-hidden className="h-5 w-5" weight="regular" />
+        <MagnifyingGlass aria-hidden className="h-6 w-6" weight="regular" />
       </button>
       {open && (
         <div
@@ -295,7 +295,7 @@ function LibrarySearchControl({
             <button
               type="button"
               aria-label={`Clear filter ${title}`}
-              className="muzio-control inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
               onClick={() => {
                 onQueryChange('');
                 inputRef.current?.focus();
@@ -464,7 +464,7 @@ function AddToPlaylistModal({
           <button
             type="button"
             aria-label="Close add to playlist"
-            className="muzio-control inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
             onClick={onClose}
           >
             <CloseGlyph className="h-5 w-5" />
@@ -497,7 +497,7 @@ function AddToPlaylistModal({
         <button
           type="button"
           data-testid="add-playlist-confirm"
-          className="muzio-control muzio-primary inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
+          className="inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
           onClick={onConfirm}
         >
           Confirm

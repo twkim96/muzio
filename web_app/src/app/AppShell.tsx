@@ -8,7 +8,7 @@ import {
   type TouchEvent as ReactTouchEvent,
 } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { List } from '@phosphor-icons/react/dist/csr/List';
+import { SidebarSimple } from '@phosphor-icons/react/dist/csr/SidebarSimple';
 
 import type { LibraryItem } from '../core/api/libraryClient';
 import {
@@ -330,8 +330,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     <SearchHostProvider host={searchHost}>
       <div className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-surface dark:text-foreground">
         {!isImmersiveRoute && (
-          <header className="muzio-topbar app-top-fade sticky top-0 z-30 px-3 py-3 sm:px-4">
-            <div className="relative flex h-11 items-center justify-between gap-2">
+          <header className="muzio-topbar sticky top-3 z-30 mx-auto mt-3 w-fit max-w-[calc(100%-1.5rem)] px-1.5 py-1.5">
+            <div className="relative flex h-11 items-center justify-center gap-0.5 sm:gap-1">
               {hasMobileMenu ? (
                 <button
                   ref={menuButtonRef}
@@ -340,10 +340,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                   aria-expanded={drawerOpen}
                   aria-controls="app-sidebar-drawer"
                   data-testid="navigation-menu-button"
-                  className="muzio-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-xl shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground transition hover:bg-foreground/10"
                   onClick={() => setDrawerOpen((open) => !open)}
                 >
-                  <List aria-hidden className="h-5 w-5" weight="regular" />
+                  <SidebarSimple aria-hidden className="h-6 w-6" weight="regular" />
                 </button>
               ) : (
                 <span className="h-10 w-10 shrink-0" aria-hidden />
@@ -523,7 +523,7 @@ function SidebarDrawer({
                 type="button"
                 data-testid="playlist-create-open"
                 aria-label="Create playlist"
-                className="muzio-control inline-flex h-10 w-10 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
                 onClick={onCreatePlaylist}
               >
                 +
@@ -534,7 +534,7 @@ function SidebarDrawer({
                 type="button"
                 data-testid="playlist-edit-toggle"
                 aria-pressed={editing}
-                className="muzio-control inline-flex h-10 items-center justify-center rounded-full px-3 text-sm font-semibold text-muted hover:bg-zinc-200/70 aria-pressed:text-accent dark:hover:bg-white/10"
+                className="inline-flex h-10 items-center justify-center rounded-full px-3 text-sm font-semibold text-muted hover:bg-zinc-200/70 aria-pressed:text-accent dark:hover:bg-white/10"
                 onClick={onEditToggle}
               >
                 Edit
@@ -543,7 +543,7 @@ function SidebarDrawer({
             <button
               type="button"
               aria-label="Close navigation"
-              className="muzio-control inline-flex h-10 w-10 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
               onClick={onClose}
             >
               ×
@@ -685,8 +685,7 @@ function SegmentedTabs({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <nav
       aria-label="Primary"
-      data-glass
-      className="inline-flex max-w-full rounded-full bg-zinc-200/30 p-1 shadow-sm ring-1 ring-black/[0.025] backdrop-blur-xl dark:bg-white/[0.045] dark:ring-white/[0.035]"
+      className="inline-flex min-w-0 items-center"
     >
       {primaryTabs.map((tab) => {
         const active = activeLocation.pathname.startsWith(tab.match);
@@ -759,7 +758,7 @@ function SidebarContent({
                 type="button"
                 data-testid="playlist-create-open"
                 aria-label="Create playlist"
-                className="muzio-control inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
                 onClick={onCreatePlaylist}
               >
                 +
@@ -770,7 +769,7 @@ function SidebarContent({
                 type="button"
                 data-testid="playlist-edit-toggle"
                 aria-pressed={editing}
-                className="muzio-control inline-flex h-9 items-center justify-center rounded-full px-3 text-sm font-semibold text-muted hover:bg-zinc-200/70 aria-pressed:text-accent dark:hover:bg-white/10"
+                className="inline-flex h-9 items-center justify-center rounded-full px-3 text-sm font-semibold text-muted hover:bg-zinc-200/70 aria-pressed:text-accent dark:hover:bg-white/10"
                 onClick={onEditToggle}
               >
                 Edit
@@ -860,14 +859,14 @@ function SidebarContent({
             to="/settings"
             onClick={onNavigate}
             data-testid="menu-settings-button"
-            className="muzio-control inline-flex h-9 min-w-0 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-3 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:text-foreground dark:hover:bg-white/10"
+            className="inline-flex h-9 min-w-0 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-3 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:text-foreground dark:hover:bg-white/10"
           >
             Setting
           </Link>
           <button
             type="button"
             data-testid="menu-queue-button"
-            className="muzio-control inline-flex h-9 min-w-0 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-3 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:text-foreground dark:hover:bg-white/10"
+            className="inline-flex h-9 min-w-0 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-3 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:text-foreground dark:hover:bg-white/10"
             onClick={handleOpenQueue}
           >
             Queue
@@ -905,7 +904,7 @@ function CreatePlaylistModal({
           <button
             type="button"
             aria-label="Close create playlist"
-            className="muzio-control inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
             onClick={onClose}
           >
             ×
@@ -921,7 +920,7 @@ function CreatePlaylistModal({
         <button
           type="button"
           data-testid="playlist-create-submit"
-          className="muzio-control muzio-primary inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
+          className="inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
           onClick={onSubmit}
         >
           Create
@@ -962,7 +961,7 @@ function PlaylistNameModal({
           <button
             type="button"
             aria-label={`Close ${title}`}
-            className="muzio-control inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
             onClick={onClose}
           >
             ×
@@ -978,7 +977,7 @@ function PlaylistNameModal({
         <button
           type="button"
           data-testid="playlist-rename-submit"
-          className="muzio-control muzio-primary inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
+          className="inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
           onClick={onSubmit}
         >
           {submitLabel}
@@ -1017,7 +1016,7 @@ function ConfirmModal({
         <div className="mt-4 grid grid-cols-2 gap-2">
           <button
             type="button"
-            className="muzio-control inline-flex h-10 items-center justify-center rounded-full border border-white/14 px-4 text-sm font-semibold text-white/75 hover:bg-white/10"
+            className="inline-flex h-10 items-center justify-center rounded-full border border-white/14 px-4 text-sm font-semibold text-white/75 hover:bg-white/10"
             onClick={onClose}
           >
             Cancel
@@ -1025,7 +1024,7 @@ function ConfirmModal({
           <button
             type="button"
             data-testid="confirm-submit"
-            className="muzio-control muzio-danger inline-flex h-10 items-center justify-center rounded-full bg-accent px-4 text-sm font-semibold text-white hover:bg-accent/85"
+            className="inline-flex h-10 items-center justify-center rounded-full bg-accent px-4 text-sm font-semibold text-white hover:bg-accent/85"
             onClick={onConfirm}
           >
             {confirmLabel}

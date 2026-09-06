@@ -94,7 +94,7 @@ export function PlaylistDrawer({
                 type="button"
                 data-testid="playlist-drawer-edit"
                 aria-pressed={editing}
-                className="muzio-control inline-flex h-9 items-center justify-center rounded-full px-3 text-sm font-semibold text-muted hover:bg-white/10 hover:text-foreground aria-pressed:text-accent"
+                className="inline-flex h-9 items-center justify-center rounded-full px-3 text-sm font-semibold text-muted hover:bg-white/10 hover:text-foreground aria-pressed:text-accent"
                 onClick={() => {
                   setEditing((current) => !current);
                   setSelectedKeys(new Set());
@@ -108,7 +108,7 @@ export function PlaylistDrawer({
                 type="button"
                 data-testid="playlist-drawer-delete"
                 disabled={selectedCount === 0}
-                className="muzio-control muzio-danger inline-flex h-9 items-center justify-center rounded-full px-3 text-sm font-semibold text-accent hover:bg-accent/10 disabled:opacity-45"
+                className="inline-flex h-9 items-center justify-center rounded-full px-3 text-sm font-semibold text-accent hover:bg-accent/10 disabled:opacity-45"
                 onClick={() => setConfirmDelete(true)}
               >
                 Delete
@@ -117,7 +117,7 @@ export function PlaylistDrawer({
             <button
               type="button"
               aria-label="Close playlist"
-              className="muzio-control inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-muted hover:bg-white/10 hover:text-foreground"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-muted hover:bg-white/10 hover:text-foreground"
               onClick={onClose}
             >
               ×
@@ -177,7 +177,7 @@ export function PlaylistDrawer({
                       type="button"
                       aria-label={`Move ${item.name} up`}
                       disabled={index === 0}
-                      className="muzio-control h-7 w-8 rounded text-sm hover:bg-white/10 disabled:opacity-30"
+                      className="h-7 w-8 rounded text-sm hover:bg-white/10 disabled:opacity-30"
                       onClick={() => onMoveItem?.(contentKeyForLibraryItem(item), 'up')}
                     >
                       ↑
@@ -186,7 +186,7 @@ export function PlaylistDrawer({
                       type="button"
                       aria-label={`Move ${item.name} down`}
                       disabled={index === items.length - 1}
-                      className="muzio-control h-7 w-8 rounded text-sm hover:bg-white/10 disabled:opacity-30"
+                      className="h-7 w-8 rounded text-sm hover:bg-white/10 disabled:opacity-30"
                       onClick={() => onMoveItem?.(contentKeyForLibraryItem(item), 'down')}
                     >
                       ↓
@@ -214,7 +214,7 @@ export function PlaylistDrawer({
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  className="muzio-control inline-flex h-10 items-center justify-center rounded-full border border-white/14 px-4 text-sm font-semibold text-muted hover:bg-white/10"
+                  className="inline-flex h-10 items-center justify-center rounded-full border border-white/14 px-4 text-sm font-semibold text-muted hover:bg-white/10"
                   onClick={() => setConfirmDelete(false)}
                 >
                   Cancel
@@ -222,7 +222,7 @@ export function PlaylistDrawer({
                 <button
                   type="button"
                   data-testid="playlist-drawer-confirm-delete"
-                  className="muzio-control muzio-danger inline-flex h-10 items-center justify-center rounded-full bg-accent px-4 text-sm font-semibold text-white hover:bg-accent/85"
+                  className="inline-flex h-10 items-center justify-center rounded-full bg-accent px-4 text-sm font-semibold text-white hover:bg-accent/85"
                   onClick={confirmRemoveItems}
                 >
                   Delete

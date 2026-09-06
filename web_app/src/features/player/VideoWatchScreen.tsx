@@ -204,7 +204,7 @@ export function VideoWatchScreen({
               </div>
               <VideoOptimizationPanel source={source} positionSec={positionSec} playability={playability} />
               {playability === 'no' && (
-                <div className="muzio-panel mt-3 rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] px-3 py-2">
+                <div className="mt-3 rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] px-3 py-2">
                   <p
                     data-testid="unsupported-banner"
                     className="text-sm leading-5 text-amber-200"
@@ -301,7 +301,7 @@ function VideoOptimizationPanel({
   return (
     <section
       data-testid="video-optimization"
-      className="muzio-panel mt-3 rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] px-3 py-3"
+      className="mt-3 rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] px-3 py-3"
       aria-label="Faster playback copy"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -330,12 +330,12 @@ function VideoOptimizationPanel({
         </div>
         <div className="flex flex-wrap gap-2">
           {(status.state === 'eligible' || status.state === 'failed') && playability !== 'no' && (
-            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.prepare(mediaId, kind))} className="muzio-control muzio-primary rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.prepare(mediaId, kind))} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
               {status.state === 'failed' ? 'Retry preparation' : kind === 'hls-fmp4' ? 'Prepare segmented playback' : 'Prepare faster playback'}
             </button>
           )}
           {status.state === 'building' && (
-            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.cancel(mediaId, kind))} className="muzio-control muzio-danger rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.cancel(mediaId, kind))} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
               Cancel build
             </button>
           )}
@@ -343,7 +343,7 @@ function VideoOptimizationPanel({
             <button type="button" disabled={busy} onClick={() => {
               const direct = { ...source, url: buildStreamingUrl(mediaId, { startSec: positionSec }) };
               void playSource(videoOptimizationService.resolve(direct));
-            }} className="muzio-control muzio-primary rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+            }} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
               Use faster copy
             </button>
           )}
@@ -351,12 +351,12 @@ function VideoOptimizationPanel({
             <button type="button" disabled={busy} onClick={() => {
               videoOptimizationService.preferOriginal(mediaId);
               void playSource(restoreOriginalVideoSource(source, positionSec));
-            }} className="muzio-control rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+            }} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
               Use original
             </button>
           )}
           {status.state === 'ready' && !usingReady && status.cacheKey !== undefined && (
-            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.clear(mediaId, status.cacheKey!, kind))} className="muzio-control muzio-danger rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
+            <button type="button" disabled={busy} onClick={() => void run(() => videoOptimizationService.clear(mediaId, status.cacheKey!, kind))} className="rounded-full border border-[color:var(--color-border)] px-3 py-1.5 text-xs font-medium disabled:opacity-50">
               Clear copy
             </button>
           )}
@@ -410,7 +410,7 @@ function VideoDescription({
       ref={gestureRef}
       data-testid="video-description"
       aria-label="Video information"
-      className="muzio-panel rounded-[var(--video-watch-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] p-4 lg:col-start-1 lg:row-start-2 lg:mt-0"
+      className="rounded-[var(--video-watch-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] p-4 lg:col-start-1 lg:row-start-2 lg:mt-0"
     >
       <dl className="grid gap-3 text-sm leading-5 sm:grid-cols-2">
         {detailRows.map((row) => (
@@ -459,7 +459,7 @@ function ExternalPlaybackActions({
       <button
         type="button"
         data-testid="video-open-stream"
-        className="muzio-control inline-flex h-9 items-center gap-2 rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] px-3 text-sm font-medium leading-5 text-[var(--color-fg)] transition hover:bg-[var(--color-control-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        className="inline-flex h-9 items-center gap-2 rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] px-3 text-sm font-medium leading-5 text-[var(--color-fg)] transition hover:bg-[var(--color-control-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         onClick={openStream}
       >
         <OpenExternalGlyph className="h-4 w-4" />
@@ -468,7 +468,7 @@ function ExternalPlaybackActions({
       <button
         type="button"
         data-testid="video-share-stream"
-        className="muzio-control inline-flex h-9 items-center gap-2 rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] px-3 text-sm font-medium leading-5 text-[var(--color-fg)] transition hover:bg-[var(--color-control-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        className="inline-flex h-9 items-center gap-2 rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] px-3 text-sm font-medium leading-5 text-[var(--color-fg)] transition hover:bg-[var(--color-control-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         onClick={() => {
           void shareStream();
         }}
@@ -501,7 +501,7 @@ function DismissButton({
       type="button"
       data-testid="player-close"
       aria-label={label}
-      className="muzio-control fixed left-3 top-3 z-30 inline-flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-fg)] transition hover:bg-[var(--color-control-hover)] sm:left-5 sm:top-5"
+      className="fixed left-3 top-3 z-30 inline-flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-fg)] transition hover:bg-[var(--color-control-hover)] sm:left-5 sm:top-5"
       onClick={onCollapse}
     >
       <DownChevronIcon />
@@ -559,7 +559,7 @@ function VideoUpNextList({
             ref={sentinelRef}
             type="button"
             onClick={loadMore}
-            className="muzio-control mt-3 w-full rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] px-3 py-2 text-sm text-[var(--color-muted)] hover:bg-[var(--color-control-hover)]"
+            className="mt-3 w-full rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] px-3 py-2 text-sm text-[var(--color-muted)] hover:bg-[var(--color-control-hover)]"
           >
             Load more videos
           </button>
@@ -606,7 +606,7 @@ function VideoUpNextRow({
         type="button"
         aria-current={current ? 'true' : undefined}
         aria-label={current ? `Now playing ${item.name}` : `Play ${item.name}`}
-        className={`muzio-control grid w-full touch-pan-y grid-cols-[var(--video-watch-thumb-width)_minmax(0,1fr)] gap-3 rounded-[var(--video-watch-row-radius)] p-1.5 text-left transition hover:bg-[var(--color-control-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-default disabled:opacity-100 disabled:hover:bg-[var(--color-control)] ${
+        className={`grid w-full touch-pan-y grid-cols-[var(--video-watch-thumb-width)_minmax(0,1fr)] gap-3 rounded-[var(--video-watch-row-radius)] p-1.5 text-left transition hover:bg-[var(--color-control-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-default disabled:opacity-100 disabled:hover:bg-[var(--color-control)] ${
           current ? 'bg-[var(--color-control)]' : ''
         }`}
         disabled={current}

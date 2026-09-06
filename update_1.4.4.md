@@ -61,3 +61,10 @@
 - 브라우저: 320px 상단바 horizontal overflow 없음, 390px 검색/메뉴와 desktop 설정/재생목록 생성/음악 플레이어 확인. 1920×360 비디오 페이지 width=1920, 액션 bottom=344, wheel 후 video top=-235로 기존 크기/스크롤 계약 유지.
 - 제품 버전 1.4.4, PWA shell revision 1.4.4-r4.
 - 배포 완료: 실제 서비스 sw.js는 1.4.4-r4이며 상단바/검색 팝업의 blur(1.5px), saturate(0.9), contrast(0.82)와 로컬 Pretendard 적용을 확인했다. 이전 build는 dist/web-backup-1.4.4-r3-20260906-095638에 보존했다.
+
+## 추가 보정 - 플로팅바와 개별 요소 테두리 제거
+
+- 개별 버튼/행/설정 패널에 새로 추가한 글래스 박스 클래스를 제거해 원래의 컨트롤 표현을 복원했다. 도크, 팝업과 메뉴의 공통 글래스 재질은 유지한다.
+- 전체 너비 상단 배경을 없애고 메뉴·Music/Video/Image·검색을 중앙의 플로팅 섬에 배치했다. 메뉴 아이콘은 사이드바 형태로 변경했다.
+- 제품 버전은 1.4.4, PWA shell revision은 1.4.4-r5.
+- 검증/배포: App·MiniPlayer 39 tests와 production build 통과. 실제 서비스 desktop 중앙 bar width=338px, 320px viewport의 bar width=286px·검색 팝업 좌우 경계 8~296px 확인. 미니 재생 버튼의 border=0px/background=transparent/shadow=none 확인. 1.4.4-r5 웹 배포 완료.
