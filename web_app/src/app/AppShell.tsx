@@ -333,7 +333,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {!isImmersiveRoute && (
           <header className="sticky top-3 z-30 mx-auto mt-3 max-w-7xl px-3 sm:px-8 lg:px-10">
             {section !== null && (
-              <div className="mb-2 h-[57.42px] w-fit [--title-scale:1.794375] sm:[--title-scale:1.4355] md:absolute md:top-[0.29px] md:mb-0">
+              <div className="mb-2 h-[46.4px] w-fit [--title-scale:1.45] sm:[--title-scale:1.16] md:absolute md:top-[5.8px] md:mb-0">
                 <h1 className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
                   <span className="scale-[calc(1/var(--title-scale))]">{sideSections[section].title}</span>
                 </h1>
@@ -369,9 +369,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               to="/settings"
               aria-label="Settings"
               onClick={closeDrawer}
-              className="muzio-settings-button absolute right-3 top-[10.71px] flex h-9 w-9 items-center justify-center text-foreground sm:right-8 sm:top-[6.71px] sm:h-11 sm:w-11 lg:right-10"
+              className="muzio-settings-button absolute right-3 top-0 flex h-[46.4px] w-[46.4px] items-center justify-center text-foreground sm:right-8 md:top-[5.8px] lg:right-10"
             >
-              <GearSix aria-hidden className="h-5 w-5" />
+              <GearSix aria-hidden className="h-[21.1px] w-[21.1px]" />
             </NavLink>
           </header>
         )}
@@ -531,7 +531,7 @@ function SidebarDrawer({
         <div className="mb-4 flex shrink-0 flex-col items-start gap-3">
           <div
             data-testid="mobile-menu-title"
-            className="h-[57.42px] w-fit [--title-scale:1.794375] sm:[--title-scale:1.4355]"
+            className="h-[46.4px] w-fit [--title-scale:1.45] sm:[--title-scale:1.16]"
           >
             <span className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
               <span className="scale-[calc(1/var(--title-scale))]">{sidebar.title}</span>
