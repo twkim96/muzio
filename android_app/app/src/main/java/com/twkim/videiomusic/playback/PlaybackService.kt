@@ -1,6 +1,7 @@
 package com.twkim.videiomusic.playback
 
 import android.content.Intent
+import android.app.PendingIntent
 import android.os.Bundle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -13,15 +14,14 @@ import androidx.media3.session.MediaSessionService
 import com.twkim.videiomusic.data.MediaType
 import com.twkim.videiomusic.data.LibraryPreferencesStore
 import com.twkim.videiomusic.data.MuzioApi
-import com.twkim.videiomusic.data.ProfileStore
 import com.twkim.videiomusic.data.ProgressSource
+import com.twkim.videiomusic.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -36,7 +36,6 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
     private lateinit var libraryPreferencesStore: LibraryPreferencesStore
     private lateinit var player: ExoPlayer
     private var mediaSession: MediaSession? = null
-    private var baseUrl = ""
     private var lastSample: ProgressSample? = null
     private var lastSyncedAtMs = 0L
     private var progressLoop: Job? = null
@@ -52,17 +51,16 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
                     .build(),
                 true,
             )
+            setHandleAudioBecomingNoisy(true)
             addListener(playerListener)
         }
+        PlaybackRuntime.update { PlaybackRuntimeState() }
         PlaybackRuntime.actions = this
         publishVolumeState()
-        mediaSession = MediaSession.Builder(this, player).build()
+        val openApp = PendingIntent.getActivity(this, 0,
+            Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        mediaSession = MediaSession.Builder(this, player).setSessionActivity(openApp).build()
 
-        scope.launch {
-            ProfileStore(applicationContext).profile.collectLatest { profile ->
-                baseUrl = profile.baseUrl
-            }
-        }
         progressLoop = scope.launch {
             while (isActive) {
                 delay(PROGRESS_SAMPLE_INTERVAL_MS)
@@ -198,12 +196,14 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
             completed = completed || positionMs >= durationMs * 0.95 || durationMs - positionMs < 10_000,
             source = item.progressSource(),
             contentKey = item.mediaMetadata.extras?.getString(EXTRA_CONTENT_KEY).orEmpty(),
+            baseUrl = item.mediaMetadata.extras?.getString(EXTRA_SERVER_ORIGIN)
+                ?: item.localConfiguration?.uri?.let { uri -> "${uri.scheme}://${uri.encodedAuthority}" }.orEmpty(),
         )
     }
 
     private fun sync(sample: ProgressSample?) {
         sample ?: return
-        val targetBaseUrl = baseUrl.takeIf { it.isNotBlank() } ?: return
+        val targetBaseUrl = sample.baseUrl.takeIf { it.isNotBlank() } ?: return
         lastSyncedAtMs = System.currentTimeMillis()
         scope.launch(Dispatchers.IO) {
             runCatching {
@@ -254,9 +254,12 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
         val completed: Boolean,
         val source: ProgressSource?,
         val contentKey: String,
+        val baseUrl: String,
     )
 
     companion object {
+        const val EXTRA_SERVER_ORIGIN = "muzio.server_origin"
+        const val EXTRA_WEB_SOURCE = "muzio.web_source"
         const val EXTRA_MEDIA_TYPE = "muzio.media_type"
         const val EXTRA_NAME = "muzio.name"
         const val EXTRA_ROOT_NAME = "muzio.root_name"

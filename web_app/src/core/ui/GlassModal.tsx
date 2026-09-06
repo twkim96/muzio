@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { CloseGlyph } from './AppIcons';
+import { useAndroidBack } from '../platform/androidShell';
 
 const modalStack: HTMLElement[] = [];
 let previousOverflow = '';
@@ -17,6 +18,7 @@ export function GlassModal({
   closeLabel?: string;
   alert?: boolean;
 }) {
+  useAndroidBack(true, onClose, 100);
   const titleId = useId();
   const backdropRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLElement>(null);

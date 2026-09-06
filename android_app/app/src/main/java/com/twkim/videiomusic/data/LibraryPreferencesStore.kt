@@ -56,6 +56,16 @@ class LibraryPreferencesStore(private val context: Context) {
     private val playlistsKey = stringPreferencesKey("music.playlists.v1")
     private val activityKey = stringPreferencesKey("music.activity.v1")
 
+    /** Copy the existing v1 documents without rewriting or deleting native data. */
+    suspend fun exportWebPreferences(): JSONObject {
+        val values = context.libraryPreferencesDataStore.data.first()
+        return JSONObject().apply {
+            for (key in listOf(likedKey, playlistsKey, activityKey)) {
+                values[key]?.let { put(key.name, it) }
+            }
+        }
+    }
+
     val preferences: Flow<LibraryPreferences> = context.libraryPreferencesDataStore.data.map { values ->
         LibraryPreferences(
             likedContentKeys = parseLiked(values[likedKey]),

@@ -1,3 +1,5 @@
+> Historical Compose-client checklist. The shared web UI host supersedes this UI implementation; see [README.md](README.md) for current scope and acceptance boundaries.
+
 # Web → Android 기능 동등성
 
 웹 구현을 기능 계약의 기준으로 삼습니다. 기능 연결과 첫 UI 이식을 완료했으며,

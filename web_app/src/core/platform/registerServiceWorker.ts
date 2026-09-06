@@ -1,4 +1,7 @@
 export function registerServiceWorker() {
+  // Android packages the same UI inside its APK; a server service worker must
+  // not replace those assets with another release or intercept native hosting.
+  if (import.meta.env.VITE_MUZIO_ANDROID === '1') return;
   const enableDevPwa = import.meta.env.DEV && import.meta.env.VITE_ENABLE_PWA_DEV === '1';
   if (!import.meta.env.PROD && !enableDevPwa) return;
   if (enableDevPwa && !window.isSecureContext) return;

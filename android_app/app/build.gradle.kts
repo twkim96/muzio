@@ -11,8 +11,8 @@ android {
         applicationId = "com.twkim.videiomusic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.1.0-dev"
+        versionCode = 5
+        versionName = "1.2.0-web-dev"
     }
 
     buildFeatures {
@@ -31,6 +31,8 @@ android {
 }
 
 dependencies {
+    implementation("androidx.webkit:webkit:1.14.0")
+    testImplementation("junit:junit:4.13.2")
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.compose.material3:material3:1.4.0")
     implementation("androidx.compose.foundation:foundation:1.11.2")
@@ -47,3 +49,22 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling:1.11.2")
 }
+
+// The APK always contains the current React UI. Never maintain a second copy
+// of these assets or silently package an old web_app/dist directory.
+val sharedWebRoot = rootProject.projectDir.resolve("../web_app")
+val sharedWebAssets = layout.buildDirectory.dir("generated/sharedWebAssets")
+val buildSharedWeb by tasks.registering(Exec::class) {
+    workingDir(sharedWebRoot)
+    inputs.dir(sharedWebRoot.resolve("src"))
+    inputs.dir(sharedWebRoot.resolve("public"))
+    inputs.files(fileTree(sharedWebRoot) {
+        include("package*.json", "*.config.*", "tsconfig.json", "index.html")
+    })
+    outputs.dir(sharedWebAssets)
+    environment("VITE_MUZIO_ANDROID", "1")
+    commandLine("npm", "run", "build", "--", "--outDir",
+        sharedWebAssets.get().dir("muzio-web").asFile.absolutePath)
+}
+android.sourceSets.getByName("main").assets.srcDir(sharedWebAssets.get().asFile)
+tasks.named("preBuild").configure { dependsOn(buildSharedWeb) }

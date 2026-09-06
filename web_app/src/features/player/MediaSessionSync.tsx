@@ -68,7 +68,8 @@ const DEFAULT_SEEK_OFFSET_SEC = 10;
 export function MediaSessionSync() {
   const store = usePlayerStore();
   const activeState = store(selectActiveState);
-  const source = activeState.source;
+  const nativeAudio = store((state) => state.nativeAudio);
+  const source = nativeAudio && store.getState().active !== 'video' ? null : activeState.source;
   const status = activeState.status;
   const active = store((state) => state.active);
   const musicQueue = store((state) => state.musicQueue);
@@ -86,7 +87,7 @@ export function MediaSessionSync() {
 
     if (source === null) {
       setMediaSessionMetadata(mediaSession, null);
-      setPlaybackState(mediaSession, status);
+      setPlaybackState(mediaSession, nativeAudio && active !== 'video' ? { kind: 'idle' } : status);
       return;
     }
 
@@ -101,13 +102,15 @@ export function MediaSessionSync() {
 
     applyMetadata();
     queueMicrotask(applyMetadata);
-  }, [source, status]);
+  }, [source, status, nativeAudio, active]);
 
   useEffect(() => {
     const mediaSession = mediaSessionOrNull();
     if (mediaSession === null || mediaSession.setActionHandler === undefined) {
       return;
     }
+
+    if (nativeAudio && active !== 'video') return;
 
     const queueSnapshot = {
       tracks: musicQueue,
@@ -170,7 +173,7 @@ export function MediaSessionSync() {
         setActionHandler(mediaSession, action, null);
       }
     };
-  }, [active, musicQueue, musicQueueIndex, repeatMode, stopAfterCurrent, store]);
+  }, [nativeAudio, active, musicQueue, musicQueueIndex, repeatMode, stopAfterCurrent, store]);
 
   return null;
 }

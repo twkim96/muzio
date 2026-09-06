@@ -1,3 +1,4 @@
+import { useAndroidBack } from '../../core/platform/androidShell';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft } from '@phosphor-icons/react';
@@ -25,6 +26,7 @@ export function QueueDrawer({
   onClose: () => void;
   onBack?: () => void;
 }) {
+  useAndroidBack(open, onClose, 50);
   const store = usePlayerStore();
   const queue = store((state) => state.musicQueue);
   const currentIndex = store((state) => state.musicQueueIndex);

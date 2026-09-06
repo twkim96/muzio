@@ -100,6 +100,8 @@ const initialPlayback: PlaybackState = {
 };
 
 export interface PlayerState extends PlayerSnapshot {
+  nativeAudio: boolean;
+  attachNativeAudio(session: PlaybackSession, pauseAndWait: () => Promise<void>): void;
   sleepTimer: SleepTimerState;
   stopAfterCurrent: boolean;
   volume: number;
@@ -478,6 +480,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
     ((handle: unknown) =>
       globalThis.clearInterval(handle as ReturnType<typeof setInterval>));
   let sleepTimerHandle: unknown = null;
+  let pauseNativeAudio: (() => Promise<void>) | null = null;
   let queueEntryCounter = 0;
   const lastActivityProgress = {
     audio: {
@@ -542,14 +545,28 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
   };
 
   return create<PlayerState>((set, get) => {
-    const withQueueEntry = (source: PlaybackSource): PlaybackSource => ({
-      ...source,
-      queueEntryId:
-        source.queueEntryId ??
-        `queue-${++queueEntryCounter}-${source.mediaId}`,
-    });
-    const withQueueEntries = (sources: readonly PlaybackSource[]) =>
-      sources.map(withQueueEntry);
+    const queueEntryIds = (sources: readonly PlaybackSource[] = []) => new Set(
+      [...get().musicQueue, ...(get().shuffleBaseQueue ?? []), ...sources]
+        .flatMap((source) => source.queueEntryId === undefined ? [] : [source.queueEntryId]),
+    );
+    const withQueueEntry = (
+      source: PlaybackSource,
+      reserved = queueEntryIds(),
+    ): PlaybackSource => {
+      if (source.queueEntryId !== undefined) return source;
+      let queueEntryId: string;
+      do {
+        queueEntryId = `queue-${++queueEntryCounter}-${source.mediaId}`;
+      } while (reserved.has(queueEntryId));
+      reserved.add(queueEntryId);
+      return { ...source, queueEntryId };
+    };
+    const withQueueEntries = (sources: readonly PlaybackSource[]) => {
+      // Include supplied IDs up front so generated IDs cannot collide with a
+      // later row, or with rows restored by the native service after recreation.
+      const reserved = queueEntryIds(sources);
+      return sources.map((source) => withQueueEntry(source, reserved));
+    };
     const projectFromSlot = (kind: 'audio' | 'video'): PlaybackState => {
       const slot = slots[kind];
       const state = slot.session ? slot.session.getState() : initialPlayback;
@@ -667,7 +684,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       const targetKind = source.mediaType;
       const otherKind = targetKind === 'audio' ? 'video' : 'audio';
       const slot = slots[targetKind];
-      let playbackSource = playbackSourceWithoutQueueEntry(source);
+      let playbackSource = get().nativeAudio && targetKind === 'audio' ? source : playbackSourceWithoutQueueEntry(source);
       if (
         slot.seededSource !== null &&
         slot.seededSource.mediaId === playbackSource.mediaId &&
@@ -681,7 +698,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         );
       }
       slot.presentationSource = playbackSource;
-      if (targetKind === 'audio' && audioResumeCache !== null) {
+      if (targetKind === 'audio' && !get().nativeAudio && audioResumeCache !== null) {
         playbackSource = audioResumeCache.resolve(playbackSource);
       }
       if (
@@ -710,7 +727,8 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       try {
         // Pause the other kind so the two sessions never speak at once.
         const otherSession = slots[otherKind].session;
-        if (otherSession) otherSession.pause();
+        if (targetKind === 'video' && pauseNativeAudio) await pauseNativeAudio();
+        else if (otherSession) otherSession.pause();
 
         const elementAlive =
           slot.element !== null && isElementConnected(slot.element);
@@ -721,7 +739,8 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           slot.session !== null &&
           elementAlive &&
           currentState?.status.kind !== 'ended' &&
-          samePlaybackMedia(currentState?.source ?? null, playbackSource);
+          samePlaybackMedia(currentState?.source ?? null, playbackSource) &&
+          (!get().nativeAudio || currentState?.source?.queueEntryId === playbackSource.queueEntryId);
         if (slot.session !== null && shouldFlushCurrent && !sameActiveAudio) {
           slot.progressAttachment?.flush();
           syncActivityProgress(targetKind, slot.session.getState(), true);
@@ -864,6 +883,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
     };
 
     const maybeAdvanceAudioQueue = () => {
+      if (get().nativeAudio) return;
       const state = get();
       if (state.audio.status.kind !== 'ended') return;
       const nextIndex = nextQueueIndex(
@@ -951,6 +971,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         }
         if (
           kind === 'audio' &&
+          !get().nativeAudio &&
           audioResumeCache !== null &&
           nextState.status.kind === 'playing' &&
           nextState.source !== null &&
@@ -992,6 +1013,11 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           });
         }
         if (kind === 'video') {
+          if (nextState.status.kind === 'playing' && pauseNativeAudio &&
+              get().audio.status.kind === 'playing') {
+            // Vidstack controls can resume directly, bypassing store actions.
+            void pauseNativeAudio().catch(() => slot.session?.pause());
+          }
           const seekSeq = nextState.userSeekSeq ?? 0;
           if (seekSeq < slot.optimizationHandledSeekSeq) {
             slot.optimizationHandledSeekSeq = seekSeq;
@@ -1040,6 +1066,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       );
       if (remainingSec <= 0) {
         clearSleepTimerHandle();
+        if (get().nativeAudio && get().active === 'audio') return;
         get().pauseActive();
         set({ sleepTimer: { kind: 'expired' } });
         return;
@@ -1064,6 +1091,15 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
     };
 
     return {
+      nativeAudio: false,
+      attachNativeAudio(session, pauseAndWait) {
+        pauseNativeAudio = pauseAndWait;
+        set({ nativeAudio: true });
+        get().setSessionForTests('audio', session);
+        slots.audio.unsubscribe?.();
+        subscribeToSession('audio');
+        slots.audio.element = { isConnected: true };
+      },
       audio: initialPlayback,
       video: initialPlayback,
       active: null,
@@ -1461,16 +1497,17 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           return;
         }
         const state = get();
+        const entry = withQueueEntry(source);
         const next = insertQueueTrackAfterCurrent(
           state.musicQueue,
           state.musicQueueIndex,
-          withQueueEntry(source),
+          entry,
         );
         const base = baseQueueSnapshot(state);
         const nextBase = insertQueueTrackAfterCurrent(
           base.tracks,
           base.currentIndex,
-          withQueueEntry(source),
+          entry,
         );
         const current = currentQueueTrack(next.tracks, next.currentIndex);
         if (current === null) return;
@@ -1485,6 +1522,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       async togglePlayPause() {
         const active = get().active;
         if (active === null) return;
+        if (active === 'video' && pauseNativeAudio) await pauseNativeAudio();
         const slot = slots[active];
         const seededSource = slot.seededSource;
         if (seededSource !== null) {
@@ -1543,6 +1581,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       async retryActivePlayback() {
         const active = get().active;
         if (active === null) return;
+        if (active === 'video' && pauseNativeAudio) await pauseNativeAudio();
         const slot = slots[active];
         const seededSource = slot.seededSource;
         if (seededSource !== null) {

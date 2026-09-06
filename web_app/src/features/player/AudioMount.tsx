@@ -17,6 +17,7 @@ import { usePlayerStore } from './PlayerContext';
  */
 export function AudioMount() {
   const store = usePlayerStore();
+  const nativeAudio = store((state) => state.nativeAudio);
   const ref = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -34,6 +35,8 @@ export function AudioMount() {
       });
     };
   }, [store]);
+
+  if (nativeAudio) return null;
 
   return (
     <audio

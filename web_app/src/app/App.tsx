@@ -1,3 +1,4 @@
+import { androidShellBridge, useAndroidBack } from '../core/platform/androidShell';
 import {
   BrowserRouter,
   Navigate,
@@ -58,6 +59,15 @@ function RoutedContent() {
   const imageViewerMediaId = showImageViewerOverlay
     ? decodeURIComponent(location.pathname.slice('/image/'.length))
     : '';
+
+  useAndroidBack(androidShellBridge() !== null, () => {
+    if (isOpen) close();
+    else if (showImageViewerOverlay) navigate(-1);
+    else if (location.pathname !== '/library/music') {
+      if (typeof window.history.state?.idx === 'number' && window.history.state.idx > 0) navigate(-1);
+      else navigate('/library/music', { replace: true });
+    } else void androidShellBridge()?.request('shell.background');
+  });
 
   return (
     <>

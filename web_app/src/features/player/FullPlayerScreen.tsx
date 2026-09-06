@@ -1,3 +1,4 @@
+import { useAndroidBack } from '../../core/platform/androidShell';
 import { MediaCollapseButton } from '../../core/ui/MediaCollapseButton';
 import {
   useEffect,
@@ -80,6 +81,7 @@ export function FullPlayerScreen({
     kind: 'idle',
   });
   const [openPopover, setOpenPopover] = useState<PopoverKind>(null);
+  useAndroidBack(openPopover !== null, () => setOpenPopover(null), 50);
   const [queueOpen, setQueueOpen] = useState(false);
   const [customMinutes, setCustomMinutes] = useState('45');
   const [moreMessage, setMoreMessage] = useState('');

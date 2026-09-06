@@ -1,3 +1,4 @@
+import { androidShellBridge } from '../../core/platform/androidShell';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { FloatingSearchControl } from '../../app/FloatingSearchControl';
@@ -89,6 +90,8 @@ export function SettingsScreen() {
   const matchesSection = (id: keyof typeof settingsSearchTerms) =>
     query.trim().toLocaleLowerCase().split(/\s+/).every((term) =>
       settingsSearchTerms[id].toLocaleLowerCase().includes(term));
+  const showServerConnection = androidShellBridge() !== null && query.trim().toLocaleLowerCase().split(/\s+/).every((term) => 'server connection address change 서버 연결 주소 변경'.includes(term));
+  const [serverError, setServerError] = useState('');
   const [theme, setTheme] = useState<ThemeSettings>(() => readThemeSettings());
   const [themeStatus, setThemeStatus] = useState<
     'ready' | 'loading' | 'saving' | 'saved' | 'error'
@@ -257,11 +260,20 @@ export function SettingsScreen() {
         <FloatingSearchControl title="Settings" query={query} onQueryChange={setQuery} />,
         searchHost,
       )}
-      {!Object.keys(settingsSearchTerms).some((id) => matchesSection(id as keyof typeof settingsSearchTerms)) && (
+      {!showServerConnection && !Object.keys(settingsSearchTerms).some((id) => matchesSection(id as keyof typeof settingsSearchTerms)) && (
         <p role="status" className="py-6 text-sm text-muted">검색 결과가 없습니다.</p>
       )}
 
       <div className="grid min-w-0 gap-4">
+        {showServerConnection && <section className="min-w-0 border-t border-zinc-200/70 py-6 dark:border-white/10">
+          <h2 className="text-2xl font-semibold">Server connection</h2>
+          <p className="mt-2 break-all text-sm text-muted">{window.location.origin}</p>
+          <button type="button" className="mt-3 rounded-xl border border-white/20 px-4 py-2" onClick={() => {
+            setServerError('');
+            void androidShellBridge()?.request('shell.editServer').catch((error: unknown) => setServerError(String(error)));
+          }}>Change server</button>
+          {serverError && <p role="alert" className="mt-2 text-sm text-red-400">{serverError}</p>}
+        </section>}
         <section
           id="appearance"
           hidden={!matchesSection('appearance')}

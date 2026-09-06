@@ -1,3 +1,4 @@
+import { useAndroidBack } from '../core/platform/androidShell';
 import {
   useEffect,
   useMemo,
@@ -124,6 +125,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [renameTarget, setRenameTarget] = useState<PlaylistMenuEntry | null>(null);
   const [renamePlaylistName, setRenamePlaylistName] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<PlaylistMenuEntry | null>(null);
+  useAndroidBack(drawerOpen || queueOpen || playlistDrawer !== null, () => {
+    if (queueOpen) setQueueOpen(false);
+    else if (playlistDrawer !== null) setPlaylistDrawer(null);
+    else setDrawerOpen(false);
+  }, 50);
   const [searchHost, setSearchHost] = useState<HTMLElement | null>(null);
   const [searchPopoverHost, setSearchPopoverHost] = useState<HTMLElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
