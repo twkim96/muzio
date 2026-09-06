@@ -6,21 +6,30 @@ import { createContext, useContext, type ReactNode } from 'react';
  * coupling the shell to one particular library implementation.
  */
 export const SearchHostContext = createContext<HTMLElement | null>(null);
+const SearchPopoverHostContext = createContext<HTMLElement | null>(null);
 
 export function SearchHostProvider({
   children,
   host,
+  popoverHost = null,
 }: {
   children: ReactNode;
   host: HTMLElement | null;
+  popoverHost?: HTMLElement | null;
 }) {
   return (
     <SearchHostContext.Provider value={host}>
-      {children}
+      <SearchPopoverHostContext.Provider value={popoverHost}>
+        {children}
+      </SearchPopoverHostContext.Provider>
     </SearchHostContext.Provider>
   );
 }
 
 export function useSearchHost(): HTMLElement | null {
   return useContext(SearchHostContext);
+}
+
+export function useSearchPopoverHost(): HTMLElement | null {
+  return useContext(SearchPopoverHostContext);
 }

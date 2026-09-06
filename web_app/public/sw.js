@@ -1,4 +1,4 @@
-const CACHE_NAME = 'muzio-shell-v1.4.4-r16';
+const CACHE_NAME = 'muzio-shell-v1.4.4-r17';
 const APP_SHELL = [
   '/',
   '/index.html',

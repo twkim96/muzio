@@ -146,8 +146,8 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-8 lg:px-10">
-      <header className="mb-4 flex min-h-10 items-center justify-end gap-4">
+    <div className="mx-auto w-full max-w-7xl px-4 pb-7 pt-3 sm:px-8 lg:px-10">
+      {(searchHost === null || (selectionMode && type !== 'image')) && <header className="mb-4 flex min-h-10 items-center justify-end gap-4">
         {searchHost === null && (
           <div className="mr-auto min-w-0">
             <h1 className="truncate text-xl font-semibold tracking-tight">
@@ -178,7 +178,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
           )}
 
         </div>
-      </header>
+      </header>}
       {searchHost === null ? (
         <StandaloneLibrarySearch
           title={meta.title}
@@ -320,7 +320,7 @@ function LibraryBody({
     }
     return (
       <>
-        <div className="border-y border-zinc-200/70 dark:border-white/10">
+        <div className="border-b border-zinc-200/70 dark:border-white/10">
           <div className={`border-b border-zinc-200/70 px-3 text-sm font-medium text-muted dark:border-white/10 sm:px-5 ${type === 'audio' ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_6.75rem] xl:gap-2' : ''}`}>
             <div
               role="group"

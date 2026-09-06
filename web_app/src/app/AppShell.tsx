@@ -116,6 +116,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [renamePlaylistName, setRenamePlaylistName] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<PlaylistMenuEntry | null>(null);
   const [searchHost, setSearchHost] = useState<HTMLElement | null>(null);
+  const [searchPopoverHost, setSearchPopoverHost] = useState<HTMLElement | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const navigationTriggerRef = useRef<HTMLButtonElement | null>(null);
   const location = useLocation();
@@ -329,7 +330,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   return (
-    <SearchHostProvider host={searchHost}>
+    <SearchHostProvider host={searchHost} popoverHost={searchPopoverHost}>
       <div className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-surface dark:text-foreground">
         {!isImmersiveRoute && (
           <header className="sticky top-3 z-30 mx-auto mt-3 max-w-7xl px-3 sm:px-8 lg:px-10">
@@ -352,34 +353,37 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </h1>
               </div>
             )}
-            <div className="muzio-topbar relative mx-auto w-fit max-w-full px-1.5 py-1.5">
-              <div className="flex h-11 items-center justify-center gap-0.5 sm:gap-1">
-                {hasMobileMenu ? (
-                  <button
-                    ref={menuButtonRef}
-                    type="button"
-                    aria-label="Open navigation"
-                    aria-expanded={drawerOpen}
-                    aria-controls="app-sidebar-drawer"
-                    data-testid="navigation-menu-button"
-                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground transition hover:bg-foreground/10"
-                    onClick={(event) => {
-                      navigationTriggerRef.current = event.currentTarget;
-                      setDrawerOpen((open) => !open);
-                    }}
-                  >
-                    <SidebarSimple aria-hidden className="h-6 w-6" weight="regular" />
-                  </button>
-                ) : (
-                  <span className="h-10 w-10 shrink-0" aria-hidden />
-                )}
-                <SegmentedTabs onNavigate={closeDrawer} />
-                <div
-                  ref={setSearchHost}
-                  data-testid="search-host"
-                  className="flex h-10 w-10 shrink-0 items-center justify-end"
-                />
+            <div className="relative mx-auto w-fit max-w-full">
+              <div className="muzio-topbar relative px-1.5 py-1.5">
+                <div className="flex h-11 items-center justify-center gap-0.5 sm:gap-1">
+                  {hasMobileMenu ? (
+                    <button
+                      ref={menuButtonRef}
+                      type="button"
+                      aria-label="Open navigation"
+                      aria-expanded={drawerOpen}
+                      aria-controls="app-sidebar-drawer"
+                      data-testid="navigation-menu-button"
+                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground transition hover:bg-foreground/10"
+                      onClick={(event) => {
+                        navigationTriggerRef.current = event.currentTarget;
+                        setDrawerOpen((open) => !open);
+                      }}
+                    >
+                      <SidebarSimple aria-hidden className="h-6 w-6" weight="regular" />
+                    </button>
+                  ) : (
+                    <span className="h-10 w-10 shrink-0" aria-hidden />
+                  )}
+                  <SegmentedTabs onNavigate={closeDrawer} />
+                  <div
+                    ref={setSearchHost}
+                    data-testid="search-host"
+                    className="flex h-10 w-10 shrink-0 items-center justify-end"
+                  />
+                </div>
               </div>
+              <div ref={setSearchPopoverHost} />
             </div>
             <NavLink
               to="/settings"

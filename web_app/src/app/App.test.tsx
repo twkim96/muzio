@@ -200,6 +200,9 @@ describe('App routes', () => {
     fireEvent.click(searchButton);
     const filter = screen.getByLabelText('Filter Music');
     expect(filter).toHaveFocus();
+    expect(screen.getByTestId('search-popover').closest('.muzio-topbar')).toBeNull();
+    fireEvent.pointerDown(filter);
+    expect(screen.getByRole('dialog', { name: 'Music search' })).toBeInTheDocument();
     fireEvent.change(filter, { target: { value: 'second' } });
 
     await waitFor(() => {

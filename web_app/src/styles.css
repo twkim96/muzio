@@ -199,9 +199,6 @@ html.wr-kit {
   border-radius: 999px;
   background: var(--app-menu-surface);
 }
-.wr-kit .muzio-search:focus-within {
-  border-color: rgb(var(--accent) / .55);
-}
 .wr-kit :is(.muzio-dialog, .muzio-popover, .muzio-sidebar, .muzio-drawer, .muzio-search) :is(input:not([type='range']):not([type='checkbox']):not([type='color']), select, textarea) {
   border: 1px solid var(--app-menu-control-border);
   border-radius: 8px;
