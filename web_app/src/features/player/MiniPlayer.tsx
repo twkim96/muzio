@@ -421,6 +421,7 @@ export function MiniPlayer() {
             active={liked}
             disabled={currentLikeKey === ''}
             testId="mini-like-button"
+            prominent
             onClick={() => snapshot.toggleLike(currentLikeKey)}
           >
             <LikeGlyph liked={liked} className="h-6 w-6" />
@@ -430,7 +431,7 @@ export function MiniPlayer() {
               type="button"
               aria-label="Sleep timer"
               aria-expanded={timerOpen}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-zinc-800 dark:text-white hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
               onClick={() => setTimerOpen((open) => !open)}
             >
               <SleepTimerGlyph className="h-7 w-7" />
@@ -463,7 +464,7 @@ export function MiniPlayer() {
             aria-label="Open queue"
             aria-expanded={queueOpen}
             data-testid="mini-queue-button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-xl leading-none text-muted hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-xl leading-none text-zinc-800 dark:text-white hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
             onClick={() => setQueueOpen(true)}
           >
             <QueueGlyph className="h-6 w-6" />
@@ -506,6 +507,7 @@ function MiniIconButton({
   active = false,
   disabled = false,
   variant = 'utility',
+  prominent = false,
   testId,
   onClick,
   children,
@@ -514,6 +516,7 @@ function MiniIconButton({
   active?: boolean;
   disabled?: boolean;
   variant?: 'utility' | 'skip';
+  prominent?: boolean;
   testId?: string;
   onClick?: () => void;
   children: ReactNode;
@@ -528,7 +531,7 @@ function MiniIconButton({
       className={
         variant === 'skip'
           ? 'inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-800 hover:bg-zinc-200/55 hover:text-zinc-950 disabled:cursor-not-allowed disabled:opacity-70 dark:text-white dark:hover:bg-white/[0.06] dark:hover:text-white'
-          : 'inline-flex h-10 w-10 items-center justify-center rounded-xl text-2xl leading-none text-muted hover:bg-zinc-200/55 hover:text-zinc-950 aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-white/[0.06] dark:hover:text-foreground'
+          : `inline-flex h-10 w-10 items-center justify-center rounded-xl text-2xl leading-none ${prominent ? 'text-zinc-800 dark:text-white dark:aria-pressed:text-accent' : 'text-muted'} hover:bg-zinc-200/55 hover:text-zinc-950 aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-45 dark:hover:bg-white/[0.06] dark:hover:text-foreground`
       }
       onClick={onClick}
     >

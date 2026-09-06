@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { PlaybackSource } from '../../core/playback/source/source';
-import { CloseGlyph, PlayGlyph } from '../../core/ui/AppIcons';
+import { PlayGlyph } from '../../core/ui/AppIcons';
 import { currentQueueTrack, queueTrackKey } from './musicQueue';
 import { usePlayerStore } from './PlayerContext';
 
@@ -27,6 +27,7 @@ export function QueueDrawer({
   const playQueueTrack = store((state) => state.playQueueTrack);
   const clearMusicQueue = store((state) => state.clearMusicQueue);
   const current = currentQueueTrack(queue, currentIndex);
+  const drawerRef = useRef<HTMLElement | null>(null);
   const listRef = useRef<HTMLOListElement | null>(null);
   const [range, setRange] = useState<QueueRange>(() =>
     initialQueueRange(queue.length, currentIndex),
@@ -62,6 +63,38 @@ export function QueueDrawer({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose, open]);
 
+  useEffect(() => {
+    const drawer = drawerRef.current;
+    if (!open || drawer === null) return;
+    const previousFocus = document.activeElement;
+    drawer.focus();
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      const controls = Array.from(drawer.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled)',
+      ));
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (!first || !last) {
+        event.preventDefault();
+        drawer.focus();
+      } else if (event.shiftKey && (document.activeElement === first || document.activeElement === drawer || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === drawer || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', trapFocus);
+    return () => {
+      document.removeEventListener('keydown', trapFocus);
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus();
+      }
+    };
+  }, [open]);
+
   useLayoutEffect(() => {
     if (!open || queue.length === 0) return;
     const next = initialQueueRange(queue.length, currentIndex);
@@ -87,45 +120,43 @@ export function QueueDrawer({
     >
       <div
         data-testid="queue-drawer-backdrop"
-        className="absolute inset-0 bg-black/20 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/35"
         onPointerDown={onClose}
       />
       <aside
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
         aria-label="Queue"
         data-glass
         data-allow-scroll
         data-testid="music-now-playing"
-        className="muzio-drawer absolute bottom-0 left-0 top-0 flex w-[min(24rem,92vw)] flex-col border-r border-white/16 bg-zinc-950/78 px-5 py-5 text-foreground shadow-2xl shadow-black/55 backdrop-blur-[34px] sm:w-[25rem]"
+        className="muzio-sidebar absolute inset-y-2 left-2 flex w-[min(20rem,84vw)] flex-col overflow-hidden rounded-2xl outline-none border border-zinc-200/70 bg-white/88 px-5 py-5 text-zinc-950 shadow-2xl shadow-black/20 backdrop-blur-xl dark:border-white/10 dark:bg-surface/94 dark:text-foreground"
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/12 pb-4">
-          <div className="min-w-0">
-            <h2 className="text-lg font-semibold">Queue</h2>
-            <p className="truncate text-sm text-muted">
+        <div className="mb-1 flex shrink-0 flex-col items-start gap-3">
+          <h2 className="h-[46.4px] w-fit text-left [--title-scale:1.45] sm:[--title-scale:1.16]">
+            <span className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
+              <span className="scale-[calc(1/var(--title-scale))]">Queue</span>
+            </span>
+          </h2>
+          <div className="flex h-12 w-full min-w-0 items-center justify-between gap-2">
+            <p className="min-w-0 truncate text-sm text-muted">
               {current === null
                 ? 'Empty'
                 : `${currentIndex + 1}/${queue.length} · ${current.name}`}
             </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
             {queue.length > 1 && (
               <button
                 type="button"
                 data-testid="clear-music-queue"
-                className="rounded-full px-3 py-1 text-sm text-accent hover:bg-white/12"
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-full px-3 text-sm font-semibold text-accent hover:bg-zinc-200/70 dark:hover:bg-white/10"
                 onClick={clearMusicQueue}
               >
                 Clear
               </button>
             )}
-            <button
-              type="button"
-              aria-label="Close queue"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl leading-none text-muted hover:bg-white/12 hover:text-foreground"
-              onClick={onClose}
-            >
-              <CloseGlyph className="h-5 w-5" />
-            </button>
           </div>
         </div>
 

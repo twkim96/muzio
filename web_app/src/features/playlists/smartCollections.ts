@@ -26,24 +26,24 @@ export function buildImageCollections({
   return [
     {
       id: 'image-favorites',
-      title: 'Favorites',
+      title: '즐겨찾기',
       items: images.filter((item) => {
         return contentKeysForLibraryItem(item).some((key) => liked.has(key)) || liked.has(item.id);
       }).slice(0, IMAGE_COLLECTION_LIMIT),
     },
     {
       id: 'image-recently-added',
-      title: 'Recently Added',
+      title: '최근 추가한 항목',
       items: newest.slice(0, IMAGE_COLLECTION_LIMIT),
     },
     {
       id: 'image-screenshots',
-      title: 'Screenshots',
+      title: '스크린샷',
       items: images.filter(isScreenshot).slice(0, IMAGE_COLLECTION_LIMIT),
     },
     {
       id: 'image-downloads',
-      title: 'Downloads',
+      title: '다운로드',
       items: images.filter((item) => pathTokens(item.rootName).some(isDownloadsRootToken)).slice(0, IMAGE_COLLECTION_LIMIT),
     },
   ];
@@ -105,7 +105,7 @@ export function buildSmartCollections({
   return [
     {
       id: 'liked-music',
-      title: 'Liked Music',
+      title: '좋아하는 음악',
       items: items.filter((item) => {
         if (item.type !== 'audio') return false;
         return contentKeysForLibraryItem(item).some((key) => liked.has(key)) || liked.has(item.id);
@@ -113,7 +113,7 @@ export function buildSmartCollections({
     },
     {
       id: 'most-played',
-      title: 'Most Played',
+      title: '많이 재생한 음악',
       items: recordsToItems(
         [...activityRecords]
           .filter((record) => record.mediaType === 'audio' && record.playCount > 0)
@@ -124,7 +124,7 @@ export function buildSmartCollections({
     },
     {
       id: 'recently-watching',
-      title: 'Recently Watching',
+      title: '최근 시청한 영상',
       items: recordsToItems(
         [...activityRecords]
           .filter((record) => record.mediaType === 'video' && record.playCount > 0)

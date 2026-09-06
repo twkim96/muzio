@@ -9,6 +9,12 @@ import {
 } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { SidebarSimple } from '@phosphor-icons/react/dist/csr/SidebarSimple';
+import { Heart } from '@phosphor-icons/react/dist/csr/Heart';
+import { ChartBar } from '@phosphor-icons/react/dist/csr/ChartBar';
+import { ClockCounterClockwise } from '@phosphor-icons/react/dist/csr/ClockCounterClockwise';
+import { Playlist } from '@phosphor-icons/react/dist/csr/Playlist';
+import { ImageSquare } from '@phosphor-icons/react/dist/csr/ImageSquare';
+import { DownloadSimple } from '@phosphor-icons/react/dist/csr/DownloadSimple';
 import { GearSix } from '@phosphor-icons/react/dist/csr/GearSix';
 
 import type { LibraryItem } from '../core/api/libraryClient';
@@ -31,6 +37,7 @@ import {
   resolvePlaylistItemsFromIndex,
 } from '../features/playlists/smartCollections';
 import { backgroundLocationFrom } from './backgroundLocation';
+import { QueueGlyph } from '../core/ui/AppIcons';
 import { SearchHostProvider } from './SearchHostContext';
 
 const primaryTabs = [
@@ -43,17 +50,17 @@ const sideSections = {
   music: {
     title: 'Music',
     to: '/library/music',
-    items: ['Liked Music', 'Most Played'],
+    items: ['좋아하는 음악', '많이 재생한 음악'],
   },
   video: {
     title: 'Video',
     to: '/library/video',
-    items: ['Recently Watching'],
+    items: ['최근 시청한 영상'],
   },
   image: {
     title: 'Image',
     to: '/library/image',
-    items: ['Favorites', 'Recently Added', 'Screenshots', 'Downloads'],
+    items: ['즐겨찾기', '최근 추가한 항목', '스크린샷', '다운로드'],
   },
   settings: {
     title: 'Settings',
@@ -548,27 +555,19 @@ function SidebarDrawer({
         className="muzio-sidebar absolute inset-y-2 left-2 flex w-[min(20rem,84vw)] flex-col overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/88 px-5 py-5 text-zinc-950 shadow-2xl shadow-black/20 backdrop-blur-xl dark:border-white/10 dark:bg-surface/94 dark:text-foreground"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="mb-4 flex shrink-0 flex-col items-start gap-3">
-          <div
+        <div className="mb-1 flex shrink-0 flex-col items-start gap-3">
+          <button
+            type="button"
+            aria-label="Close navigation"
+            onClick={onClose}
             data-testid="mobile-menu-title"
             className="h-[46.4px] w-fit text-left [--title-scale:1.45] sm:[--title-scale:1.16]"
           >
             <span className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
               <span className="scale-[calc(1/var(--title-scale))]">{sidebar.title}</span>
             </span>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 self-end">
-            {canCreatePlaylist && (
-              <button
-                type="button"
-                data-testid="playlist-create-open"
-                aria-label="Create playlist"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
-                onClick={onCreatePlaylist}
-              >
-                +
-              </button>
-            )}
+          </button>
+          <div className="flex h-12 shrink-0 items-center gap-2 self-end">
             {canCreatePlaylist && (
               <button
                 type="button"
@@ -580,14 +579,17 @@ function SidebarDrawer({
                 Edit
               </button>
             )}
-            <button
-              type="button"
-              aria-label="Close navigation"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
-              onClick={onClose}
-            >
-              ×
-            </button>
+            {canCreatePlaylist && (
+              <button
+                type="button"
+                data-testid="playlist-create-open"
+                aria-label="Create playlist"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
+                onClick={onCreatePlaylist}
+              >
+                +
+              </button>
+            )}
           </div>
         </div>
         <SidebarContent
@@ -748,6 +750,16 @@ function SegmentedTabs({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+function SidebarEntryIcon({ id }: { id: string }) {
+  const icon = id.includes('liked-music') || id.includes('image-favorites') ? Heart
+    : id.includes('most-played') ? ChartBar
+    : id.includes('recently-') ? ClockCounterClockwise
+    : id.includes('image-downloads') ? DownloadSimple
+    : id.includes('image-') ? ImageSquare : Playlist;
+  const Icon = icon;
+  return <Icon aria-hidden className="h-6 w-6 shrink-0" weight="regular" />;
+}
+
 function SidebarContent({
   canCreatePlaylist,
   editing,
@@ -828,14 +840,15 @@ function SidebarContent({
                 >
                   <button
                     type="button"
-                    className="flex min-w-0 flex-1 items-center justify-between rounded-lg px-3 py-2.5 text-left text-lg text-zinc-600 dark:text-muted dark:hover:text-foreground"
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2.5 text-left text-lg text-zinc-800 dark:text-foreground dark:hover:text-foreground"
                     onClick={() => {
                       if (editing) return;
                       onOpenPlaylist(entry);
                       onNavigate?.();
                     }}
                   >
-                    <span className="min-w-0 truncate">{entry.title}</span>
+                    <SidebarEntryIcon id={entry.id} />
+                    <span className="min-w-0 flex-1 truncate">{entry.title}</span>
                     <span className="text-sm text-muted">{entry.count}</span>
                   </button>
                   {editing && entry.kind === 'custom' && (
@@ -872,9 +885,9 @@ function SidebarContent({
                     key={label}
                     href={settingsAnchorFor(label)}
                     onClick={onNavigate}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-lg text-zinc-600 hover:bg-zinc-200/70 dark:text-muted dark:hover:bg-white/10 dark:hover:text-foreground"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-lg text-zinc-600 hover:bg-zinc-200/70 dark:text-muted dark:hover:bg-white/10 dark:hover:text-foreground"
                   >
-                    <span>{label}</span>
+                    <GearSix aria-hidden className="h-6 w-6 shrink-0" /><span className="flex-1">{label}</span>
                   </a>
                 ) : (
                   <button
@@ -883,7 +896,7 @@ function SidebarContent({
                     disabled
                     className="flex w-full cursor-not-allowed items-center justify-between rounded-lg px-3 py-2.5 text-left text-lg text-zinc-400 opacity-70 dark:text-muted"
                   >
-                    <span>{label}</span>
+                    <GearSix aria-hidden className="h-6 w-6 shrink-0" /><span className="flex-1">{label}</span>
                     <span className="text-sm">Soon</span>
                   </button>
                 ),
@@ -899,16 +912,18 @@ function SidebarContent({
             to="/settings"
             onClick={onNavigate}
             data-testid="menu-settings-button"
-            className="inline-flex h-9 min-w-0 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-3 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:text-foreground dark:hover:bg-white/10"
+            className="inline-flex h-12 min-w-0 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-200/70 dark:text-foreground dark:hover:bg-white/10"
           >
+            <GearSix aria-hidden className="h-6 w-6" />
             Setting
           </Link>
           <button
             type="button"
             data-testid="menu-queue-button"
-            className="inline-flex h-9 min-w-0 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-3 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:text-foreground dark:hover:bg-white/10"
+            className="inline-flex h-12 min-w-0 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium text-zinc-800 hover:bg-zinc-200/70 dark:text-foreground dark:hover:bg-white/10"
             onClick={handleOpenQueue}
           >
+            <QueueGlyph className="h-6 w-6" />
             Queue
           </button>
         </div>

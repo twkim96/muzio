@@ -227,7 +227,7 @@ export function LikeGlyph({
   liked = false,
   ...props
 }: IconProps & { liked?: boolean }) {
-  return <AppIcon icon={Heart} weight={liked ? 'fill' : 'light'} {...props} />;
+  return <AppIcon icon={Heart} weight={liked ? 'fill' : 'bold'} {...props} />;
 }
 
 export function VolumeGlyph({

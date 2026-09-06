@@ -399,9 +399,9 @@ describe('App routes', () => {
       'text-left',
     );
     const headerButtons = within(navigation).getAllByRole('button');
-    expect(headerButtons[0]).toHaveAttribute('aria-label', 'Create playlist');
+    expect(headerButtons[0]).toHaveAttribute('aria-label', 'Close navigation');
     expect(headerButtons[1]).toHaveTextContent('Edit');
-    expect(headerButtons[2]).toHaveAttribute('aria-label', 'Close navigation');
+    expect(headerButtons[2]).toHaveAttribute('aria-label', 'Create playlist');
 
     fireEvent.click(within(navigation).getByLabelText('Create playlist'));
     fireEvent.change(screen.getByTestId('playlist-create-name'), {
@@ -412,10 +412,10 @@ describe('App routes', () => {
     fireEvent.click(within(navigation).getByTestId('playlist-edit-toggle'));
 
     expect(
-      within(navigation).queryByLabelText('Rename Liked Music'),
+      within(navigation).queryByLabelText('Rename 좋아하는 음악'),
     ).not.toBeInTheDocument();
     expect(
-      within(navigation).queryByLabelText('Delete Liked Music'),
+      within(navigation).queryByLabelText('Delete 좋아하는 음악'),
     ).not.toBeInTheDocument();
 
     fireEvent.click(within(navigation).getByLabelText('Rename Night'));
@@ -479,7 +479,7 @@ describe('App routes', () => {
 
     fireEvent.click(screen.getByTestId('navigation-menu-button'));
     const navigation = screen.getByTestId('mobile-navigation');
-    fireEvent.click(within(navigation).getByText('Liked Music'));
+    fireEvent.click(within(navigation).getByText('좋아하는 음악'));
 
     expect(screen.getByTestId('playlist-drawer')).toBeInTheDocument();
     fireEvent.click(
@@ -596,7 +596,7 @@ describe('App routes', () => {
 
     expect(
       within(screen.getByTestId('mobile-navigation')).getByText(
-        'Recently Watching',
+        '최근 시청한 영상',
       ),
     ).toBeInTheDocument();
   });
@@ -644,7 +644,7 @@ describe('App routes', () => {
     fireEvent.click(screen.getByTestId('navigation-menu-button'));
     const navigation = screen.getByTestId('mobile-navigation');
     const entry = within(navigation).getByRole('button', {
-      name: /Recently Watching/,
+      name: /최근 시청한 영상/,
     });
     expect(entry).toHaveTextContent('2');
     fireEvent.click(entry);

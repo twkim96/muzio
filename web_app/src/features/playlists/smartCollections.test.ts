@@ -82,7 +82,7 @@ describe('buildImageCollections', () => {
     const collections = buildImageCollections({ items: images, likedKeys: ['image-0'] });
 
     expect(collections.map((collection) => collection.title)).toEqual([
-      'Favorites', 'Recently Added', 'Screenshots', 'Downloads',
+      '즐겨찾기', '최근 추가한 항목', '스크린샷', '다운로드',
     ]);
     expect(collections.every((collection) => collection.items.length <= 100)).toBe(true);
     expect(collections.find((collection) => collection.id === 'image-screenshots')?.items.map((entry) => entry.id)).toContain('image-0');
@@ -149,9 +149,9 @@ describe('buildSmartCollections', () => {
         ?.items.map((t) => t.id),
     ).toEqual(['v3', 'v2', 'v']);
     expect(collections.map((c) => c.title)).toEqual([
-      'Liked Music',
-      'Most Played',
-      'Recently Watching',
+      '좋아하는 음악',
+      '많이 재생한 음악',
+      '최근 시청한 영상',
     ]);
   });
 });

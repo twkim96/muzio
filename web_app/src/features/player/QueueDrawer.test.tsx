@@ -18,6 +18,35 @@ function queueTracks(count: number): PlaybackSource[] {
 }
 
 describe('QueueDrawer', () => {
+  test('traps focus and preserves keyboard and backdrop dismissal', () => {
+    const store = createPlayerStore({ activityRepository: null, likedRepository: null });
+    store.setState({ musicQueue: queueTracks(2), musicQueueIndex: 0 });
+    const onClose = vi.fn();
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    opener.focus();
+    const { unmount } = render(
+      <PlayerProvider store={store}>
+        <QueueDrawer open onClose={onClose} />
+      </PlayerProvider>,
+    );
+
+    expect(screen.getByRole('dialog', { name: 'Queue' })).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(screen.getByTestId('clear-music-queue')).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(screen.getByRole('button', { name: 'Play Track 1' })).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(screen.getByTestId('clear-music-queue')).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    fireEvent.pointerDown(screen.getByTestId('queue-drawer-backdrop'));
+    expect(onClose).toHaveBeenCalledTimes(2);
+    unmount();
+    expect(opener).toHaveFocus();
+    opener.remove();
+  });
+
   test('renders a bounded window around the current item', () => {
     const store = createPlayerStore({
       activityRepository: null,
