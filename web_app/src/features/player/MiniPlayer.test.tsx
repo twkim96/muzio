@@ -354,28 +354,76 @@ describe('MiniPlayer', () => {
     expect(screen.getByTestId('play-pause')).toBeInTheDocument();
   });
 
-  test('opens a vertical volume slider from the mini player', async () => {
+  test('shows the mini action rail without volume or mobile next controls', async () => {
     const store = createPlayerStore();
     store.getState().attachElement('audio', fakeElement());
-    await store.getState().playSource({
-      kind: 'remote',
-      mediaId: 'a1',
-      mediaType: 'audio',
-      url: '/api/media/a1',
-      name: 'song.mp3',
-    });
+    await store.getState().playSource(audioSource);
     renderWithStore(store);
 
-    fireEvent.click(screen.getByLabelText('Volume'));
-    expect(screen.getByTestId('mini-volume-popover')).toBeInTheDocument();
-
-    fireEvent.change(screen.getByTestId('mini-volume-slider'), {
-      target: { value: '0.35' },
-    });
-    expect(store.getState().volume).toBe(0.35);
+    const like = screen.getByTestId('mini-like-button');
+    const timer = screen.getByRole('button', { name: 'Sleep timer' });
+    const queue = screen.getByTestId('mini-queue-button');
+    expect(like.compareDocumentPosition(timer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(timer.compareDocumentPosition(queue) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByLabelText('Volume')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mini-volume-control')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mini-volume-popover')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('mini-next-mobile')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Pause' })).toHaveLength(2);
   });
 
-  test('shows next track instead of volume in the mobile mini player', async () => {
+  test('toggles the current audio and video source like state', () => {
+    const audioStore = createPlayerStore({ likedRepository: null });
+    audioStore.getState().setSessionForTests(
+      'audio',
+      fakeSession({
+        status: { kind: 'playing' },
+        source: audioSource,
+        positionSec: 0,
+        durationSec: 100,
+      }),
+    );
+    const audioView = renderWithStore(audioStore);
+    const audioLike = screen.getByTestId('mini-like-button');
+
+    expect(audioLike).toHaveAttribute('aria-label', 'Like current track');
+    expect(audioLike).toHaveAttribute('aria-pressed', 'false');
+    expect(audioLike).toHaveClass('aria-pressed:text-accent');
+    fireEvent.click(audioLike);
+    expect(audioStore.getState().likedMediaIds).toEqual(['audio:title:song']);
+    expect(screen.getByTestId('mini-like-button')).toHaveAttribute(
+      'aria-label',
+      'Unlike current track',
+    );
+    expect(screen.getByTestId('mini-like-button')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    audioView.unmount();
+    const videoStore = createPlayerStore({ likedRepository: null });
+    videoStore.getState().setSessionForTests(
+      'video',
+      fakeSession({
+        status: { kind: 'playing' },
+        source: videoSource,
+        positionSec: 0,
+        durationSec: 120,
+      }),
+    );
+    renderWithStore(videoStore);
+    const videoLike = screen.getByTestId('mini-like-button');
+
+    expect(videoLike).toHaveAttribute('aria-label', 'Like current track');
+    fireEvent.click(videoLike);
+    expect(videoStore.getState().likedMediaIds).toEqual(['video:title:clip']);
+    expect(screen.getByTestId('mini-like-button')).toHaveAttribute(
+      'aria-label',
+      'Unlike current track',
+    );
+  });
+
+  test('keeps desktop queue transport while removing the mobile next action', async () => {
     const store = createPlayerStore();
     store.getState().attachElement('audio', fakeElement());
     await store.getState().playMusicQueue(
@@ -392,17 +440,8 @@ describe('MiniPlayer', () => {
     );
     renderWithStore(store);
 
-    expect(screen.getByTestId('mini-volume-control')).toHaveClass(
-      'hidden',
-      'sm:block',
-    );
-    const next = screen.getByTestId('mini-next-mobile');
-    expect(next).toHaveClass('sm:hidden');
-    expect(next).toBeEnabled();
-
-    fireEvent.click(next);
-    expect(store.getState().musicQueueIndex).toBe(1);
-    expect(next).toBeDisabled();
+    expect(screen.getByLabelText('Next')).toBeInTheDocument();
+    expect(screen.queryByTestId('mini-next-mobile')).not.toBeInTheDocument();
   });
 
   test('opens the full player only from the cover button', async () => {

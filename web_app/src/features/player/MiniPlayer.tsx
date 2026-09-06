@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import {
+  contentKeyForPlaybackSource,
+  contentKeysForPlaybackSource,
+} from '../../core/media/contentIdentity';
 import { explicitNextQueueIndex, previousQueueIndex } from './musicQueue';
 import { usePlayerStore } from './PlayerContext';
 import { usePlayerOverlay } from './PlayerOverlayContext';
@@ -11,6 +15,7 @@ import { usePlaybackNetworkHint } from './playbackNetworkStatus';
 import { formatTime } from './formatTime';
 import { useDocumentHorizontalDrag } from './controls/useDocumentHorizontalDrag';
 import {
+  LikeGlyph,
   MusicGlyph,
   PauseGlyph,
   PlayGlyph,
@@ -21,7 +26,6 @@ import {
   SkipGlyph,
   SleepTimerGlyph,
   VideoGlyph,
-  VolumeGlyph,
 } from '../../core/ui/AppIcons';
 
 /**
@@ -34,7 +38,6 @@ export function MiniPlayer() {
   const store = usePlayerStore();
   const snapshot = store();
   const state = selectActiveState(snapshot);
-  const [volumeOpen, setVolumeOpen] = useState(false);
   const [timerOpen, setTimerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [scrubValueSec, setScrubValueSec] = useState<number | null>(null);
@@ -51,8 +54,6 @@ export function MiniPlayer() {
   const togglePlayPause = store((s) => s.togglePlayPause);
   const toggleShuffle = store((s) => s.toggleShuffle);
   const cycleRepeatMode = store((s) => s.cycleRepeatMode);
-  const toggleMute = store((s) => s.toggleMute);
-  const setVolume = store((s) => s.setVolume);
   const seekActive = store((s) => s.seekActive);
   const retryActivePlayback = store((s) => s.retryActivePlayback);
   const networkHint = usePlaybackNetworkHint(state.status, state.source);
@@ -110,6 +111,11 @@ export function MiniPlayer() {
       : snapshot.repeatMode === 'all'
         ? 'Repeat all'
         : 'Repeat off';
+  const currentLikeKey = contentKeyForPlaybackSource(state.source);
+  const liked =
+    contentKeysForPlaybackSource(state.source).some((key) =>
+      snapshot.likedMediaIds.includes(key),
+    ) || snapshot.likedMediaIds.includes(state.source.mediaId);
   const queueSnapshot = {
     tracks: snapshot.musicQueue,
     currentIndex: snapshot.musicQueueIndex,
@@ -120,10 +126,6 @@ export function MiniPlayer() {
     state.source.mediaType === 'audio' && previousQueueIndex(queueSnapshot) !== null;
   const canPlayNext =
     state.source.mediaType === 'audio' && explicitNextQueueIndex(queueSnapshot) !== null;
-  const handleVolumeChange = (value: number) => {
-    if (snapshot.muted) toggleMute();
-    setVolume(value);
-  };
   const clearScrubPreviewHide = () => {
     if (scrubPreviewHideRef.current !== null) {
       window.clearTimeout(scrubPreviewHideRef.current);
@@ -414,16 +416,15 @@ export function MiniPlayer() {
               {timerLabel}
             </span>
           )}
-          <button
-            type="button"
-            aria-label="Open queue"
-            aria-expanded={queueOpen}
-            data-testid="mini-queue-button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-xl leading-none text-muted hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
-            onClick={() => setQueueOpen(true)}
+          <MiniIconButton
+            label={liked ? 'Unlike current track' : 'Like current track'}
+            active={liked}
+            disabled={currentLikeKey === ''}
+            testId="mini-like-button"
+            onClick={() => snapshot.toggleLike(currentLikeKey)}
           >
-            <QueueGlyph className="h-6 w-6" />
-          </button>
+            <LikeGlyph liked={liked} className="h-6 w-6" />
+          </MiniIconButton>
           <div className="relative" ref={timerShellRef}>
             <button
               type="button"
@@ -457,52 +458,15 @@ export function MiniPlayer() {
               </div>
             )}
           </div>
-          <div className="relative hidden sm:block" data-testid="mini-volume-control">
-            <button
-              type="button"
-              aria-label="Volume"
-              aria-expanded={volumeOpen}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-2xl leading-none text-muted hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
-              onClick={() => setVolumeOpen((open) => !open)}
-            >
-              <VolumeGlyph muted={snapshot.muted} className="h-6 w-6" />
-            </button>
-            {volumeOpen && (
-              <div
-                data-testid="mini-volume-popover"
-                className="muzio-popover absolute bottom-11 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-1.5 rounded-xl border border-zinc-200/60 bg-surface/92 px-2 py-2 shadow-2xl shadow-black/20 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/86"
-              >
-                <input
-                  type="range"
-                  data-testid="mini-volume-slider"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={snapshot.volume}
-                  aria-label="Mini player volume"
-                  className="h-20 w-6 accent-accent"
-                  style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
-                  onChange={(event) =>
-                    handleVolumeChange(Number(event.target.value))
-                  }
-                />
-                <span className="text-[0.7rem] tabular-nums text-muted">
-                  {Math.round(snapshot.volume * 100)}%
-                </span>
-              </div>
-            )}
-          </div>
           <button
             type="button"
-            data-testid="mini-next-mobile"
-            aria-label="Next track"
-            disabled={!canPlayNext}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-950 hover:bg-zinc-200/60 disabled:opacity-35 dark:text-white dark:hover:bg-white/[0.06] sm:hidden"
-            onClick={() => {
-              void snapshot.playNextQueueItem();
-            }}
+            aria-label="Open queue"
+            aria-expanded={queueOpen}
+            data-testid="mini-queue-button"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-xl leading-none text-muted hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
+            onClick={() => setQueueOpen(true)}
           >
-            <SkipGlyph direction="forward" className="h-7 w-7" />
+            <QueueGlyph className="h-6 w-6" />
           </button>
           <button
             type="button"
@@ -542,6 +506,7 @@ function MiniIconButton({
   active = false,
   disabled = false,
   variant = 'utility',
+  testId,
   onClick,
   children,
 }: {
@@ -549,6 +514,7 @@ function MiniIconButton({
   active?: boolean;
   disabled?: boolean;
   variant?: 'utility' | 'skip';
+  testId?: string;
   onClick?: () => void;
   children: ReactNode;
 }) {
@@ -556,6 +522,7 @@ function MiniIconButton({
     <button
       type="button"
       aria-label={label}
+      data-testid={testId}
       aria-pressed={disabled ? undefined : active}
       disabled={disabled}
       className={

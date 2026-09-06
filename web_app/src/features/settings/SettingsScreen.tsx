@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { FloatingSearchControl } from '../../app/FloatingSearchControl';
+import { useSearchHost } from '../../app/SearchHostContext';
 
 import {
   fetchAppearanceSettings,
@@ -73,7 +76,19 @@ const themeColorFields: Array<{
   },
 ];
 
+const settingsSearchTerms = {
+  appearance: 'Appearance theme dark light custom surface text muted accent color reset 외관 테마 색상 화면 어두운 밝은 초기화',
+  'backend-status': 'Backend Status connection health test server 백엔드 상태 연결 서버 테스트',
+  'media-folders': 'Media Folders music video image roots refresh save 미디어 폴더 음악 영상 이미지 경로 새로고침 저장',
+  'runtime-notes': 'Runtime Notes deployment web app backend service version 런타임 배포 버전 서비스',
+};
+
 export function SettingsScreen() {
+  const searchHost = useSearchHost();
+  const [query, setQuery] = useState('');
+  const matchesSection = (id: keyof typeof settingsSearchTerms) =>
+    query.trim().toLocaleLowerCase().split(/\s+/).every((term) =>
+      settingsSearchTerms[id].toLocaleLowerCase().includes(term));
   const [theme, setTheme] = useState<ThemeSettings>(() => readThemeSettings());
   const [themeStatus, setThemeStatus] = useState<
     'ready' | 'loading' | 'saving' | 'saved' | 'error'
@@ -237,23 +252,19 @@ export function SettingsScreen() {
     mediaRootsStatus === 'refreshing';
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-8 lg:px-10">
-      <header className="mb-8">
-        <p className="text-xs font-semibold uppercase tracking-wide text-accent">
-          Settings
-        </p>
-        <h1 className="mt-2 text-5xl font-semibold tracking-tight sm:text-6xl">
-          Settings
-        </h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
-          Theme, backend health, and local runtime notes for this MacBook-first
-          web app.
-        </p>
-      </header>
+    <div className="mx-auto w-full max-w-7xl px-4 pb-8 pt-24 sm:px-8 lg:px-10">
+      {searchHost !== null && createPortal(
+        <FloatingSearchControl title="Settings" query={query} onQueryChange={setQuery} />,
+        searchHost,
+      )}
+      {!Object.keys(settingsSearchTerms).some((id) => matchesSection(id as keyof typeof settingsSearchTerms)) && (
+        <p role="status" className="py-6 text-sm text-muted">검색 결과가 없습니다.</p>
+      )}
 
       <div className="grid min-w-0 gap-4">
         <section
           id="appearance"
+          hidden={!matchesSection('appearance')}
           className="min-w-0 border-t border-zinc-200/70 py-6 dark:border-white/10"
         >
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -348,6 +359,7 @@ export function SettingsScreen() {
 
         <section
           id="backend-status"
+          hidden={!matchesSection('backend-status')}
           className="min-w-0 border-t border-zinc-200/70 py-6 dark:border-white/10"
         >
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -382,6 +394,7 @@ export function SettingsScreen() {
 
         <section
           id="media-folders"
+          hidden={!matchesSection('media-folders')}
           className="min-w-0 border-t border-zinc-200/70 py-6 dark:border-white/10"
         >
           <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -458,6 +471,7 @@ export function SettingsScreen() {
 
         <section
           id="runtime-notes"
+          hidden={!matchesSection('runtime-notes')}
           className="min-w-0 border-t border-zinc-200/70 py-6 dark:border-white/10"
         >
           <div className="mb-5">

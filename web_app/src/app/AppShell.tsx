@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { SidebarSimple } from '@phosphor-icons/react/dist/csr/SidebarSimple';
+import { GearSix } from '@phosphor-icons/react/dist/csr/GearSix';
 
 import type { LibraryItem } from '../core/api/libraryClient';
 import {
@@ -331,7 +332,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-surface dark:text-foreground">
         {!isImmersiveRoute && (
           <header className="sticky top-3 z-30 mt-3 px-3 sm:px-8 lg:px-10">
-            {section !== null && section !== 'settings' && (
+            {section !== null && (
               <h1 className="mb-2 text-lg font-semibold tracking-tight sm:absolute sm:top-0 sm:mb-0 sm:flex sm:h-[58px] sm:items-center sm:text-xl">
                 {sideSections[section].title}
               </h1>
@@ -362,6 +363,14 @@ export function AppShell({ children }: { children: ReactNode }) {
                 />
               </div>
             </div>
+            <NavLink
+              to="/settings"
+              aria-label="Settings"
+              onClick={closeDrawer}
+              className="muzio-settings-button absolute right-3 top-0 flex h-8 w-8 items-center justify-center text-foreground sm:right-8 sm:h-[58px] sm:w-[58px] lg:right-10"
+            >
+              <GearSix aria-hidden className="h-5 w-5 sm:h-6 sm:w-6" />
+            </NavLink>
           </header>
         )}
 

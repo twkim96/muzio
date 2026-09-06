@@ -172,6 +172,27 @@ describe('App routes', () => {
     await waitFor(() => expect(searchButton).toHaveFocus());
   });
 
+  test('opens settings from the floating button and searches settings without losing edits', async () => {
+    renderApp('/library/music');
+    fireEvent.click(screen.getByRole('link', { name: 'Settings' }));
+    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.queryByText(/Theme, backend health/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Search Settings' }));
+    const search = screen.getByLabelText('Filter Settings');
+    fireEvent.change(search, { target: { value: '폴더' } });
+    expect(screen.getByRole('heading', { name: 'Media Folders' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Appearance' })).not.toBeInTheDocument();
+    const folder = screen.getByRole('textbox', { name: 'Music folders 1' });
+    fireEvent.change(folder, { target: { value: '/draft-music' } });
+    fireEvent.change(search, { target: { value: '테마' } });
+    expect(screen.getByRole('heading', { name: 'Appearance' })).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Media Folders' })).not.toBeInTheDocument();
+    fireEvent.change(search, { target: { value: 'no-matching-setting' } });
+    expect(screen.getByText('검색 결과가 없습니다.')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filter Settings' }));
+    expect(screen.getByRole('textbox', { name: 'Music folders 1' })).toHaveValue('/draft-music');
+  });
+
   test('menu button controls the drawer and restores focus after backdrop close', async () => {
     renderApp('/library/music');
 
