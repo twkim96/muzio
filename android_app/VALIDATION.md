@@ -156,3 +156,18 @@ SHA-256: `03834f3f93339756abb1c004bc0f8283e716ae155e1694583710e5d3118433ec`
 - Samsung update install and Activity launch succeeded, versionCode10.
 - Artifact: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc10.apk`
 - SHA-256: `a8a823503a907ad50ec333f0fef0743323582a0c43eed8195ab2af5f0c06cf69`
+
+
+## Anchored glass sleep timer — versionCode 11 / 2026-09-07
+
+- Shared timer replaces duplicate mini/full controls, with themed presets,
+  input, Set and close buttons. Body portal avoids dock backdrop containing blocks.
+- Web1280px mini and mobile412px full-player both placed panel12px above trigger;
+  viewport clamping kept it onscreen. Escape dismissed only timer, retaining full
+  player. Computed glass surface/filter and translucent Set confirmed visually.
+- MiniPlayer/FullPlayer68 tests plus anchor/scroll/control/Escape regression1 test
+  passed. TypeScript/Vite, web deployment and final APK assembly passed.
+- Web PWA1.4.5-r6 served assets match build. Samsung update install, launch and
+  versionCode11 confirmed; phone touch acceptance remains a separate check.
+- Artifact: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc11.apk`
+- SHA-256: `d2948d0e90953f656f8668cd0a94427e1a5e4d7ee456c8c5f3e1c05778aa9a8d`

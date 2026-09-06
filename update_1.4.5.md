@@ -6,7 +6,7 @@
 - 기준: 1.4.4 최종 웹 UI `c283d52` (PWA r32). 1.4.4 마감 유지.
 - 작업 브랜치: `codex/android-shared-web-ui`
 - 상태: 개발 브랜치 구현·자동 검증·에뮬레이터 동작 검증 완료. Samsung 설치/실행 및 운영 웹 배포 완료. 실제 개인 라이브러리 사용성 검증은 별도.
-- 제품/Web 버전: 1.4.5. Android 개발 APK: 1.4.5-web-dev / versionCode 10 (아래 추가 패치 포함).
+- 제품/Web 버전: 1.4.5. Android 개발 APK: 1.4.5-web-dev / versionCode 11 (아래 추가 패치 포함).
 
 ## 이번 세션의 변경
 
@@ -105,3 +105,14 @@
 - 실 웹 PC/412px에서 #부분 Artist 후보, 최대8개 제한, 선택 후 검색창 닫힘/중앙 필터 적용을 확인했다. 모바일 미리보기 x=12..400px로 가로 overflow가 없었다.
 - 이전 APK에서 등록한 로컬 폴더를 보존한 업데이트 후 서버를 끈 상태에서 목록/미니바 모두240×240 커버를 표시했고11.38초 재생을 확인했다. 없는 커버/미등록 ID는404, 폴더 제거 후 기존 커버 URL도404이며 원본 MP3는 유지됐다.
 - 최종 APK build 및 Samsung versionCode10 업데이트 설치/Activity 실행 확인. 산출물 `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc10.apk`, SHA-256 `a8a823503a907ad50ec333f0fef0743323582a0c43eed8195ab2af5f0c06cf69`. 개인 파일의 커버 형식별 호환성은 사용 중 추가 확인한다.
+
+
+## 버튼 위 슬립타이머 및 글래스 컨트롤 (1.4.5-r6)
+
+- 미니바와 전체 플레이어의 중복 타이머 UI를 공통 패널로 통일했다. 패널뿐 아니라 preset/Cancel/Set/분 입력/X도 공통 글래스 재질을 사용하며 이전 흰색 Set 버튼 스타일을 제거했다.
+- 화면 중앙 고정 배치 대신 누른 버튼의 실제 위치를 기준으로12px 위에 표시한다. backdrop-filter가 있는 미니바의 좌표/글래스 중첩 영향을 피하도록 body portal에 표시한다. resize/scroll/visual viewport 변화에 맞춰 위치를 조정하며 위 공간이 부족할 때만 아래쪽으로 배치한다.
+- 바깥 클릭/Escape/Android Back 닫기를 유지한다. Escape는 전체 플레이어를 닫지 않고 타이머만 닫고 버튼에 초점을 돌려준다.
+- 기존 MiniPlayer/FullPlayer68 tests + 버튼 위치/scroll/내부 동작/Escape 회귀1 test 통과. 공통화 후 남은 미사용 import를 정리하고 TypeScript/Vite/운영 배포 및 APK build 통과.
+- 실제 웹1280×900 미니바: panel x837..1173px, button 중심x1005px, 수직 간격12px. 모바일412px 전체 플레이어: panel x12..348px, 수직 간격12px, Escape 후 전체 플레이어 유지. 배경/blur와 반투명 Set 버튼을 computed style 및 화면으로 확인했다.
+- 웹 cache1.4.5-r6와 제공 JS/CSS 산출물 일치 확인. Samsung versionCode11 업데이트 설치/Activity 실행 확인.
+- 산출물 `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc11.apk`, SHA-256 `d2948d0e90953f656f8668cd0a94427e1a5e4d7ee456c8c5f3e1c05778aa9a8d`.

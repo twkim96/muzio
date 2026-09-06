@@ -1,3 +1,4 @@
+import { SleepTimerPopover } from './SleepTimerPopover';
 import { useAndroidBack } from '../../core/platform/androidShell';
 import { MediaCollapseButton } from '../../core/ui/MediaCollapseButton';
 import {
@@ -5,6 +6,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type Ref,
 } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -20,11 +22,10 @@ import { canPlayMime } from '../../core/playback/capabilities/canPlayMime';
 import { explicitNextQueueIndex, previousQueueIndex } from './musicQueue';
 import { usePlayerStore } from './PlayerContext';
 import { QueueDrawer } from './QueueDrawer';
-import { selectActiveState, type SleepTimerState } from './playerStore';
+import { selectActiveState } from './playerStore';
 import { PositionScrubber } from './controls/PositionScrubber';
 import { TimeDisplay } from './controls/TimeDisplay';
 import { useDocumentHorizontalDrag } from './controls/useDocumentHorizontalDrag';
-import { formatTime } from './formatTime';
 import { usePlaybackNetworkHint } from './playbackNetworkStatus';
 import {
   CloseGlyph,
@@ -78,6 +79,7 @@ export function FullPlayerScreen({
   const active = snapshot.active;
   const shellRef = useRef<HTMLDivElement | null>(null);
   const actionShellRef = useRef<HTMLDivElement | null>(null);
+  const timerButtonRef = useRef<HTMLButtonElement | null>(null);
   const [fallbackState, setFallbackState] = useState<FallbackState>({
     kind: 'idle',
   });
@@ -121,7 +123,7 @@ export function FullPlayerScreen({
   }, [playability, sourceId]);
 
   useEffect(() => {
-    if (openPopover === null) return;
+    if (openPopover === null || openPopover === 'timer') return;
 
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target;
@@ -262,6 +264,7 @@ export function FullPlayerScreen({
                   <LikeGlyph liked={liked} />
                 </ActionButton>
                 <ActionButton
+                  buttonRef={timerButtonRef}
                   label="Sleep timer"
                   active={
                     openPopover === 'timer' ||
@@ -322,17 +325,9 @@ export function FullPlayerScreen({
                   <StopAfterCurrentGlyph />
                 </ActionButton>
               </div>
-            {openPopover === 'timer' && (
-              <ActionPopoverPanel timer onClose={() => setOpenPopover(null)}>
-                <SleepTimerPopover
-                  customMinutes={customMinutes}
-                  sleepTimer={snapshot.sleepTimer}
-                  onCancel={snapshot.cancelSleepTimer}
-                  onCustomMinutes={setCustomMinutes}
-                  onStart={snapshot.startSleepTimer}
-                />
-              </ActionPopoverPanel>
-            )}
+            {openPopover === 'timer' && <SleepTimerPopover anchorRef={timerButtonRef}
+              customMinutes={customMinutes} sleepTimer={snapshot.sleepTimer} onClose={() => setOpenPopover(null)}
+              onCancel={snapshot.cancelSleepTimer} onCustomMinutes={setCustomMinutes} onStart={snapshot.startSleepTimer} />}
             {openPopover === 'volume' && (
               <ActionPopoverPanel onClose={() => setOpenPopover(null)}>
                 <VolumePopover
@@ -545,6 +540,7 @@ function NowPlayingArtwork({ artworkUrl }: { artworkUrl?: string }) {
 }
 
 function ActionButton({
+  buttonRef,
   label,
   active = false,
   expanded,
@@ -553,6 +549,7 @@ function ActionButton({
   onClick,
   children,
 }: {
+  buttonRef?: Ref<HTMLButtonElement>;
   label: string;
   active?: boolean;
   expanded?: boolean;
@@ -563,6 +560,7 @@ function ActionButton({
 }) {
   return (
     <button
+      ref={buttonRef}
       type="button"
       aria-label={label}
       aria-pressed={disabled ? undefined : active}
@@ -735,81 +733,6 @@ function VolumePopover({
       <span className="w-9 text-right text-xs tabular-nums text-muted">
         {Math.round(volume * 100)}%
       </span>
-    </section>
-  );
-}
-
-function SleepTimerPopover({
-  customMinutes,
-  sleepTimer,
-  onCancel,
-  onCustomMinutes,
-  onStart,
-}: {
-  customMinutes: string;
-  sleepTimer: SleepTimerState;
-  onCancel: () => void;
-  onCustomMinutes: (value: string) => void;
-  onStart: (minutes: number) => void;
-}) {
-  const applyCustom = () => {
-    const minutes = Number(customMinutes);
-    if (!Number.isFinite(minutes) || minutes <= 0) return;
-    onStart(minutes);
-  };
-
-  return (
-    <section data-testid="sleep-timer-control" aria-label="Sleep timer">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold">Sleep timer</h2>
-        <span
-          data-testid="sleep-timer-status"
-          className="text-xs tabular-nums text-muted"
-        >
-          {sleepTimer.kind === 'running'
-            ? formatTime(sleepTimer.remainingSec)
-            : sleepTimer.kind === 'expired'
-              ? 'Paused'
-              : 'Off'}
-        </span>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {[15, 30, 60].map((minutes) => (
-          <button
-            key={minutes}
-            type="button"
-            className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10"
-            onClick={() => onStart(minutes)}
-          >
-            {minutes}m
-          </button>
-        ))}
-        <button
-          type="button"
-          className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10"
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <input
-          type="number"
-          min={1}
-          step={1}
-          value={customMinutes}
-          onChange={(event) => onCustomMinutes(event.target.value)}
-          aria-label="Custom timer minutes"
-          className="w-20 rounded-full border border-white/15 bg-transparent px-3 py-1 text-sm"
-        />
-        <button
-          type="button"
-          className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-white/80"
-          onClick={applyCustom}
-        >
-          Set
-        </button>
-      </div>
     </section>
   );
 }

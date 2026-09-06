@@ -166,6 +166,13 @@ html.wr-kit {
   background: var(--muzio-overlay-surface);
 }
 .wr-kit .muzio-timer-popover { background: var(--app-menu-surface); }
+.muzio-timer-popover .muzio-glass-action {
+  min-height: 34px;
+  padding: 7px 12px;
+  font-size: 12px;
+}
+.muzio-timer-popover .muzio-modal-close { width: 32px; min-height: 32px; }
+.muzio-timer-popover .muzio-glass-input { min-height: 36px; padding: 6px 10px; }
 .wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-title, .muzio-settings-button, .muzio-sidebar, .muzio-search)::before {
   content: '';
   position: absolute;

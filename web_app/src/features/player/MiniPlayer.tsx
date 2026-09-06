@@ -9,14 +9,14 @@ import { explicitNextQueueIndex, previousQueueIndex } from './musicQueue';
 import { usePlayerStore } from './PlayerContext';
 import { usePlayerOverlay } from './PlayerOverlayContext';
 import { Playlist } from '@phosphor-icons/react/dist/csr/Playlist';
-import { selectActiveState, type SleepTimerState } from './playerStore';
+import { selectActiveState } from './playerStore';
 import { describePlaybackStatus } from './playerMessage';
 import { usePlaybackNetworkHint } from './playbackNetworkStatus';
 import { formatTime } from './formatTime';
+import { SleepTimerPopover } from './SleepTimerPopover';
 import { useAndroidBack } from '../../core/platform/androidShell';
 import { useDocumentHorizontalDrag } from './controls/useDocumentHorizontalDrag';
 import {
-  CloseGlyph,
   LikeGlyph,
   MusicGlyph,
   PauseGlyph,
@@ -45,7 +45,7 @@ export function MiniPlayer() {
   const [scrubPreviewSec, setScrubPreviewSec] = useState<number | null>(null);
   const [customMinutes, setCustomMinutes] = useState('45');
   const [artworkFailed, setArtworkFailed] = useState(false);
-  const timerShellRef = useRef<HTMLDivElement | null>(null);
+  const timerButtonRef = useRef<HTMLButtonElement | null>(null);
   const scrubberRef = useRef<HTMLDivElement | null>(null);
   const scrubPreviewHideRef = useRef<number | null>(null);
   const scrubValueRef = useRef<number | null>(null);
@@ -62,20 +62,6 @@ export function MiniPlayer() {
   useEffect(() => {
     setArtworkFailed(false);
   }, [state.source?.artworkUrl]);
-
-  useEffect(() => {
-    if (!timerOpen) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (timerShellRef.current?.contains(target)) return;
-      setTimerOpen(false);
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown, true);
-    return () => document.removeEventListener('pointerdown', handlePointerDown, true);
-  }, [timerOpen]);
 
   useEffect(() => {
     return () => {
@@ -431,9 +417,10 @@ export function MiniPlayer() {
             <LikeGlyph liked={liked} className="h-6 w-6" />
           </MiniIconButton>
           </span>
-          <div className="relative hidden sm:block" ref={timerShellRef}>
+          <div className="relative hidden sm:block">
             <button
               type="button"
+              ref={timerButtonRef}
               aria-label="Sleep timer"
               aria-expanded={timerOpen}
               className="inline-flex h-10 w-10 items-center justify-center rounded-full text-zinc-800 dark:text-white hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
@@ -441,25 +428,9 @@ export function MiniPlayer() {
             >
               <SleepTimerGlyph className="h-7 w-7 max-sm:h-5 max-sm:w-5" />
             </button>
-            {timerOpen && (
-              <div
-                data-testid="mini-timer-popover"
-                data-glass
-                data-allow-scroll
-                className="muzio-popover muzio-timer-popover fixed bottom-[7.25rem] left-1/2 z-[70] max-h-[min(22rem,calc(100vh-9rem))] w-[min(21rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-2xl p-3 text-foreground"
-              >
-                <div className="relative max-h-[calc(min(22rem,100vh-9rem)-1.5rem)] overflow-y-auto">
-                  <MiniTimerPopover
-                    customMinutes={customMinutes}
-                    sleepTimer={sleepTimer}
-                    onClose={() => setTimerOpen(false)}
-                    onCancel={snapshot.cancelSleepTimer}
-                    onCustomMinutes={setCustomMinutes}
-                    onStart={snapshot.startSleepTimer}
-                  />
-                </div>
-              </div>
-            )}
+            {timerOpen && <SleepTimerPopover anchorRef={timerButtonRef} testId="mini-timer-popover"
+              customMinutes={customMinutes} sleepTimer={sleepTimer} onClose={() => setTimerOpen(false)}
+              onCancel={snapshot.cancelSleepTimer} onCustomMinutes={setCustomMinutes} onStart={snapshot.startSleepTimer} />}
           </div>
           <button
             type="button"
@@ -543,86 +514,6 @@ function MiniIconButton({
     >
       {children}
     </button>
-  );
-}
-
-function MiniTimerPopover({
-  customMinutes,
-  sleepTimer,
-  onCancel,
-  onClose,
-  onCustomMinutes,
-  onStart,
-}: {
-  customMinutes: string;
-  sleepTimer: SleepTimerState;
-  onCancel: () => void;
-  onClose: () => void;
-  onCustomMinutes: (value: string) => void;
-  onStart: (minutes: number) => void;
-}) {
-  const applyCustom = () => {
-    const minutes = Number(customMinutes);
-    if (!Number.isFinite(minutes) || minutes <= 0) return;
-    onStart(minutes);
-  };
-
-  return (
-    <section data-testid="sleep-timer-control" aria-label="Sleep timer">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold">Sleep timer</h2>
-        <span
-          data-testid="sleep-timer-status"
-          className="text-xs tabular-nums text-muted"
-        >
-          {sleepTimer.kind === 'running'
-            ? formatTime(sleepTimer.remainingSec)
-            : sleepTimer.kind === 'expired'
-              ? 'Paused'
-              : 'Off'}
-        </span>
-        <button type="button" aria-label="Close sleep timer" onClick={onClose} className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/10">
-          <CloseGlyph className="h-5 w-5" />
-        </button>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {[15, 30, 60].map((minutes) => (
-          <button
-            key={minutes}
-            type="button"
-            className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/12"
-            onClick={() => onStart(minutes)}
-          >
-            {minutes}m
-          </button>
-        ))}
-        <button
-          type="button"
-          className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/12"
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <input
-          type="number"
-          min={1}
-          step={1}
-          value={customMinutes}
-          onChange={(event) => onCustomMinutes(event.target.value)}
-          aria-label="Custom timer minutes"
-          className="w-20 rounded-full border border-white/15 bg-transparent px-3 py-1 text-sm"
-        />
-        <button
-          type="button"
-          className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-white/85"
-          onClick={applyCustom}
-        >
-          Set
-        </button>
-      </div>
-    </section>
   );
 }
 
