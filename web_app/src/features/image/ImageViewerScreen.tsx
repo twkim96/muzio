@@ -54,7 +54,7 @@ export function ImageViewerScreen({
     >
       <div
         data-testid="image-viewer-motion-layer"
-        className={`relative z-10 min-h-screen bg-black px-4 py-4 sm:px-6 sm:py-6 ${dismissGesture.motionClassName}`}
+        className={`relative z-10 min-h-screen bg-black px-3 py-3 sm:px-5 sm:py-5 ${dismissGesture.motionClassName}`}
         style={dismissGesture.motionStyle}
       >
         <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/70 to-transparent" />
@@ -91,7 +91,7 @@ export function ImageViewerScreen({
           </StatusMessage>
         )}
         {image !== null && (
-          <main className="relative z-10 mx-auto flex min-h-[calc(100vh-2rem)] max-w-6xl flex-col justify-center gap-4">
+          <main className="relative z-10 mx-auto flex min-h-[calc(100vh-1.5rem)] sm:min-h-[calc(100vh-2.5rem)] max-w-6xl flex-col justify-center gap-4">
             <h1
               data-testid="image-viewer-title"
               className="truncate px-14 text-center text-lg font-semibold text-white sm:text-2xl"
