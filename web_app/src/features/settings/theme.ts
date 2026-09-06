@@ -123,7 +123,7 @@ export function applyThemeSettings(settings: ThemeSettings) {
   root.classList.toggle('dark', isDark);
   root.classList.add('wr-kit');
   root.dataset.material = 'glass';
-  root.dataset.texture = 'grain';
+  root.dataset.texture = 'none';
   root.dataset.theme = next.mode;
   root.style.setProperty('--surface', hexToRgbChannels(next.surfaceColor));
   root.style.setProperty('--foreground', hexToRgbChannels(next.foregroundColor));

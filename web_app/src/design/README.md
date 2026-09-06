@@ -6,8 +6,9 @@ material uses 1.5px blur, 90% saturation, 82% contrast, layered shadows and a
 Muzio markup and icons. Catalog demo scripts and generic SVG rules are excluded.
 
 The theme scope lives on `html` so body portals inherit it. Muzio's saved surface,
-text, muted and accent colors remain authoritative. Grain appears on page
-backgrounds; overlays use denser glass for text legibility. Individual controls retain their original unboxed styling. Pretendard and its OFL license are under `public/fonts`.
+text, muted and accent colors remain authoritative. Page backgrounds are plain, without a texture. The floating navigation island
+uses the kit glass surface and edge highlight; dense overlays retain more opacity
+for text legibility. Individual controls retain their original unboxed styling. Pretendard and its OFL license are under `public/fonts`.
 
 | Surface | Integration |
 | --- | --- |

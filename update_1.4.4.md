@@ -68,3 +68,11 @@
 - 전체 너비 상단 배경을 없애고 메뉴·Music/Video/Image·검색을 중앙의 플로팅 섬에 배치했다. 메뉴 아이콘은 사이드바 형태로 변경했다.
 - 제품 버전은 1.4.4, PWA shell revision은 1.4.4-r5.
 - 검증/배포: App·MiniPlayer 39 tests와 production build 통과. 실제 서비스 desktop 중앙 bar width=338px, 320px viewport의 bar width=286px·검색 팝업 좌우 경계 8~296px 확인. 미니 재생 버튼의 border=0px/background=transparent/shadow=none 확인. 1.4.4-r5 웹 배포 완료.
+
+## 추가 보정 - 상단 글래스와 설정 배치
+
+- 상단 플로팅 섬을 kit의 반투명 glass surface, layered shadow와 곡면 edge highlight로 복원했다. 개별 버튼의 박스는 추가하지 않는다.
+- 설정 페이지를 중앙 정렬한 반응형 컨테이너로 정리하고 제목과 섹션의 좌우 시작점을 맞췄다.
+- 모든 테마에서 grain 배경을 끄고 페이지 및 플레이어의 점무늬 CSS를 제거했다. 저장된 사용자 색상은 유지한다.
+- 제품 버전은 1.4.4, PWA shell revision은 1.4.4-r6.
+- 검증/배포: Settings·theme 10 tests, TypeScript/Vite build와 버전 검사 통과. 실제 서비스에서 body background-image=none, 상단 blur/반투명/edge highlight 확인. 설정은 desktop 1200px 본문 중앙 정렬, 320px viewport 전체 section 좌우 16~304px 및 horizontal overflow 없음. 1.4.4-r6 배포 완료.

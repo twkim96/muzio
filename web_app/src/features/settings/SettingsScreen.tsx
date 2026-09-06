@@ -237,8 +237,8 @@ export function SettingsScreen() {
     mediaRootsStatus === 'refreshing';
 
   return (
-    <div className="w-full px-4 py-7 sm:px-8 lg:px-10">
-      <header className="mb-8 max-w-5xl">
+    <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-8 lg:px-10">
+      <header className="mb-8">
         <p className="text-xs font-semibold uppercase tracking-wide text-accent">
           Settings
         </p>
@@ -251,10 +251,10 @@ export function SettingsScreen() {
         </p>
       </header>
 
-      <div className="grid max-w-5xl gap-4">
+      <div className="grid min-w-0 gap-4">
         <section
           id="appearance"
-          className="border-t border-zinc-200/70 px-4 py-6 dark:border-white/10 sm:px-6"
+          className="min-w-0 border-t border-zinc-200/70 py-6 dark:border-white/10"
         >
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -348,7 +348,7 @@ export function SettingsScreen() {
 
         <section
           id="backend-status"
-          className="border-t border-zinc-200/70 px-4 py-6 dark:border-white/10 sm:px-6"
+          className="min-w-0 border-t border-zinc-200/70 py-6 dark:border-white/10"
         >
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -382,7 +382,7 @@ export function SettingsScreen() {
 
         <section
           id="media-folders"
-          className="border-t border-zinc-200/70 px-4 py-6 dark:border-white/10 sm:px-6"
+          className="min-w-0 border-t border-zinc-200/70 py-6 dark:border-white/10"
         >
           <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -458,7 +458,7 @@ export function SettingsScreen() {
 
         <section
           id="runtime-notes"
-          className="border-t border-zinc-200/70 px-4 py-6 dark:border-white/10 sm:px-6"
+          className="min-w-0 border-t border-zinc-200/70 py-6 dark:border-white/10"
         >
           <div className="mb-5">
             <h2 className="text-2xl font-semibold">Runtime Notes</h2>
@@ -505,7 +505,7 @@ function ThemeColorInput({
   };
 
   return (
-    <label className="rounded-xl border border-zinc-200/70 p-4 dark:border-white/10">
+    <label className="min-w-0 rounded-xl border border-zinc-200/70 p-4 dark:border-white/10">
       <span className="flex items-start justify-between gap-4">
         <span>
           <span className="block text-base font-semibold">{label}</span>
