@@ -227,6 +227,9 @@ html.wr-kit {
   background: rgb(var(--foreground) / .07);
   color: color-mix(in srgb, rgb(var(--accent)) 68%, rgb(var(--foreground)));
 }
+.wr-kit .muzio-topbar nav[aria-label='Primary'] a:not([aria-current='page']) {
+  color: var(--app-menu-ink);
+}
 .wr-kit :is(.muzio-sidebar, .muzio-topbar) button[aria-pressed='true'] { color: rgb(var(--accent)); }
 /* Vidstack keeps white transport glyphs legible over the picture; its menus
    share the application's material, including menus portalled to body. */
