@@ -333,9 +333,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         {!isImmersiveRoute && (
           <header className="sticky top-3 z-30 mx-auto mt-3 max-w-7xl px-3 sm:px-8 lg:px-10">
             {section !== null && (
-              <h1 className="muzio-title relative mb-2 flex h-8 w-fit items-center px-4 text-lg font-semibold tracking-tight sm:absolute sm:top-[9px] sm:mb-0 sm:h-10 sm:text-xl">
-                {sideSections[section].title}
-              </h1>
+              <div className="mb-2 h-[57.42px] w-fit [--title-scale:1.794375] sm:[--title-scale:1.4355] md:absolute md:top-[0.29px] md:mb-0">
+                <h1 className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
+                  <span className="scale-[calc(1/var(--title-scale))]">{sideSections[section].title}</span>
+                </h1>
+              </div>
             )}
             <div className="muzio-topbar relative mx-auto w-fit max-w-full px-1.5 py-1.5">
               <div className="flex h-11 items-center justify-center gap-0.5 sm:gap-1">
@@ -367,7 +369,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               to="/settings"
               aria-label="Settings"
               onClick={closeDrawer}
-              className="muzio-settings-button absolute right-3 top-0 flex h-8 w-8 items-center justify-center text-foreground sm:right-8 sm:top-[9px] sm:h-10 sm:w-10 lg:right-10"
+              className="muzio-settings-button absolute right-3 top-[10.71px] flex h-9 w-9 items-center justify-center text-foreground sm:right-8 sm:top-[6.71px] sm:h-11 sm:w-11 lg:right-10"
             >
               <GearSix aria-hidden className="h-5 w-5" />
             </NavLink>
@@ -526,14 +528,16 @@ function SidebarDrawer({
         className="muzio-sidebar absolute inset-y-2 left-2 flex w-[min(20rem,84vw)] flex-col overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/88 px-5 py-5 text-zinc-950 shadow-2xl shadow-black/20 backdrop-blur-xl dark:border-white/10 dark:bg-surface/94 dark:text-foreground"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
-          <span
+        <div className="mb-4 flex shrink-0 flex-col items-start gap-3">
+          <div
             data-testid="mobile-menu-title"
-            className="min-w-0 flex-1 truncate text-left text-2xl font-semibold"
+            className="h-[57.42px] w-fit [--title-scale:1.794375] sm:[--title-scale:1.4355]"
           >
-            {sidebar.title}
-          </span>
-          <div className="flex shrink-0 items-center gap-2">
+            <span className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
+              <span className="scale-[calc(1/var(--title-scale))]">{sidebar.title}</span>
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 self-end">
             {canCreatePlaylist && (
               <button
                 type="button"
