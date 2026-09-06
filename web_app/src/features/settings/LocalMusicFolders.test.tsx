@@ -30,3 +30,12 @@ test('background enrichment shows progress while folder controls remain usable',
   expect(screen.getByRole('status')).toHaveTextContent('지금 재생할 수 있습니다');
   expect(screen.getByRole('button', { name: '로컬 폴더 추가' })).toBeEnabled();
 });
+
+test('iOS hides local folders and never requests the unsupported library', () => {
+  const request = vi.fn();
+  configureAndroidShell({ platform: 'ios', capabilities: { localLibrary: false, nativeAudio: true }, request });
+  render(<LocalMusicFolders query="" />);
+  expect(screen.queryByText('Local Music')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '로컬 폴더 추가' })).not.toBeInTheDocument();
+  expect(request).not.toHaveBeenCalled();
+});

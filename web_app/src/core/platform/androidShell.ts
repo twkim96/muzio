@@ -1,12 +1,26 @@
 import { useEffect, useRef } from 'react';
 
-export interface AndroidShellBridge {
+export interface NativeCapabilities {
+  localLibrary?: boolean;
+  nativeAudio?: boolean;
+}
+export interface NativeShellMetadata {
+  platform?: 'android' | 'ios' | 'macos';
+  capabilities?: NativeCapabilities;
+}
+export interface AndroidShellBridge extends NativeShellMetadata {
   request<T>(command: string, payload?: object): Promise<T>;
 }
 let shellBridge: AndroidShellBridge | null = null;
 /** Configure once with the same bridge instance used by native audio. */
 export function configureAndroidShell(bridge: AndroidShellBridge | null) { shellBridge = bridge; }
 export function androidShellBridge() { return shellBridge; }
+
+/** Older Android hosts advertise no metadata and retain their existing features. */
+export function supportsNativeCapability(capability: keyof NativeCapabilities, bridge = shellBridge): boolean {
+  if (!bridge) return false;
+  return bridge.capabilities?.[capability] ?? (capability === 'nativeAudio' || (bridge.platform === undefined || bridge.platform === 'android'));
+}
 
 const migrationKeys = ['music.likes.v1', 'music.playlists.v1', 'music.activity.v1'] as const;
 export async function migrateNativePreferences(bridge: AndroidShellBridge, storage: Storage = localStorage) {

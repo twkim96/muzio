@@ -1,9 +1,11 @@
-/** AndroidX WebMessageListener transport. No bridge means ordinary web playback. */
-export interface NativeMessagePort {
+import type { NativeShellMetadata } from './androidShell';
+
+/** Native host message transport. No bridge means ordinary web playback. */
+export interface NativeMessagePort extends NativeShellMetadata {
   postMessage(message: string): void;
   onmessage?: ((event: { data: string }) => void) | null;
 }
-export interface NativeBridge {
+export interface NativeBridge extends NativeShellMetadata {
   request<T = unknown>(command: string, payload?: object): Promise<T>;
   subscribe(listener: (event: { type: string; state?: unknown }) => void): () => void;
   dispose(): void;
@@ -34,6 +36,8 @@ export function createNativeBridge(port = nativeMessagePort()): NativeBridge | n
   };
   port.onmessage = receive;
   return {
+    platform: port.platform,
+    capabilities: port.capabilities,
     request<T>(command: string, payload?: object) {
       const id = `web-${Date.now()}-${++sequence}`;
       return new Promise<T>((resolve, reject) => {

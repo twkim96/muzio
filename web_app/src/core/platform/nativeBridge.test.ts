@@ -23,3 +23,14 @@ it('rejects native errors instead of reporting a successful handoff', async () =
   port.onmessage!({ data: JSON.stringify({ type: 'response', id, ok: false, error: 'Unavailable' }) });
   await expect(result).rejects.toThrow('Unavailable'); bridge.dispose();
 });
+it('propagates iOS host capabilities without changing its message transport', async () => {
+  const port: NativeMessagePort = { platform: 'ios', capabilities: { localLibrary: false, nativeAudio: true }, postMessage: vi.fn() };
+  const bridge = createNativeBridge(port)!;
+  expect(bridge.platform).toBe('ios');
+  expect(bridge.capabilities).toEqual({ localLibrary: false, nativeAudio: true });
+  const result = bridge.request('shell.profile');
+  const { id } = JSON.parse(vi.mocked(port.postMessage).mock.calls[0][0]);
+  port.onmessage!({ data: JSON.stringify({ type: 'response', id, ok: true, result: { setup: false } }) });
+  await expect(result).resolves.toEqual({ setup: false });
+  bridge.dispose();
+});

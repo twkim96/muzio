@@ -1,4 +1,4 @@
-# Muzio 1.4.5
+# Muzio 1.4.6
 
 Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 브라우저에서 탐색하고 재생하는 경량 self-hosted 미디어 앱입니다.
@@ -8,7 +8,7 @@ Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 | Item | Current contract |
 | --- | --- |
 | Product/service name | `Muzio` |
-| Version | `1.4.5` |
+| Version | `1.4.6` |
 | Primary client | React + TypeScript web app |
 | Backend | Go `1.22`, CGO-free |
 | Normal runtime | Go server가 API, media, `web_app/dist`를 한 origin에서 제공 |
@@ -73,6 +73,17 @@ Android 설정에서 로컬 음악 폴더를 추가하면 네트워크 음악과
 오프라인 재생할 수 있습니다. 상단 필터는 정렬·저장소·온/오프라인·Artist 태그를
 지원하며 `#가수명` 또는 `#"공백이 있는 가수명"` 검색과 연동합니다. 기존 열 제목은
 보조 정렬 및 현재 정렬 표시로 유지합니다. 위젯은 후속 작업입니다.
+
+`1.4.6`은 iPhone·iPad·Mac용 Apple 앱을 추가합니다. `WKWebView`가 선택한
+서버의 현재 웹 UI를 표시하고, 음악은 `AVPlayer`와 시스템 미디어 제어를
+연결합니다. UI를 앱에 묶는 Android와 달리 Apple 앱은 서버에 배포한 UI를
+사용하므로 첫 연결과 화면 로딩에 서버가 필요합니다. Apple 로컬 폴더·위젯·
+재생 큐의 전체 프로세스 복구는 아직 지원하지 않습니다.
+
+Mac 앱은 빌드/실행 및 테스트 음원 재생 검증을 완료했습니다. iPhone·iPad는
+공용 소스와 Xcode 타깃을 준비했으며, Xcode/iOS SDK와 서명 설정 후 빌드·
+실기기 검증이 남아 있습니다. [Apple 앱 빌드 및 지원 범위](ios_app/README.md)를
+참조하세요. Android 1.4.5는 versionCode13 설치 대기로 마감했습니다.
 
 ## Source Of Truth
 

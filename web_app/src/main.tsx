@@ -26,7 +26,7 @@ import { createAudioResumeCacheService } from './features/player/audioResumeCach
 import { videoOptimizationService } from './features/player/videoOptimizationService';
 
 import { createNativeBridge } from './core/platform/nativeBridge';
-import { configureAndroidShell, migrateNativePreferences } from './core/platform/androidShell';
+import { configureAndroidShell, migrateNativePreferences, supportsNativeCapability } from './core/platform/androidShell';
 import { createLocalAwareLibraryStore, startLocalLibraryProgressSync, useNativeLocalLibrary } from './features/library/nativeLocalLibrary';
 import { AndroidServerSetup } from './core/platform/AndroidServerSetup';
 import { connectNativeAudio } from './features/player/nativeAudio';
@@ -68,7 +68,7 @@ async function startApp() {
     video: createLibraryStore({ type: 'video' }),
     image: createLibraryStore({ type: 'image' }),
   };
-  if (bridge) {
+  if (supportsNativeCapability('localLibrary', bridge)) {
     libraryStores.audio = createLocalAwareLibraryStore(libraryStores.audio);
     void useNativeLocalLibrary.getState().run('list');
     const stopLocalProgressSync = startLocalLibraryProgressSync();
@@ -118,7 +118,7 @@ async function startApp() {
     );
   }
 
-  await connectNativeAudio(playerStore, bridge);
+  await connectNativeAudio(playerStore, supportsNativeCapability('nativeAudio', bridge) ? bridge : null);
   seedMostRecentProgress();
   void progressRepository.syncFromRemote().then(() => {
     seedMostRecentProgress();

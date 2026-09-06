@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Muzio</string>
+	<key>CFBundleExecutable</key>
+	<string>Muzio</string>
+	<key>CFBundleIconFile</key>
+	<string>Muzio.icns</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.twkim.muzio.apple</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Muzio</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.4.6</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.music</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>선택한 Muzio 서버에서 음악, 영상과 이미지를 불러옵니다.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+</dict>
+</plist>

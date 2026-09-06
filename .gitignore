@@ -23,3 +23,11 @@ android_app/**/*.jks
 android_app/**/*.keystore
 
 **/.DS_Store
+
+!ios_app/
+!ios_app/**
+ios_app/build/
+ios_app/**/xcuserdata/
+ios_app/**/*.xcuserstate
+ios_app/**/*.mobileprovision
+ios_app/**/*.p12

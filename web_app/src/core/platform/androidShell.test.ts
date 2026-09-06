@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { migrateNativePreferences, registerAndroidBack, type AndroidShellBridge } from './androidShell';
+import { migrateNativePreferences, registerAndroidBack, supportsNativeCapability, type AndroidShellBridge } from './androidShell';
 
 afterEach(() => { localStorage.clear(); vi.restoreAllMocks(); });
 describe('native preference migration', () => {
@@ -40,4 +40,17 @@ test('Android back closes only the highest, latest surface then falls through', 
   cleanups.pop()!(); back(); expect(drawer).toHaveBeenCalledOnce();
   cleanups.pop()!(); back(); expect(route).toHaveBeenCalledOnce();
   cleanups.pop()!(); expect(back()).toBe(false);
+});
+
+test('native capabilities retain legacy Android features and exclude iOS local music', () => {
+  const request = vi.fn();
+  expect(supportsNativeCapability('localLibrary', { request })).toBe(true);
+  expect(supportsNativeCapability('nativeAudio', { request })).toBe(true);
+  const ios = { platform: 'ios' as const, capabilities: { localLibrary: false, nativeAudio: true }, request };
+  expect(supportsNativeCapability('localLibrary', ios)).toBe(false);
+  expect(supportsNativeCapability('nativeAudio', ios)).toBe(true);
+  expect(supportsNativeCapability('localLibrary', { platform: 'ios', request })).toBe(false);
+  expect(supportsNativeCapability('localLibrary', { platform: 'macos', request })).toBe(false);
+  expect(supportsNativeCapability('nativeAudio', { platform: 'macos', request })).toBe(true);
+  expect(supportsNativeCapability('nativeAudio', null)).toBe(false);
 });

@@ -1,0 +1,273 @@
+// !$*UTF8*$!
+{
+	"archiveVersion" = 1;
+	"classes" = {
+	};
+	"objectVersion" = 56;
+	"objects" = {
+		"D176E740841215E0523F4F58" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Muzio/MuzioApp.swift";
+			"sourceTree" = "<group>";
+		};
+		"F229491693818D20A6F95A25" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Muzio/NativeAudioPlayer.swift";
+			"sourceTree" = "<group>";
+		};
+		"678A9B67B58BFA18FEA1B4BA" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Muzio/ServerPolicy.swift";
+			"sourceTree" = "<group>";
+		};
+		"DB0FB694E41D3DF24FECA347" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Muzio/WebHost.swift";
+			"sourceTree" = "<group>";
+		};
+		"FBDC4F23F93125BBEEAE800C" = {
+			"isa" = "PBXGroup";
+			"children" = ("275BF9B3A50B44479EC76F60", "D75D417EF6D35B8F3139CFB4");
+			"name" = "Products";
+			"sourceTree" = "<group>";
+		};
+		"B28B7AF69320201D1CF206EB" = {
+			"isa" = "PBXGroup";
+			"children" = ("D176E740841215E0523F4F58", "F229491693818D20A6F95A25", "678A9B67B58BFA18FEA1B4BA", "DB0FB694E41D3DF24FECA347", "FBDC4F23F93125BBEEAE800C", "F8995BA5891B07E328C60D6B");
+			"sourceTree" = "<group>";
+		};
+		"3F4BD41D3B97E7E911C1031F" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "D176E740841215E0523F4F58";
+		};
+		"5432F61B012C994D535226E0" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "F229491693818D20A6F95A25";
+		};
+		"E3EF91C96B576F9B1E27E660" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "678A9B67B58BFA18FEA1B4BA";
+		};
+		"46BE4B70CD012AAB4E5CB5FF" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "DB0FB694E41D3DF24FECA347";
+		};
+		"FF0E585B3DBBB543420ABDB4" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = ("3F4BD41D3B97E7E911C1031F", "5432F61B012C994D535226E0", "E3EF91C96B576F9B1E27E660", "46BE4B70CD012AAB4E5CB5FF");
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"275BF9B3A50B44479EC76F60" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.application";
+			"includeInIndex" = 0;
+			"path" = "Muzio.app";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"D5431FECA6B56E0768DD5696" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "Muzio";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.twkim.muzio.apple";
+				"INFOPLIST_FILE" = "Info.plist";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"SDKROOT" = "iphoneos";
+				"SWIFT_VERSION" = "5.0";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"MARKETING_VERSION" = "1.4.6";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @executable_path/../Frameworks";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "16.0";
+				"TARGETED_DEVICE_FAMILY" = "1,2";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+			};
+			"name" = "Debug";
+		};
+		"5E07CD4E4832A93B502A287A" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "Muzio";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.twkim.muzio.apple";
+				"INFOPLIST_FILE" = "Info.plist";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"SDKROOT" = "iphoneos";
+				"SWIFT_VERSION" = "5.0";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"MARKETING_VERSION" = "1.4.6";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @executable_path/../Frameworks";
+				"IPHONEOS_DEPLOYMENT_TARGET" = "16.0";
+				"TARGETED_DEVICE_FAMILY" = "1,2";
+				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+				"SUPPORTS_MACCATALYST" = "NO";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+			};
+			"name" = "Release";
+		};
+		"72ADF03DCF504BFC7606B648" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = ("D5431FECA6B56E0768DD5696", "5E07CD4E4832A93B502A287A");
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Release";
+		};
+		"886BE97B0E56FC1D22704169" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "72ADF03DCF504BFC7606B648";
+			"buildPhases" = ("FF0E585B3DBBB543420ABDB4");
+			"buildRules" = ();
+			"dependencies" = ();
+			"name" = "Muzio-iOS";
+			"productName" = "Muzio";
+			"productReference" = "275BF9B3A50B44479EC76F60";
+			"productType" = "com.apple.product-type.application";
+		};
+		"2DA448F81FCEE8A01D2FE0E2" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "D176E740841215E0523F4F58";
+		};
+		"A3D4466B3EDCAD41631F4222" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "F229491693818D20A6F95A25";
+		};
+		"3C94380EF17F1BED606B4DA5" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "678A9B67B58BFA18FEA1B4BA";
+		};
+		"4330E98DC465A35A6B227E3D" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "DB0FB694E41D3DF24FECA347";
+		};
+		"04965CE9328B2D4F378ECBC7" = {
+			"isa" = "PBXSourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = ("2DA448F81FCEE8A01D2FE0E2", "A3D4466B3EDCAD41631F4222", "3C94380EF17F1BED606B4DA5", "4330E98DC465A35A6B227E3D");
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"D75D417EF6D35B8F3139CFB4" = {
+			"isa" = "PBXFileReference";
+			"explicitFileType" = "wrapper.application";
+			"includeInIndex" = 0;
+			"path" = "Muzio.app";
+			"sourceTree" = "BUILT_PRODUCTS_DIR";
+		};
+		"F8995BA5891B07E328C60D6B" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "image.icns";
+			"path" = "Muzio.icns";
+			"sourceTree" = "<group>";
+		};
+		"74C2431FE30C4A47C8443B80" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "F8995BA5891B07E328C60D6B";
+		};
+		"0189424A5A60FED329FA868E" = {
+			"isa" = "PBXResourcesBuildPhase";
+			"buildActionMask" = 2147483647;
+			"files" = ("74C2431FE30C4A47C8443B80");
+			"runOnlyForDeploymentPostprocessing" = 0;
+		};
+		"D9F0501C445CB777E71FE66E" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "Muzio";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.twkim.muzio.apple";
+				"INFOPLIST_FILE" = "Mac-Info.plist";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"SDKROOT" = "macosx";
+				"SWIFT_VERSION" = "5.0";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"MARKETING_VERSION" = "1.4.6";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @executable_path/../Frameworks";
+				"MACOSX_DEPLOYMENT_TARGET" = "13.0";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"ENABLE_HARDENED_RUNTIME" = "YES";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+			};
+			"name" = "Debug";
+		};
+		"7CB32C66D6442831F84F2EED" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"PRODUCT_NAME" = "Muzio";
+				"PRODUCT_BUNDLE_IDENTIFIER" = "com.twkim.muzio.apple";
+				"INFOPLIST_FILE" = "Mac-Info.plist";
+				"GENERATE_INFOPLIST_FILE" = "NO";
+				"SDKROOT" = "macosx";
+				"SWIFT_VERSION" = "5.0";
+				"CODE_SIGN_STYLE" = "Automatic";
+				"MARKETING_VERSION" = "1.4.6";
+				"CURRENT_PROJECT_VERSION" = "1";
+				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @executable_path/../Frameworks";
+				"MACOSX_DEPLOYMENT_TARGET" = "13.0";
+				"SUPPORTED_PLATFORMS" = "macosx";
+				"ENABLE_HARDENED_RUNTIME" = "YES";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+			};
+			"name" = "Release";
+		};
+		"8B661FD7730F6D824E06F512" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = ("D9F0501C445CB777E71FE66E", "7CB32C66D6442831F84F2EED");
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Release";
+		};
+		"696E951C1BB8B9C8F9B2BC44" = {
+			"isa" = "PBXNativeTarget";
+			"buildConfigurationList" = "8B661FD7730F6D824E06F512";
+			"buildPhases" = ("04965CE9328B2D4F378ECBC7", "0189424A5A60FED329FA868E");
+			"buildRules" = ();
+			"dependencies" = ();
+			"name" = "Muzio-macOS";
+			"productName" = "Muzio";
+			"productReference" = "D75D417EF6D35B8F3139CFB4";
+			"productType" = "com.apple.product-type.application";
+		};
+		"89E1FD6268CC0F221A2BE178" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CLANG_ENABLE_MODULES" = "YES";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+			};
+			"name" = "Debug";
+		};
+		"E6DE6C99132752C914FEF632" = {
+			"isa" = "XCBuildConfiguration";
+			"buildSettings" = {
+				"CLANG_ENABLE_MODULES" = "YES";
+				"SWIFT_OPTIMIZATION_LEVEL" = "-O";
+			};
+			"name" = "Release";
+		};
+		"BC7E287B75C6D3E574547D08" = {
+			"isa" = "XCConfigurationList";
+			"buildConfigurations" = ("89E1FD6268CC0F221A2BE178", "E6DE6C99132752C914FEF632");
+			"defaultConfigurationIsVisible" = 0;
+			"defaultConfigurationName" = "Release";
+		};
+		"98F54143AB4E86B28C3AFEE0" = {
+			"isa" = "PBXProject";
+			"attributes" = {
+				"LastUpgradeCheck" = "1600";
+			};
+			"buildConfigurationList" = "BC7E287B75C6D3E574547D08";
+			"compatibilityVersion" = "Xcode 14.0";
+			"developmentRegion" = "en";
+			"hasScannedForEncodings" = 0;
+			"knownRegions" = ("en", "Base");
+			"mainGroup" = "B28B7AF69320201D1CF206EB";
+			"productRefGroup" = "FBDC4F23F93125BBEEAE800C";
+			"projectDirPath" = "";
+			"projectRoot" = "";
+			"targets" = ("886BE97B0E56FC1D22704169", "696E951C1BB8B9C8F9B2BC44");
+		};
+	};
+	"rootObject" = "98F54143AB4E86B28C3AFEE0";
+}

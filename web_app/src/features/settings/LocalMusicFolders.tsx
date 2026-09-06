@@ -1,9 +1,9 @@
-import { androidShellBridge } from '../../core/platform/androidShell';
+import { supportsNativeCapability } from '../../core/platform/androidShell';
 import { useNativeLocalLibrary } from '../library/nativeLocalLibrary';
 
 export function LocalMusicFolders({ query }: { query: string }) {
   const { roots, items, enrichment, busy, error, run } = useNativeLocalLibrary();
-  if (!androidShellBridge()) return null;
+  if (!supportsNativeCapability('localLibrary')) return null;
   const matches = query.trim().toLocaleLowerCase().split(/\s+/).every((word) =>
     `local music folders offline storage device 로컬 음악 폴더 오프라인 저장소 기기 ${roots.map((root) => root.name).join(' ')}`.toLocaleLowerCase().includes(word));
   return <section id="local-music-folders" hidden={!matches} className="min-w-0 border-t border-zinc-200/70 py-6 dark:border-white/10">
