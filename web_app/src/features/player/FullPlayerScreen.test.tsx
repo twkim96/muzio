@@ -274,11 +274,7 @@ describe('FullPlayerScreen', () => {
     });
     renderScreen(store);
     expect(screen.getByTestId('now-playing-art')).toBeInTheDocument();
-    const close = screen.getByTestId('player-close');
-    expect(close).toHaveAccessibleName('Collapse music player');
-    expect(close).not.toHaveTextContent('×');
-    fireEvent.click(close);
-    expect(screen.getByTestId('location')).toHaveTextContent('/library/music');
+    expect(screen.queryByTestId('player-close')).not.toBeInTheDocument();
     expect(screen.queryByTestId('video-viewport')).not.toBeInTheDocument();
   });
 
@@ -962,9 +958,7 @@ describe('FullPlayerScreen', () => {
           Node.DOCUMENT_POSITION_FOLLOWING,
       ),
     ).toBe(true);
-    expect(screen.getByTestId('player-close')).toHaveAccessibleName(
-      'Collapse video player',
-    );
+    expect(screen.queryByTestId('player-close')).not.toBeInTheDocument();
     expect(screen.queryByTestId('now-playing-art')).not.toBeInTheDocument();
   });
 
@@ -1171,7 +1165,7 @@ describe('FullPlayerScreen', () => {
     layout.scrollTop = 300;
     fireEvent.click(toggle);
     expect(layout.scrollTop).toBe(0);
-    expect(layout).toHaveClass('w-full', 'max-w-none', 'pt-14');
+    expect(layout).toHaveClass('w-full', 'max-w-none', '[--video-watch-top:0px]');
     expect(viewport).toHaveClass('aspect-video');
     expect(screen.getByTestId('video-mount')).toBe(mount);
   });
@@ -1924,7 +1918,13 @@ describe('FullPlayerScreen', () => {
     });
     expect(screen.getByTestId('video-mount')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('player-close'));
+    const title = screen.getByTestId('video-player-title');
+    fireEvent.touchStart(title, { touches: [{ clientX: 100, clientY: 40 }] });
+    fireEvent.touchMove(title, { touches: [{ clientX: 100, clientY: 240 }] });
+    fireEvent.touchEnd(title, { changedTouches: [{ clientX: 100, clientY: 240 }] });
+    await waitFor(() => {
+      expect(screen.getByTestId('collapsed-target')).toBeInTheDocument();
+    });
 
     expect(screen.getByTestId('collapsed-target')).toBeInTheDocument();
     expect(store.getState().active).toBe('video');

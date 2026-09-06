@@ -299,7 +299,12 @@ describe('App routes', () => {
     expect(screen.queryByTestId('player-library-backdrop')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('library-list')).getByText('song.mp3')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('player-close'));
+    expect(screen.queryByTestId('player-close')).not.toBeInTheDocument();
+    const player = screen.getByTestId('player-screen');
+    fireEvent.touchStart(player, { touches: [{ clientX: 100, clientY: 40 }] });
+    fireEvent.touchMove(player, { touches: [{ clientX: 100, clientY: 300 }] });
+    fireEvent.touchEnd(player, { changedTouches: [{ clientX: 100, clientY: 300 }] });
+    await waitFor(() => expect(screen.queryByTestId('player-overlay')).not.toBeInTheDocument());
 
     expect(window.location.pathname).toBe('/library/music');
     expect(screen.queryByTestId('player-overlay')).not.toBeInTheDocument();
@@ -334,7 +339,12 @@ describe('App routes', () => {
 
     expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('player-close'));
+    expect(screen.queryByTestId('player-close')).not.toBeInTheDocument();
+    const player = screen.getByTestId('player-screen');
+    fireEvent.touchStart(player, { touches: [{ clientX: 100, clientY: 40 }] });
+    fireEvent.touchMove(player, { touches: [{ clientX: 100, clientY: 300 }] });
+    fireEvent.touchEnd(player, { changedTouches: [{ clientX: 100, clientY: 300 }] });
+    await waitFor(() => expect(screen.queryByTestId('player-overlay')).not.toBeInTheDocument());
 
     expect(screen.queryByTestId('player-overlay')).not.toBeInTheDocument();
     expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
@@ -762,7 +772,11 @@ describe('App routes', () => {
     expect(screen.queryByTestId('mini-player')).not.toBeInTheDocument();
     expect(selectActiveState(playerStore.getState()).source?.mediaId).toBe('a1');
 
-    fireEvent.click(screen.getByTestId('image-viewer-close'));
+    expect(screen.queryByTestId('image-viewer-close')).not.toBeInTheDocument();
+    const viewer = screen.getByTestId('image-viewer');
+    fireEvent.touchStart(viewer, { touches: [{ clientX: 100, clientY: 40 }] });
+    fireEvent.touchMove(viewer, { touches: [{ clientX: 100, clientY: 300 }] });
+    fireEvent.touchEnd(viewer, { changedTouches: [{ clientX: 100, clientY: 300 }] });
 
     await waitFor(() => {
       expect(window.location.pathname).toBe('/library/image');

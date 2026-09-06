@@ -25,7 +25,6 @@ import { useDocumentHorizontalDrag } from './controls/useDocumentHorizontalDrag'
 import { formatTime } from './formatTime';
 import { usePlaybackNetworkHint } from './playbackNetworkStatus';
 import {
-  DownChevronIcon,
   LikeGlyph,
   MoreGlyph,
   MusicGlyph,
@@ -220,7 +219,6 @@ export function FullPlayerScreen({
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_15%,rgba(174,174,174,0.14),transparent_34%),linear-gradient(135deg,rgba(255,55,85,0.16),transparent_28%),linear-gradient(215deg,rgba(90,120,96,0.28),transparent_42%)]" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/22 via-transparent to-black/30" />
-        <DismissButton label="Collapse music player" onCollapse={collapsePlayer} />
 
         <main
           data-testid="music-player-content"
@@ -538,26 +536,6 @@ function NowPlayingArtwork({ artworkUrl }: { artworkUrl?: string }) {
         <MusicGlyph className="h-16 w-16" />
       )}
     </div>
-  );
-}
-
-function DismissButton({
-  label,
-  onCollapse,
-}: {
-  label: string;
-  onCollapse: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      data-testid="player-close"
-      aria-label={label}
-      className="absolute left-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full text-white/88 transition hover:bg-white/10 hover:text-white sm:left-6 sm:top-6"
-      onClick={onCollapse}
-    >
-      <DownChevronIcon />
-    </button>
   );
 }
 

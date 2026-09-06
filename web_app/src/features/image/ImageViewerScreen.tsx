@@ -2,7 +2,6 @@ import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { buildStreamingUrl } from '../../core/playback/source/source';
-import { DownChevronIcon } from '../../core/ui/AppIcons';
 import { LikeGlyph } from '../../core/ui/AppIcons';
 import { contentKeyForLibraryItem } from '../../core/media/contentIdentity';
 import { useLibraryStores } from '../library/LibraryContext';
@@ -58,15 +57,6 @@ export function ImageViewerScreen({
         style={dismissGesture.motionStyle}
       >
         <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/70 to-transparent" />
-        <button
-          type="button"
-          data-testid="image-viewer-close"
-          aria-label="Close image viewer"
-          className="absolute left-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full text-white/88 transition hover:bg-white/10 hover:text-white sm:left-6 sm:top-6"
-          onClick={close}
-        >
-          <DownChevronIcon />
-        </button>
 
         {image !== null && (
           <button
@@ -99,7 +89,7 @@ export function ImageViewerScreen({
           </StatusMessage>
         )}
         {image !== null && (
-          <main className="relative z-10 mx-auto flex min-h-[calc(100vh-2rem)] max-w-6xl flex-col justify-center gap-4 pt-12">
+          <main className="relative z-10 mx-auto flex min-h-[calc(100vh-2rem)] max-w-6xl flex-col justify-center gap-4">
             <h1
               data-testid="image-viewer-title"
               className="truncate px-14 text-center text-lg font-semibold text-white sm:text-2xl"

@@ -28,7 +28,6 @@ import {
 import { progressFractionFor, resumePositionFor } from '../progress/progressPolicy';
 import { useProgressRecord } from '../progress/ProgressContext';
 import {
-  DownChevronIcon,
   OpenExternalGlyph,
   ShareGlyph,
   VideoGlyph,
@@ -151,10 +150,6 @@ export function VideoWatchScreen({
         className={`muzio-video-page relative z-10 h-[100svh] overflow-hidden bg-[var(--color-bg)] lg:h-screen ${watchGesture.motionClassName}`}
         style={watchGesture.motionStyle}
       >
-        <DismissButton
-          label="Collapse video player"
-          onCollapse={onCollapse}
-        />
         <main
           ref={layoutRef}
           data-testid="video-watch-layout"
@@ -163,7 +158,7 @@ export function VideoWatchScreen({
           className={`mx-auto h-full min-h-0 w-full overflow-y-auto overscroll-contain ${
             theaterMode
               ? 'max-w-none [--video-watch-top:0px]'
-              : 'grid grid-cols-1 auto-rows-min content-start gap-5 px-0 pb-6 pt-14 [--video-watch-top:3.5rem] sm:px-6 sm:pt-16 sm:[--video-watch-top:4rem] max-w-none lg:gap-[var(--video-watch-gutter)] lg:grid-cols-[minmax(0,1fr)_var(--video-watch-sidebar-width)] lg:items-start lg:px-8 lg:pb-8'
+              : 'grid grid-cols-1 auto-rows-min content-start gap-5 px-0 pb-6 [--video-watch-top:0px] sm:px-6 max-w-none lg:gap-[var(--video-watch-gutter)] lg:grid-cols-[minmax(0,1fr)_var(--video-watch-sidebar-width)] lg:items-start lg:px-8 lg:pb-8'
           }`}
         >
           <section
@@ -488,26 +483,6 @@ function ExternalPlaybackActions({
   );
 }
 
-
-function DismissButton({
-  label,
-  onCollapse,
-}: {
-  label: string;
-  onCollapse: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      data-testid="player-close"
-      aria-label={label}
-      className="fixed left-3 top-3 z-30 inline-flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-fg)] transition hover:bg-[var(--color-control-hover)] sm:left-5 sm:top-5"
-      onClick={onCollapse}
-    >
-      <DownChevronIcon />
-    </button>
-  );
-}
 
 function VideoUpNextList({
   currentMediaId,
