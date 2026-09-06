@@ -91,3 +91,11 @@
 - 미니바 오른쪽 보조 액션은 desktop/mobile 모두 좋아요 → 시계 → Queue로 정렬한다. Desktop 볼륨 및 모바일 다음 곡은 제거하고 기존 desktop 이전/다음과 모바일 재생/일시정지는 유지한다.
 - 제품 버전은 1.4.4, PWA shell revision은 1.4.4-r8.
 - 검증/배포: App 20, Settings 3, LibraryScreen 31, MiniPlayer 21 tests와 TypeScript/Vite build 통과. 실제 desktop 우측 설정 버튼 58×58px, 폴더 검색 시 Media Folders만 표시 확인. 320px에서 가로 넘침 없음, 미니바 좋아요→시계→Queue→재생 순서 및 PC 볼륨/모바일 다음 곡 제거 확인. 1.4.4-r8 배포 완료.
+
+## 추가 보정 - 컨테이너 폭과 플로팅 곡률
+
+- 하단 미니바는 높이에 비례한 캡슐형 곡률로 변경해 상단 섬과 비슷한 둥근 정도를 적용한다.
+- 상단 제목을 별도의 glass 캡슐에 넣고 desktop 설정 버튼을 58px에서 40px로 줄였다.
+- 라이브러리와 상단 행을 설정과 같은 max-w-7xl 중앙 컨테이너에 맞췄다. 제목/설정 버튼도 같은 좌우 경계에 놓고 사이드바의 화면 기준 위치와 영상 몰입 화면은 유지한다.
+- 제품 버전 1.4.4, PWA shell revision 1.4.4-r9.
+- 검증/배포: App·MiniPlayer 41 tests, TypeScript/Vite build와 버전 검사 통과. 실제 desktop 상단/본문 width=1280px 및 같은 좌우 경계, 설정 버튼 40×40px 확인. 사이드바 left=8px 유지, 모바일 390px 넘침 없음과 미니바 캡슐 형태 확인. 1.4.4-r9 배포 완료.

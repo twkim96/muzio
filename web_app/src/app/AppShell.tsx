@@ -331,9 +331,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     <SearchHostProvider host={searchHost}>
       <div className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-surface dark:text-foreground">
         {!isImmersiveRoute && (
-          <header className="sticky top-3 z-30 mt-3 px-3 sm:px-8 lg:px-10">
+          <header className="sticky top-3 z-30 mx-auto mt-3 max-w-7xl px-3 sm:px-8 lg:px-10">
             {section !== null && (
-              <h1 className="mb-2 text-lg font-semibold tracking-tight sm:absolute sm:top-0 sm:mb-0 sm:flex sm:h-[58px] sm:items-center sm:text-xl">
+              <h1 className="muzio-title relative mb-2 flex h-8 w-fit items-center px-4 text-lg font-semibold tracking-tight sm:absolute sm:top-[9px] sm:mb-0 sm:h-10 sm:text-xl">
                 {sideSections[section].title}
               </h1>
             )}
@@ -367,9 +367,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               to="/settings"
               aria-label="Settings"
               onClick={closeDrawer}
-              className="muzio-settings-button absolute right-3 top-0 flex h-8 w-8 items-center justify-center text-foreground sm:right-8 sm:h-[58px] sm:w-[58px] lg:right-10"
+              className="muzio-settings-button absolute right-3 top-0 flex h-8 w-8 items-center justify-center text-foreground sm:right-8 sm:top-[9px] sm:h-10 sm:w-10 lg:right-10"
             >
-              <GearSix aria-hidden className="h-5 w-5 sm:h-6 sm:w-6" />
+              <GearSix aria-hidden className="h-5 w-5" />
             </NavLink>
           </header>
         )}

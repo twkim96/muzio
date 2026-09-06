@@ -150,7 +150,7 @@ html.wr-kit {
 }
 .wr-kit .app-top-fade::before { display: none; }
 
-.wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-settings-button, .muzio-sidebar, .muzio-search) {
+.wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-title, .muzio-settings-button, .muzio-sidebar, .muzio-search) {
   background: var(--app-menu-surface);
   border: 1px solid var(--app-menu-border);
   border-radius: 14px;
@@ -166,7 +166,7 @@ html.wr-kit {
   /* A little more ink behind dense overlay text keeps underlying rows legible. */
   background: var(--muzio-overlay-surface);
 }
-.wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-settings-button, .muzio-sidebar, .muzio-search)::before {
+.wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-title, .muzio-settings-button, .muzio-sidebar, .muzio-search)::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -179,13 +179,13 @@ html.wr-kit {
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
 }
-.wr-kit :is(.muzio-topbar, .muzio-settings-button) {
+.wr-kit :is(.muzio-topbar, .muzio-title, .muzio-settings-button) {
   border-radius: 999px;
   background: var(--app-menu-surface);
   box-shadow: var(--app-menu-panel-shadow);
 }
 .wr-kit .muzio-dock {
-  border-radius: 14px;
+  border-radius: 999px;
   box-shadow: var(--app-menu-dock-shadow), inset 0 1px rgb(255 255 255 / .2);
 }
 .wr-kit .muzio-drawer { border-radius: 0 14px 14px 0; }
@@ -250,18 +250,17 @@ html.wr-kit {
 }
 @media (max-width: 639px) {
   .wr-kit .muzio-dialog { border-radius: 22px; max-height: 82svh; overflow-y: auto; }
-  .wr-kit .muzio-dock { border-radius: 14px; }
 }
 @supports not (backdrop-filter: blur(1px)) {
-  .wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-settings-button, .muzio-sidebar, .muzio-search) { background-color: var(--viewer-theme-bg); }
+  .wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-title, .muzio-settings-button, .muzio-sidebar, .muzio-search) { background-color: var(--viewer-theme-bg); }
 }
-.no-glass :is([data-glass], .muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-settings-button, .muzio-sidebar, .muzio-search) {
+.no-glass :is([data-glass], .muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-title, .muzio-settings-button, .muzio-sidebar, .muzio-search) {
   background-color: rgb(var(--surface));
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
 @media (prefers-reduced-transparency: reduce) {
-  .wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-settings-button, .muzio-sidebar, .muzio-search) { background-color: var(--viewer-theme-bg); backdrop-filter: none; }
+  .wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-title, .muzio-settings-button, .muzio-sidebar, .muzio-search) { background-color: var(--viewer-theme-bg); backdrop-filter: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .wr-kit *, .wr-kit *::before { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }

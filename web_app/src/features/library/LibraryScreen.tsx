@@ -139,7 +139,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   };
 
   return (
-    <div className="w-full px-4 py-7 sm:px-8 lg:px-10">
+    <div className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-8 lg:px-10">
       <header className="mb-4 flex items-center justify-end gap-4">
         {searchHost === null && (
           <div className="mr-auto min-w-0">
