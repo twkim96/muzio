@@ -13,6 +13,7 @@ import { CloseGlyph } from '../../core/ui/AppIcons';
 import { GlassModal } from '../../core/ui/GlassModal';
 import { FunnelSimple } from '@phosphor-icons/react/dist/csr/FunnelSimple';
 import { LibraryFilterPanel } from './LibraryFilterPanel';
+import { LibrarySearchPreview } from './LibrarySearchPreview';
 import { useFilterHost, useSearchHost } from '../../app/SearchHostContext';
 import { usePlaylists } from '../playlists/PlaylistContext';
 import { useLibraryStores } from './LibraryContext';
@@ -87,6 +88,8 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   const selectedFilters = { ...filters, artists: parsedQuery.artists };
   const filterCount = filters.storageIds.length + filters.locations.length + parsedQuery.artists.length;
   const clearFilters = () => { setFilters(EMPTY_LIBRARY_FILTERS); setQuery(''); };
+  const renderSearchPreview = (onClose?: () => void) => <LibrarySearchPreview query={query} facets={facets} filters={filters}
+    onApply={(nextQuery, nextFilters) => { setQuery(nextQuery); setFilters(nextFilters); }} onClose={onClose} />;
   const filterButton = <button type="button" data-testid="library-filter-toggle" aria-label="Sort and filter library" aria-expanded={filterOpen}
     aria-pressed={filterCount > 0 || sortKey !== 'latest'} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-foreground/10 aria-pressed:text-accent" onClick={() => setFilterOpen(true)}>
     <FunnelSimple aria-hidden className="h-6 w-6" />
@@ -198,17 +201,21 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
         </div>
       </header>}
       {searchHost === null ? (
+        <>
         <StandaloneLibrarySearch
           title={meta.title}
           query={query}
           onQueryChange={setQuery}
         />
+        {renderSearchPreview()}
+        </>
       ) : (
         createPortal(
           <FloatingSearchControl
             title={meta.title}
             query={query}
             onQueryChange={setQuery}
+            renderPreview={renderSearchPreview}
           />,
           searchHost,
         )

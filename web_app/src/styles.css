@@ -336,6 +336,12 @@ html.wr-kit {
   .muzio-glass-action:not(:disabled):hover, .muzio-modal-close:hover { opacity: .78; }
 }
 html:has(.muzio-side-sheet, .muzio-modal-backdrop) { overflow: hidden; }
+[data-testid='library-search-preview'] .muzio-glass-action {
+  min-height: 32px;
+  padding: 6px 10px;
+  gap: 6px;
+  font-size: 12px;
+}
 /* Match Web Reader's wider desktop filter sheet and compact facet tags. */
 @media (min-width: 640px) {
   .wr-kit [data-testid='library-filter-panel'] .muzio-modal-sheet {

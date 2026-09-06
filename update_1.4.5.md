@@ -6,7 +6,7 @@
 - 기준: 1.4.4 최종 웹 UI `c283d52` (PWA r32). 1.4.4 마감 유지.
 - 작업 브랜치: `codex/android-shared-web-ui`
 - 상태: 개발 브랜치 구현·자동 검증·에뮬레이터 동작 검증 완료. Samsung 설치/실행 및 운영 웹 배포 완료. 실제 개인 라이브러리 사용성 검증은 별도.
-- 제품/Web 버전: 1.4.5. Android 개발 APK: 1.4.5-web-dev / versionCode 9 (아래 추가 패치 포함).
+- 제품/Web 버전: 1.4.5. Android 개발 APK: 1.4.5-web-dev / versionCode 10 (아래 추가 패치 포함).
 
 ## 이번 세션의 변경
 
@@ -59,7 +59,7 @@
 
 ## 후속 범위
 
-- 로컬 영상/이미지 재생·커버·자동 감시, 위젯, 더 풍부한 알림 제어, 네이티브 영상 surface, 완전한 process-death 복구는 후속 작업이다.
+- 로컬 영상/이미지 재생·자동 감시, 위젯, 더 풍부한 알림 제어, 네이티브 영상 surface, 완전한 process-death 복구는 후속 작업이다.
 - 실제 개인 라이브러리의 장시간 재생/배터리 정책/헤드셋·Bluetooth/HLS·seek 사용성은 별도 기기 점검으로 남긴다.
 - 이 문서는 현재 세션의 개발 브랜치, Android APK와 아래 운영 웹 배포를 기록한다. main 병합/원격 push 완료를 의미하지 않는다.
 
@@ -92,3 +92,16 @@
 - 운영 HTTPS의 health 정상, PWA cache 1.4.5-r3 및 실제 제공 JS/CSS와 배포 산출물 일치를 확인했다. 같은 공유 UI 소스의 웹 배포이며 앱 전용 네이티브 큐 최적화/자동 PiP는 Android host에서 처리한다.
 - 설정 등 라이브러리가 아닌 화면에서는 필터 host를 렌더링하지 않아 빈 자리 없이 상단바가 줄어든다. 실제 웹 측정에서 Music 396.19px → Settings 352.19px이며, 검색 버튼은 유지되고 Music 복귀 시 필터가 다시 나타났다. 최종 PWA cache는1.4.5-r4다.
 - Android versionCode9 최종 APK build 및 Samsung 업데이트 설치/Activity 실행을 확인했다. 산출물: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc9.apk` / SHA-256: `802a0c04ddedeb1dc43454aed08d0f1307c7030c4cc0b047d8ace503f8e83d2d`.
+
+
+## 검색 필터 미리보기·로컬 앨범아트 (1.4.5-r5)
+
+- Web Reader `ShelfSearchModal.tsx`/`shelf/tagSearch.ts`의 태그 후보 구조를 참고했다. 검색창 아래에는 Artist/Storage/Source 필터 후보와 전체 목록 기준 개수만 최대8개 표시하며 음악 결과는 중앙 목록에 남긴다.
+- 일반 검색어 및 #부분태그를 지원하고 완전 일치→접두어→부분 일치와 곡 수로 정렬한다. 태그 선택 시 입력 중인 토큰을 완성하고 앞선 검색어/태그와 다른 필터를 유지한다. 검색창을 닫고 중앙 목록에 적용한다. 설정 검색에는 필터 미리보기를 넣지 않는다.
+- 검색 후보는 이미 불러온 라이브러리의 facet을 재사용하며 검색할 때마다 서버 요청이나 곡별 추가 조회를 하지 않는다. 새 미리보기3 tests와 기존 LibraryScreen/App을 포함한69 tests, 마지막 통합 App33 tests를 통과했다.
+- Android 로컬 음악의 embedded artwork를 최대1024px JPEG로 추출해 앱 내부에 cache한다. 기존 목록은 파일 재등록 없이 썸네일 URL을 보완하고 처음 보일 때 필요한 커버만 추출한다. 새/변경 파일은 metadata scan에서 함께 추출하며 커버가 없는 파일은 기본 아이콘을 유지한다.
+- 로컬 커버 요청은 같은 origin/등록된 로컬 ID/현재 폴더 권한을 확인한다. 경로를 웹에서 직접 지정할 수 없고, 폴더 제거·파일 변경 시 오래된 cache를 정리한다. 선택한 곡의 커버는 native Media3 metadata에도 연결한다.
+- Native Kotlin compile/JVM10 tests 통과. 웹 PWA cache1.4.5-r5, Android versionCode10.
+- 실 웹 PC/412px에서 #부분 Artist 후보, 최대8개 제한, 선택 후 검색창 닫힘/중앙 필터 적용을 확인했다. 모바일 미리보기 x=12..400px로 가로 overflow가 없었다.
+- 이전 APK에서 등록한 로컬 폴더를 보존한 업데이트 후 서버를 끈 상태에서 목록/미니바 모두240×240 커버를 표시했고11.38초 재생을 확인했다. 없는 커버/미등록 ID는404, 폴더 제거 후 기존 커버 URL도404이며 원본 MP3는 유지됐다.
+- 최종 APK build 및 Samsung versionCode10 업데이트 설치/Activity 실행 확인. 산출물 `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc10.apk`, SHA-256 `a8a823503a907ad50ec333f0fef0743323582a0c43eed8195ab2af5f0c06cf69`. 개인 파일의 커버 형식별 호환성은 사용 중 추가 확인한다.

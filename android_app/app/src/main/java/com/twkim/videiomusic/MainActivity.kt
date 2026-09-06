@@ -175,6 +175,15 @@ class MainActivity : ComponentActivity() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val url = request.url.toString()
                 if (!BundledWebPolicy.sameOrigin(url, pageOrigin)) return null
+                if (request.url.path.orEmpty().startsWith("/__muzio_local/artwork/")) {
+                    if (request.isForMainFrame || request.method != "GET" || showSetup) return emptyResponse(403, "Forbidden")
+                    return runCatching {
+                        val id = request.url.path.orEmpty().removePrefix("/__muzio_local/artwork/")
+                        val stream = localLibrary.openArtwork(id) ?: return emptyResponse(404, "Not Found")
+                        WebResourceResponse("image/jpeg", null, 200, "OK",
+                            mapOf("Cache-Control" to "no-store", "X-Content-Type-Options" to "nosniff"), stream)
+                    }.getOrElse { emptyResponse(404, "Not Found") }
+                }
                 // Never load server-provided HTML as an app screen, including
                 // after redirect; APIs/media retain their actual network path.
                 val asset = BundledWebPolicy.assetPath(url, pageOrigin)

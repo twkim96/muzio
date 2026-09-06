@@ -138,3 +138,21 @@ SHA-256: `03834f3f93339756abb1c004bc0f8283e716ae155e1694583710e5d3118433ec`
   succeeded; package reports versionCode 9 / 1.4.5-web-dev.
 - Artifact: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc9.apk`
 - SHA-256: `802a0c04ddedeb1dc43454aed08d0f1307c7030c4cc0b047d8ace503f8e83d2d`
+
+
+## Search filter previews and local artwork — versionCode 10 / 2026-09-07
+
+- Search preview/component + LibraryScreen + App: 69 tests passed; the final
+  App integration case passed with all 33 App tests. Kotlin compile and existing
+  Android JVM 10 tests passed; final shared-web TypeScript/Vite/APK build passed.
+- Deployed web 1.4.5-r5: partial artist search, eight-candidate cap, tag selection
+  closes search and applies the central list. At 412px preview spans x12..400px.
+- On API36, added a synthetic embedded-cover MP3 with the old APK. After updating
+  without re-registering the folder and stopping the isolated backend, the new
+  APK showed the 240x240 JPEG in both library row and mini-player; local playback
+  advanced to 11.38s. Missing art/unregistered IDs return404 and retain fallback.
+- Removing the root made its previous artwork URL return404; original MP3 stayed
+  on disk. Personal phone folders/files were not changed during verification.
+- Samsung update install and Activity launch succeeded, versionCode10.
+- Artifact: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc10.apk`
+- SHA-256: `a8a823503a907ad50ec333f0fef0743323582a0c43eed8195ab2af5f0c06cf69`

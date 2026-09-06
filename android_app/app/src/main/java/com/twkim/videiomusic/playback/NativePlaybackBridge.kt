@@ -74,10 +74,12 @@ class NativePlaybackBridge(
                     for (i in 0 until entries.length()) entries.getJSONObject(i).takeIf { it.optString("location") == "local" }?.let { localIds.add(it.getString("mediaId")) }
                 }
                 val localUris = if (localIds.isEmpty()) emptyMap() else localLibrary.resolveAll(localIds)
+                val localArtwork = if (localIds.isEmpty()) emptyMap() else localLibrary.artworkUris(
+                    localIds, payload.optJSONObject("source")?.optString("mediaId"))
                 when (command) {
                     "playback.snapshot" -> Unit
-                    "playback.load" -> load(player, payload, localUris)
-                    "playback.queue" -> updateQueue(player, payload, localUris)
+                    "playback.load" -> load(player, payload, localUris, localArtwork)
+                    "playback.queue" -> updateQueue(player, payload, localUris, localArtwork)
                     "playback.play" -> {
                         if (player.playbackState == Player.STATE_ENDED) player.seekToDefaultPosition()
                         if (player.playbackState == Player.STATE_IDLE) player.prepare()
@@ -104,7 +106,7 @@ class NativePlaybackBridge(
         controller = null
     }
 
-    private fun load(player: MediaController, payload: JSONObject, localUris: Map<String, Uri>) {
+    private fun load(player: MediaController, payload: JSONObject, localUris: Map<String, Uri>, localArtwork: Map<String, Uri>) {
         val source = payload.getJSONObject("source")
         val queue = payload.optJSONArray("queue")?.takeIf { it.length() > 0 } ?: JSONArray().put(source)
         val index = payload.optInt("index", 0)
@@ -113,15 +115,15 @@ class NativePlaybackBridge(
         val resolved = JSONObject(source.toString()).apply {
             selected.queueEntryId?.let { put("queueEntryId", it) }
         }
-        val items = (0 until queue.length()).map { mediaItem(if (it == index) resolved else queue.getJSONObject(it), localUris) }
+        val items = (0 until queue.length()).map { mediaItem(if (it == index) resolved else queue.getJSONObject(it), localUris, localArtwork) }
         player.pause()
         player.setMediaItems(items, index, if (payload.has("positionSec")) seconds(payload, "positionSec") else 0L)
         player.prepare()
     }
 
-    private fun updateQueue(player: MediaController, payload: JSONObject, localUris: Map<String, Uri>) {
+    private fun updateQueue(player: MediaController, payload: JSONObject, localUris: Map<String, Uri>, localArtwork: Map<String, Uri>) {
         val entries = payload.getJSONArray("queue")
-        val next = items(entries, localUris)
+        val next = items(entries, localUris, localArtwork)
         if (next.isEmpty()) { player.pause(); player.stop(); player.clearMediaItems(); return }
         val existingIndex = NativePlaybackPolicy.retainedIndex(
             source(player.currentMediaItem)?.let(::identity),
@@ -172,9 +174,9 @@ class NativePlaybackBridge(
         }
     }
 
-    private fun items(queue: JSONArray, localUris: Map<String, Uri>): List<MediaItem> = (0 until queue.length()).map { mediaItem(queue.getJSONObject(it), localUris) }
+    private fun items(queue: JSONArray, localUris: Map<String, Uri>, localArtwork: Map<String, Uri>): List<MediaItem> = (0 until queue.length()).map { mediaItem(queue.getJSONObject(it), localUris, localArtwork) }
 
-    private fun mediaItem(source: JSONObject, localUris: Map<String, Uri>): MediaItem {
+    private fun mediaItem(source: JSONObject, localUris: Map<String, Uri>, localArtwork: Map<String, Uri>): MediaItem {
         require(source.getString("kind") == "remote" && source.getString("mediaType") == "audio") { "Only remote audio is supported" }
         val mediaId = source.getString("mediaId").also { require(it.isNotBlank()) }
         val local = source.optString("location") == "local"
@@ -192,6 +194,7 @@ class NativePlaybackBridge(
         }
         val metadata = MediaMetadata.Builder().setTitle(title).setArtist(artist).setAlbumTitle(source.optString("album"))
             .setExtras(extras)
+        if (local) localArtwork[mediaId]?.let { metadata.setArtworkUri(it) }
         if (!local) source.optString("artworkUrl").takeIf { it.isNotBlank() }?.let { metadata.setArtworkUri(mediaUri(it, artwork = true)) }
         return MediaItem.Builder().setMediaId(mediaId).setUri(url)
             .setMimeType(source.optString("mimeType").takeIf { it.isNotBlank() })

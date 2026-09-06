@@ -189,6 +189,21 @@ describe('App routes', () => {
     expect(screen.getByRole('heading', { name: 'Music' })).toBeInTheDocument();
   });
 
+  test('previews filter tags below search and applies them to the central library', async () => {
+    renderApp('/library/music');
+    await screen.findByText('second.mp3');
+    fireEvent.click(screen.getByRole('button', { name: 'Search Music' }));
+    fireEvent.change(screen.getByLabelText('Filter Music'), { target: { value: '#mus' } });
+    const preview = screen.getByTestId('library-search-preview');
+    expect(screen.getByTestId('search-popover')).toContainElement(preview);
+    expect(preview.querySelector('[data-testid="library-item"]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply storage filter music' }));
+    expect(screen.queryByRole('dialog', { name: 'Music search' })).not.toBeInTheDocument();
+    await screen.findByText('second.mp3');
+    expect(screen.getByText('song.mp3')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove storage music' })).toBeInTheDocument();
+  });
+
   test('opens the topbar search, filters the library, and preserves a closed query', async () => {
     renderApp('/library/music');
 

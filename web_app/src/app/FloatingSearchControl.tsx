@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchPopoverHost } from './SearchHostContext';
 import { MagnifyingGlass } from '@phosphor-icons/react/dist/csr/MagnifyingGlass';
@@ -7,10 +7,12 @@ export function FloatingSearchControl({
   onQueryChange,
   query,
   title,
+  renderPreview,
 }: {
   onQueryChange: (query: string) => void;
   query: string;
   title: string;
+  renderPreview?: (close: () => void) => ReactNode;
 }) {
   const popoverHost = useSearchPopoverHost();
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -48,8 +50,9 @@ export function FloatingSearchControl({
       role="dialog"
       aria-label={`${title} search`}
       data-testid="search-popover"
-      className="muzio-search absolute left-1/2 top-[calc(100%+0.75rem)] z-40 flex h-[58px] w-[calc(100%+6rem)] max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-3 px-5"
+      className="absolute left-1/2 top-[calc(100%+0.75rem)] z-40 w-[calc(100%+6rem)] max-w-[calc(100vw-1.5rem)] -translate-x-1/2"
     >
+      <div className="muzio-search flex h-[58px] items-center gap-3 px-5">
       <MagnifyingGlass aria-hidden className="h-5 w-5 shrink-0 text-muted" weight="regular" />
       <input
         ref={inputRef}
@@ -72,6 +75,8 @@ export function FloatingSearchControl({
           ×
         </button>
       )}
+      </div>
+      {renderPreview?.(close)}
     </div>
   );
 
@@ -94,4 +99,3 @@ export function FloatingSearchControl({
     </div>
   );
 }
-

@@ -14,7 +14,7 @@ and progress metadata. The old Compose screens remain as reference code but
 `MainActivity` no longer launches them. `FEATURE_PARITY.md` describes that old
 Compose implementation, not acceptance evidence for this host.
 
-Version: `1.4.5-web-dev`, versionCode `9`; minimum Android 8 / SDK 26, target SDK 36.
+Version: `1.4.5-web-dev`, versionCode `10`; minimum Android 8 / SDK 26, target SDK 36.
 
 ## Architecture
 
@@ -113,4 +113,7 @@ files Online. Server disconnection does not hide authorized local tracks.
 Folder removal forgets the catalog/grant without deleting files. Re-scan after
 changing folder contents; unavailable permissions are shown in settings. Local
 progress is stored on the device and is not uploaded to the server. Local video,
-images, embedded artwork and automatic filesystem watching are later work.
+images and automatic filesystem watching are later work. Embedded album art is
+extracted into a private bounded JPEG cache and displayed in lists and players;
+existing folders acquire covers lazily without re-registration. Files without
+embedded art retain the default icon.
