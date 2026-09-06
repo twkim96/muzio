@@ -76,3 +76,10 @@
 - 모든 테마에서 grain 배경을 끄고 페이지 및 플레이어의 점무늬 CSS를 제거했다. 저장된 사용자 색상은 유지한다.
 - 제품 버전은 1.4.4, PWA shell revision은 1.4.4-r6.
 - 검증/배포: Settings·theme 10 tests, TypeScript/Vite build와 버전 검사 통과. 실제 서비스에서 body background-image=none, 상단 blur/반투명/edge highlight 확인. 설정은 desktop 1200px 본문 중앙 정렬, 320px viewport 전체 section 좌우 16~304px 및 horizontal overflow 없음. 1.4.4-r6 배포 완료.
+
+## 추가 보정 - 작은 라이브러리 제목과 검색 섬
+
+- Music/Video/Image 제목을 작은 상단 제목으로 옮겼다. Desktop에서는 탐색 섬과 같은 행의 왼쪽에, 좁은 모바일에서는 겹치지 않게 섬 위에 표시한다.
+- 검색은 탐색 섬 아래 약 12px 간격으로 같은 중심선에 표시한다. 높이는 동일한 58px, 폭은 섬보다 약 96px 넓되 화면 여백 안으로 제한하며 둥근 glass 재질과 하나의 입력 면을 사용한다.
+- 기존 검색 열기/닫기, 입력 포커스, 필터 유지와 초기화 동작은 유지한다. 제품 버전은 1.4.4, PWA shell revision은 1.4.4-r7.
+- 검증/배포: App·LibraryScreen 50 tests, TypeScript/Vite build와 버전 검사 통과. 실제 desktop 제목 20px·탐색 섬/검색창 높이 58px·동일 중심선 확인. 320px 검색창 좌우 12~308px, 가로 넘침 없음 및 Escape 닫기 확인. 1.4.4-r7 배포 완료.

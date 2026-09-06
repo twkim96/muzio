@@ -330,30 +330,37 @@ export function AppShell({ children }: { children: ReactNode }) {
     <SearchHostProvider host={searchHost}>
       <div className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-surface dark:text-foreground">
         {!isImmersiveRoute && (
-          <header className="muzio-topbar sticky top-3 z-30 mx-auto mt-3 w-fit max-w-[calc(100%-1.5rem)] px-1.5 py-1.5">
-            <div className="relative flex h-11 items-center justify-center gap-0.5 sm:gap-1">
-              {hasMobileMenu ? (
-                <button
-                  ref={menuButtonRef}
-                  type="button"
-                  aria-label="Open navigation"
-                  aria-expanded={drawerOpen}
-                  aria-controls="app-sidebar-drawer"
-                  data-testid="navigation-menu-button"
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground transition hover:bg-foreground/10"
-                  onClick={() => setDrawerOpen((open) => !open)}
-                >
-                  <SidebarSimple aria-hidden className="h-6 w-6" weight="regular" />
-                </button>
-              ) : (
-                <span className="h-10 w-10 shrink-0" aria-hidden />
-              )}
-              <SegmentedTabs onNavigate={closeDrawer} />
-              <div
-                ref={setSearchHost}
-                data-testid="search-host"
-                className="flex h-10 w-10 shrink-0 items-center justify-end"
-              />
+          <header className="sticky top-3 z-30 mt-3 px-3 sm:px-8 lg:px-10">
+            {section !== null && section !== 'settings' && (
+              <h1 className="mb-2 text-lg font-semibold tracking-tight sm:absolute sm:top-0 sm:mb-0 sm:flex sm:h-[58px] sm:items-center sm:text-xl">
+                {sideSections[section].title}
+              </h1>
+            )}
+            <div className="muzio-topbar relative mx-auto w-fit max-w-full px-1.5 py-1.5">
+              <div className="flex h-11 items-center justify-center gap-0.5 sm:gap-1">
+                {hasMobileMenu ? (
+                  <button
+                    ref={menuButtonRef}
+                    type="button"
+                    aria-label="Open navigation"
+                    aria-expanded={drawerOpen}
+                    aria-controls="app-sidebar-drawer"
+                    data-testid="navigation-menu-button"
+                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground transition hover:bg-foreground/10"
+                    onClick={() => setDrawerOpen((open) => !open)}
+                  >
+                    <SidebarSimple aria-hidden className="h-6 w-6" weight="regular" />
+                  </button>
+                ) : (
+                  <span className="h-10 w-10 shrink-0" aria-hidden />
+                )}
+                <SegmentedTabs onNavigate={closeDrawer} />
+                <div
+                  ref={setSearchHost}
+                  data-testid="search-host"
+                  className="flex h-10 w-10 shrink-0 items-center justify-end"
+                />
+              </div>
             </div>
           </header>
         )}

@@ -140,12 +140,14 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
 
   return (
     <div className="w-full px-4 py-7 sm:px-8 lg:px-10">
-      <header className="mb-7 flex items-end justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="truncate text-5xl font-semibold tracking-tight sm:text-6xl">
-            {meta.title}
-          </h1>
-        </div>
+      <header className="mb-4 flex items-center justify-end gap-4">
+        {searchHost === null && (
+          <div className="mr-auto min-w-0">
+            <h1 className="truncate text-xl font-semibold tracking-tight">
+              {meta.title}
+            </h1>
+          </div>
+        )}
         <div className="flex shrink-0 items-center gap-2">
           {selectionMode && type !== 'image' && (
             <>
@@ -262,7 +264,7 @@ function LibrarySearchControl({
   }, [open]);
 
   return (
-    <div ref={controlRef} className="relative flex items-center">
+    <div ref={controlRef} className="flex items-center">
       <button
         ref={buttonRef}
         type="button"
@@ -281,14 +283,15 @@ function LibrarySearchControl({
           role="dialog"
           aria-label={`${title} search`}
           data-testid="search-popover"
-          className="muzio-dialog absolute right-0 top-12 z-40 flex w-[min(19rem,calc(100vw-2rem))] items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/90 px-3 py-2 shadow-xl shadow-black/10 backdrop-blur-xl dark:border-white/10 dark:bg-surface/95"
+          className="muzio-search absolute left-1/2 top-[calc(100%+0.75rem)] z-40 flex h-[58px] w-[calc(100%+6rem)] max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-3 px-5"
         >
+          <MagnifyingGlass aria-hidden className="h-5 w-5 shrink-0 text-muted" weight="regular" />
           <input
             ref={inputRef}
             aria-label={`Filter ${title}`}
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Filter"
+            placeholder="검색"
             className="min-w-0 flex-1 bg-transparent px-1 py-2 text-base outline-none placeholder:text-muted focus:text-zinc-950 dark:focus:text-foreground"
           />
           {query !== '' && (
