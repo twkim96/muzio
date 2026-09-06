@@ -143,7 +143,7 @@ export function QueueDrawer({
       >
         <div className="mb-1 flex shrink-0 flex-col items-start gap-3">
           <div className="flex w-full items-start justify-between gap-3">
-            <h2 className="h-[46.4px] w-fit text-left [--title-scale:1.45] sm:[--title-scale:1.16]">
+            <h2 className="muzio-sheet-title h-[46.4px] w-fit text-left [--title-scale:1.45] sm:[--title-scale:1.16]">
               <span className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
                 <span className="scale-[calc(1/var(--title-scale))]">Queue</span>
               </span>
@@ -151,7 +151,7 @@ export function QueueDrawer({
             <button
               type="button"
               aria-label={onBack ? 'Back to sidebar' : 'Close queue'}
-              className="muzio-settings-button h-[46.4px] w-[46.4px] shrink-0 flex items-center justify-center"
+              className="muzio-sheet-header-action muzio-settings-button h-[46.4px] w-[46.4px] shrink-0 flex items-center justify-center"
               onClick={onBack ?? onClose}
             >
               {onBack ? <ArrowLeft aria-hidden className="h-[21.1px] w-[21.1px]" /> : <CloseGlyph aria-hidden className="h-[21.1px] w-[21.1px]" />}

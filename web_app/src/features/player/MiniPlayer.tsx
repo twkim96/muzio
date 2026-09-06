@@ -8,7 +8,7 @@ import {
 import { explicitNextQueueIndex, previousQueueIndex } from './musicQueue';
 import { usePlayerStore } from './PlayerContext';
 import { usePlayerOverlay } from './PlayerOverlayContext';
-import { QueueDrawer } from './QueueDrawer';
+import { Playlist } from '@phosphor-icons/react/dist/csr/Playlist';
 import { selectActiveState, type SleepTimerState } from './playerStore';
 import { describePlaybackStatus } from './playerMessage';
 import { usePlaybackNetworkHint } from './playbackNetworkStatus';
@@ -21,7 +21,6 @@ import {
   MusicGlyph,
   PauseGlyph,
   PlayGlyph,
-  QueueGlyph,
   RepeatGlyph,
   RepeatOneGlyph,
   ShuffleGlyph,
@@ -36,12 +35,11 @@ import {
  * for music and for video (with the full video frame living in the overlay).
  */
 export function MiniPlayer() {
-  const { open } = usePlayerOverlay();
+  const { open, openPlaylists } = usePlayerOverlay();
   const store = usePlayerStore();
   const snapshot = store();
   const state = selectActiveState(snapshot);
   const [timerOpen, setTimerOpen] = useState(false);
-  const [queueOpen, setQueueOpen] = useState(false);
   useAndroidBack(timerOpen, () => setTimerOpen(false), 50);
   const [scrubValueSec, setScrubValueSec] = useState<number | null>(null);
   const [scrubPreviewSec, setScrubPreviewSec] = useState<number | null>(null);
@@ -308,6 +306,7 @@ export function MiniPlayer() {
               className="block truncate text-xs tabular-nums text-muted"
             >
               {formatTime(displayedPositionValue)} : {formatTime(state.durationSec)}
+              {state.source.artist?.trim() && <span data-testid="mini-player-artist"> | {state.source.artist.trim()}</span>}
             </span>
             <div
               ref={scrubberRef}
@@ -358,7 +357,7 @@ export function MiniPlayer() {
                 if (touch) beginScrubbing(touch.clientX);
               }}
             >
-              <span className="relative block h-1 max-sm:h-1.5 w-full rounded-full bg-zinc-300/70 dark:bg-white/12">
+              <span data-testid="mini-progress-track" className="relative block h-1 max-sm:h-1.5 w-full rounded-full bg-zinc-300/70 dark:bg-white/12">
                 <span
                   className="absolute left-0 top-0 h-full rounded-full bg-white/80 dark:bg-white"
                   style={{
@@ -370,13 +369,14 @@ export function MiniPlayer() {
                   }}
                 />
                 <span
+                  data-testid="mini-progress-thumb"
                   className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow shadow-black/20"
                   style={{
-                    left: `${
+                    left: `clamp(6px, ${
                       durationIsKnown
                         ? (displayedPositionValue / state.durationSec) * 100
                         : 0
-                    }%`,
+                    }%, calc(100% - 6px))`,
                   }}
                 />
               </span>
@@ -431,12 +431,12 @@ export function MiniPlayer() {
             <LikeGlyph liked={liked} className="h-6 w-6" />
           </MiniIconButton>
           </span>
-          <div className="relative" ref={timerShellRef}>
+          <div className="relative hidden sm:block" ref={timerShellRef}>
             <button
               type="button"
               aria-label="Sleep timer"
               aria-expanded={timerOpen}
-              className="inline-flex h-10 w-10 max-sm:w-8 items-center justify-center rounded-full text-zinc-800 dark:text-white hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-zinc-800 dark:text-white hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
               onClick={() => setTimerOpen((open) => !open)}
             >
               <SleepTimerGlyph className="h-7 w-7 max-sm:h-5 max-sm:w-5" />
@@ -446,12 +446,8 @@ export function MiniPlayer() {
                 data-testid="mini-timer-popover"
                 data-glass
                 data-allow-scroll
-                className="muzio-popover fixed bottom-[7.25rem] left-1/2 z-[70] max-h-[min(22rem,calc(100vh-9rem))] w-[min(21rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/24 bg-[#111113] p-3 text-foreground shadow-2xl shadow-black/90 backdrop-blur-[96px] [-webkit-backdrop-filter:saturate(1.55)_blur(96px)] [backdrop-filter:saturate(1.55)_blur(96px)]"
+                className="muzio-popover muzio-timer-popover fixed bottom-[7.25rem] left-1/2 z-[70] max-h-[min(22rem,calc(100vh-9rem))] w-[min(21rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-2xl p-3 text-foreground"
               >
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.10),rgba(255,255,255,0.025))] opacity-90 blur-3xl"
-                />
                 <div className="relative max-h-[calc(min(22rem,100vh-9rem)-1.5rem)] overflow-y-auto">
                   <MiniTimerPopover
                     customMinutes={customMinutes}
@@ -467,33 +463,32 @@ export function MiniPlayer() {
           </div>
           <button
             type="button"
-            aria-label="Open queue"
-            aria-expanded={queueOpen}
-            data-testid="mini-queue-button"
-            className="inline-flex h-10 w-10 max-sm:w-8 items-center justify-center rounded-full text-xl leading-none text-zinc-800 dark:text-white hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
-            onClick={() => setQueueOpen(true)}
+            aria-label="Open playlists"
+            data-testid="mini-playlists-button"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-xl leading-none text-zinc-800 dark:text-white hover:bg-zinc-200/70 hover:text-zinc-950 aria-expanded:text-accent dark:aria-expanded:text-accent dark:hover:bg-white/10 dark:hover:text-foreground"
+            onClick={openPlaylists}
           >
-            <QueueGlyph className="h-6 w-6 max-sm:h-5 max-sm:w-5" />
+            <Playlist className="h-6 w-6" />
           </button>
           <button type="button" data-testid="mini-next-mobile" aria-label="Next"
             disabled={!canPlayNext} onClick={() => { void snapshot.playNextQueueItem(); }}
-            className="inline-flex h-10 w-8 items-center justify-center rounded-full text-zinc-800 dark:text-white disabled:opacity-40 sm:hidden">
-            <SkipGlyph direction="forward" className="h-5 w-5" />
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-zinc-800 dark:text-white disabled:opacity-40 sm:hidden">
+            <SkipGlyph direction="forward" className="h-6 w-6" />
           </button>
           <button
             type="button"
             data-status={state.status.kind}
             aria-label={playLabel}
             data-testid="mini-play-mobile"
-            className="inline-flex h-10 w-8 items-center justify-center rounded-xl text-zinc-950 hover:bg-zinc-200/60 dark:text-white dark:hover:bg-white/[0.06] sm:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-zinc-950 hover:bg-zinc-200/60 dark:text-white dark:hover:bg-white/[0.06] sm:hidden"
             onClick={() => {
               void togglePlayPause();
             }}
           >
             {isInFlight ? (
-              <PauseGlyph className="h-6 w-6" />
+              <PauseGlyph className="h-7 w-7" />
             ) : (
-              <PlayGlyph className="h-6 w-6" />
+              <PlayGlyph className="h-7 w-7" />
             )}
           </button>
         </div>
@@ -509,7 +504,6 @@ export function MiniPlayer() {
           <span>{formatTime(state.durationSec)}</span>
         </div>
       )}
-      <QueueDrawer open={queueOpen} onClose={() => setQueueOpen(false)} />
     </div>
   );
 }

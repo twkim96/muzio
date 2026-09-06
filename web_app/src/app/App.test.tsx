@@ -556,6 +556,23 @@ describe('App routes', () => {
     expectTab('Music');
   });
 
+  test('accepts swipes across shell blank space and both viewport edges', () => {
+    renderApp('/library/video');
+    const surface = screen.getByTestId('library-swipe-surface');
+    const swipe = (startX: number, endX: number) => {
+      fireEvent.touchStart(surface, { touches: [{ clientX: startX, clientY: 8 }] });
+      fireEvent.touchMove(surface, { touches: [{ clientX: endX, clientY: 12 }] });
+      fireEvent.touchEnd(surface);
+    };
+    swipe(2, 92);
+    expect(screen.getByRole('link', { name: 'Music' })).toHaveAttribute('aria-current', 'page');
+    swipe(388, 298);
+    expect(screen.getByRole('link', { name: 'Video' })).toHaveAttribute('aria-current', 'page');
+    swipe(200, 110);
+    expect(screen.getByRole('link', { name: 'Image' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
+  });
+
   test('swipes from actual music and video row titles without triggering playback', async () => {
     const { playerStore } = renderApp('/library/music');
     const swipe = (target: Element, dx: number, dy = 0) => {
@@ -592,6 +609,18 @@ describe('App routes', () => {
     fireEvent.touchEnd(button);
     expect(within(screen.getByRole('navigation', { name: 'Primary' })).getByRole('link', { name: 'Music' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
+  });
+
+  test.each(['/library/music', '/library/image', '/settings'])('mini playlist button opens playlist navigation from %s', async (route) => {
+    const { playerStore } = renderApp(route);
+    act(() => {
+      playerStore.getState().seedSource({ kind: 'remote', mediaId: 'a1', mediaType: 'audio', url: '/api/media/a1', name: 'song.mp3' });
+    });
+    fireEvent.click(await screen.findByTestId('mini-playlists-button'));
+    const navigation = await screen.findByTestId('mobile-navigation');
+    expect(within(navigation).getByText('좋아하는 음악')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Queue' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Music' })).toHaveAttribute('aria-current', 'page');
   });
 
   test('does not open mobile navigation from a mini player swipe', async () => {

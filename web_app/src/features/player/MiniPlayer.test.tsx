@@ -51,8 +51,8 @@ function renderWithStore(store: ReturnType<typeof createPlayerStore>) {
 }
 
 function OverlayProbe() {
-  const { isOpen } = usePlayerOverlay();
-  return <span data-testid="overlay-open">{isOpen ? 'open' : 'closed'}</span>;
+  const { isOpen, playlistsOpen } = usePlayerOverlay();
+  return <><span data-testid="overlay-open">{isOpen ? 'open' : 'closed'}</span><span data-testid="playlists-open">{playlistsOpen ? 'open' : 'closed'}</span></>;
 }
 
 function fakeSession(initial: PlaybackState): PlaybackSession & {
@@ -354,7 +354,7 @@ describe('MiniPlayer', () => {
     expect(screen.getByTestId('play-pause')).toBeInTheDocument();
   });
 
-  test('orders mobile timer, queue, next and play actions without volume', async () => {
+  test('orders mobile playlists, next and play actions with timer desktop-only', async () => {
     const store = createPlayerStore();
     store.getState().attachElement('audio', fakeElement());
     await store.getState().playSource(audioSource);
@@ -362,7 +362,8 @@ describe('MiniPlayer', () => {
 
     const like = screen.getByTestId('mini-like-button');
     const timer = screen.getByRole('button', { name: 'Sleep timer' });
-    const queue = screen.getByTestId('mini-queue-button');
+    const queue = screen.getByTestId('mini-playlists-button');
+    expect(timer.parentElement).toHaveClass('hidden', 'sm:block');
     expect(like.compareDocumentPosition(timer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(timer.compareDocumentPosition(queue) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const next = screen.getByTestId('mini-next-mobile');
@@ -608,15 +609,16 @@ describe('MiniPlayer', () => {
     expect(session.calls.seek).toHaveBeenCalledWith(100);
   });
 
-  test('opens queue from the mini queue button', async () => {
+  test('opens playlists instead of the queue from the mini playlist button', async () => {
     const store = createPlayerStore();
     store.getState().attachElement('audio', fakeElement());
     await store.getState().playMusicQueue([audioSource], 'a1');
     renderWithStore(store);
 
-    fireEvent.click(screen.getByTestId('mini-queue-button'));
+    fireEvent.click(screen.getByTestId('mini-playlists-button'));
 
-    expect(screen.getByTestId('queue-drawer')).toBeInTheDocument();
+    expect(screen.getByTestId('playlists-open')).toHaveTextContent('open');
+    expect(screen.queryByTestId('queue-drawer')).not.toBeInTheDocument();
   });
 
   test('opens sleep timer controls from the mini timer button', async () => {
@@ -628,7 +630,7 @@ describe('MiniPlayer', () => {
     const timerButton = screen.getByRole('button', { name: 'Sleep timer' });
     fireEvent.click(timerButton);
 
-    expect(screen.getByTestId('mini-timer-popover')).toBeInTheDocument();
+    expect(screen.getByTestId('mini-timer-popover')).toHaveClass('muzio-timer-popover');
     expect(timerButton).toHaveClass('aria-expanded:text-accent');
     expect(timerButton).not.toHaveClass(
       'aria-expanded:bg-accent/12',
@@ -637,9 +639,7 @@ describe('MiniPlayer', () => {
     );
     expect(timerButton.querySelector('svg')).not.toBeNull();
     expect(screen.getByTestId('mini-timer-popover').className).toContain('fixed');
-    expect(screen.getByTestId('mini-timer-popover').className).toContain(
-      'bg-[#111113]',
-    );
+    expect(screen.getByTestId('mini-timer-popover')).toHaveClass('muzio-timer-popover');
     expect(screen.getByTestId('sleep-timer-control')).toBeInTheDocument();
   });
 
@@ -704,6 +704,7 @@ describe('mini title presentation', () => {
     store.getState().setSessionForTests('audio', fakeSession({ status: { kind: 'paused' }, source: { ...audioSource, ...metadata }, positionSec: 0, durationSec: 100 }));
     renderWithStore(store);
     expect(screen.getByTestId('mini-player-title')).toHaveTextContent(expected);
+    expect(screen.getByTestId('mini-player-time')).toHaveTextContent('0:00 : 1:40 | Artist');
   });
   test('closes a primary timer panel without cancelling its timer', () => {
     const store = createPlayerStore();

@@ -1,6 +1,9 @@
 package com.twkim.videiomusic
 
 import android.Manifest
+import android.app.PictureInPictureParams
+import android.content.res.Configuration
+import android.util.Rational
 import android.app.DownloadManager
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -47,6 +50,8 @@ class MainActivity : ComponentActivity() {
     private var reply: JavaScriptReplyProxy? = null
     private var profile = ServerProfile()
     private var origin = BundledWebPolicy.SETUP_ORIGIN
+    private var videoPlaying = false
+    private var videoAspect = Rational(16, 9)
     private var setup = true
     private var fullScreenView: View? = null
     private var fullScreenCallback: WebChromeClient.CustomViewCallback? = null
@@ -66,7 +71,8 @@ class MainActivity : ComponentActivity() {
         // fixed/floating positioning without duplicating CSS safe-area padding.
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.ime())
-            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            if (isInPictureInPictureMode) view.setPadding(0, 0, 0, 0)
+            else view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
         setContentView(root)
@@ -96,6 +102,8 @@ class MainActivity : ComponentActivity() {
 
     @Suppress("SetJavaScriptEnabled")
     private fun showWeb(showSetup: Boolean) {
+        videoPlaying = false
+        updatePipParams()
         hideFullScreen()
         reply = null
         playback?.dispose()
@@ -234,6 +242,14 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             val result = runCatching {
                 when (command) {
+                    "shell.videoState" -> {
+                        videoPlaying = !setup && payload.optBoolean("playing", false)
+                        val width = payload.optInt("width", 16)
+                        val height = payload.optInt("height", 9)
+                        videoAspect = if (width > 0 && height > 0 && width.toDouble() / height in (1.0 / 2.39)..2.39) Rational(width, height) else Rational(16, 9)
+                        updatePipParams()
+                        JSONObject()
+                    }
                     "shell.profile" -> JSONObject().put("baseUrl", profile.baseUrl).put("displayName", profile.displayName).put("setup", setup)
                     "shell.connect" -> {
                         val next = BundledWebPolicy.serverOrigin(payload.getString("baseUrl"))
@@ -315,7 +331,36 @@ class MainActivity : ComponentActivity() {
         web?.visibility = View.VISIBLE
     }
 
-    private fun moveToBackground() { moveTaskToBack(true) }
+    private fun supportsPip() = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+
+    private fun pipParams(): PictureInPictureParams = PictureInPictureParams.Builder().apply {
+        setAspectRatio(videoAspect)
+        if (Build.VERSION.SDK_INT >= 31) setAutoEnterEnabled(videoPlaying && !setup)
+    }.build()
+
+    private fun updatePipParams() {
+        if (supportsPip()) runCatching { setPictureInPictureParams(pipParams()) }
+    }
+
+    private fun enterVideoPip(): Boolean {
+        if (!videoPlaying || setup || !supportsPip()) return false
+        return isInPictureInPictureMode || runCatching { enterPictureInPictureMode(pipParams()) }.getOrDefault(false)
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // Android 12+ handles gesture navigation with auto-enter parameters.
+        if (Build.VERSION.SDK_INT < 31) enterVideoPip()
+    }
+
+    override fun onPictureInPictureModeChanged(inPip: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(inPip, newConfig)
+        web?.evaluateJavascript("window.dispatchEvent(new CustomEvent('muzio-pip',{detail:$inPip}));", null)
+        ViewCompat.requestApplyInsets(root)
+        if (inPip) web?.onResume()
+    }
+
+    private fun moveToBackground() { if (!enterVideoPip()) moveTaskToBack(true) }
 
     override fun onResume() {
         super.onResume()
@@ -324,8 +369,17 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
-        web?.onPause()
+        // A PiP Activity is paused but its visible video must keep rendering.
+        if (!isInPictureInPictureMode && !videoPlaying) web?.onPause()
         super.onPause()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Visible PiP does not stop the Activity. Closing PiP does, even if
+        // the mode flag has not yet changed, so stop web video unconditionally.
+        web?.evaluateJavascript("window.dispatchEvent(new Event('muzio-video-stop'));", null)
+        web?.onPause()
     }
 
     override fun onDestroy() {

@@ -1,3 +1,4 @@
+import { connectAndroidVideoPip } from '../../core/platform/androidVideoPip';
 import {
   MediaPlayer,
   MediaProvider,
@@ -139,6 +140,8 @@ export function PersistentVidstackPlayer({
     if (host === null || player === null) return;
     store.getState().prepareSeededSource('video');
   }, [host, player, store]);
+
+  useLayoutEffect(() => connectAndroidVideoPip(portalRoot), [portalRoot]);
 
   const source = committedSource.source;
   const playerSource: PlayerSrc | undefined =

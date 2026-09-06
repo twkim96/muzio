@@ -73,3 +73,24 @@ history reconciliation are outside this initial migration.
 Artifact: `dist/android-shared-web-ui/Muzio-1.2.1-web-dev.apk`
 
 SHA-256: `03834f3f93339756abb1c004bc0f8283e716ae155e1694583710e5d3118433ec`
+
+
+## 1.4.5 mobile controls and automatic PiP — 2026-09-07
+
+- Web: 55 files / 592 tests; Android JVM: 7 tests. Final viewport sizing
+  correction: 4 PiP tests and APK rebuild passed. Version surfaces match 1.4.5.
+- API 36 emulator with synthetic media: Home entered pinned video PiP, retained
+  playback (1.78 to 12.42 seconds), and displayed video alone. Video/root/visual
+  viewport matched 228.19 × 128px after fixing a page-scale gap. Returning restored
+  the original screen; dragging PiP to dismiss paused video.
+- Settled paused video and background music did not auto-enter PiP. Music kept
+  playing in the native service. Immediate pause/Home events can race the
+  asynchronous web-to-native state notification.
+- Mobile mini title/time/progress/thumb start matched x=70.76px; artist delimiter,
+  three larger controls, playlist navigation, translucent sleep timer and 37.12px
+  sheet header controls were checked. Edge/top-space swipes changed tabs.
+- Samsung SM-S936N update install succeeded with settings retained; package is
+  versionCode 7 / 1.4.5-web-dev. Activity launch and process confirmed. Samsung
+  PiP/gesture acceptance and Android 8–11 fallback remain device checks.
+- Artifact: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev.apk`
+- SHA-256: `ed885d978a52326f278b493212af38f6e13cfedb8534af25129453c16bcf6a78`

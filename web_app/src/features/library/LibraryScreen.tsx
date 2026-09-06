@@ -162,7 +162,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
               <button
                 type="button"
                 data-testid="selection-add-to-playlist"
-                className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-4 text-sm font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
+                className="muzio-selection-action inline-flex h-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-4 text-sm font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
                 onClick={() => openAddModal(selectedItems)}
               >
                 Add to Playlist
@@ -170,7 +170,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
               <button
                 type="button"
                 aria-label="Clear selection"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-lg font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
+                className="muzio-selection-action inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-lg font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
                 onClick={clearSelection}
               >
                 <CloseGlyph className="h-5 w-5" />

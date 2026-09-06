@@ -165,6 +165,7 @@ html.wr-kit {
   /* A little more ink behind dense overlay text keeps underlying rows legible. */
   background: var(--muzio-overlay-surface);
 }
+.wr-kit .muzio-timer-popover { background: var(--app-menu-surface); }
 .wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-title, .muzio-settings-button, .muzio-sidebar, .muzio-search)::before {
   content: '';
   position: absolute;
@@ -336,6 +337,9 @@ html.wr-kit {
 }
 html:has(.muzio-side-sheet, .muzio-modal-backdrop) { overflow: hidden; }
 @media (max-width: 639px) {
+  .muzio-sheet-title, .muzio-sheet-header-action, .muzio-selection-action {
+    zoom: .8;
+  }
   .wr-kit .muzio-side-sheet {
     top: auto;
     bottom: max(12px, env(safe-area-inset-bottom));

@@ -14,7 +14,7 @@ and progress metadata. The old Compose screens remain as reference code but
 `MainActivity` no longer launches them. `FEATURE_PARITY.md` describes that old
 Compose implementation, not acceptance evidence for this host.
 
-Version: `1.2.0-web-dev`, versionCode `5`; minimum Android 8 / SDK 26, target SDK 36.
+Version: `1.4.5-web-dev`, versionCode `7`; minimum Android 8 / SDK 26, target SDK 36.
 
 ## Architecture
 
@@ -36,7 +36,9 @@ Version: `1.2.0-web-dev`, versionCode `5`; minimum Android 8 / SDK 26, target SD
   is not implemented; the service resets runtime policy when recreated.
 - Video uses the existing Vidstack/HLS.js web player and controls. Audio is paused
   before explicit video playback; native audio resumption pauses web video.
-  Native video surfaces/PiP and native video background playback are later work.
+  Playing web video enters Android PiP when the app is minimized; paused video
+  and music do not auto-enter. The same WebView video is preserved and displayed
+  alone in PiP. Native video surfaces remain later work.
 - Back closes dialogs/drawers/player overlays before returning to the library and
   backgrounding the app. OS bars and keyboard insets belong to the native host.
 

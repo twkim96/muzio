@@ -163,6 +163,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   }, [isImmersiveRoute, section]);
   useEffect(() => {
+    if (!playerOverlay.playlistsOpen) return;
+    if (section !== 'music' && section !== 'video') navigate('/library/music');
+    setDrawerOpen(true);
+    playerOverlay.closePlaylists();
+  }, [navigate, playerOverlay.playlistsOpen, playerOverlay.closePlaylists, section]);
+  useEffect(() => {
     for (const [mediaId, items, presentation] of [
       [activeAudioMediaId, audioItems, audioPresentation],
       [activeVideoMediaId, videoItems, videoPresentation],
@@ -351,7 +357,19 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <SearchHostProvider host={searchHost} popoverHost={searchPopoverHost}>
-      <div className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-surface dark:text-foreground">
+      <div
+        data-testid="library-swipe-surface"
+        onClickCapture={librarySwipeHandlers.onClickCapture}
+        onPointerCancelCapture={librarySwipeHandlers.onPointerCancel}
+        onPointerDownCapture={librarySwipeHandlers.onPointerDown}
+        onPointerMoveCapture={librarySwipeHandlers.onPointerMove}
+        onPointerUpCapture={librarySwipeHandlers.onPointerUp}
+        onTouchCancelCapture={librarySwipeHandlers.onTouchCancel}
+        onTouchEndCapture={librarySwipeHandlers.onTouchEnd}
+        onTouchMoveCapture={librarySwipeHandlers.onTouchMove}
+        onTouchStartCapture={librarySwipeHandlers.onTouchStart}
+        className="min-h-screen touch-pan-y bg-zinc-50 text-zinc-950 transition-colors dark:bg-surface dark:text-foreground"
+      >
         {!isImmersiveRoute && (
           <header className="sticky top-3 z-30 mx-auto mt-3 max-w-7xl px-3 sm:px-8 lg:px-10">
             {section !== null && (
@@ -435,15 +453,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
         <main
           data-testid="app-main"
-          onClickCapture={librarySwipeHandlers.onClickCapture}
-          onPointerCancel={librarySwipeHandlers.onPointerCancel}
-          onPointerDown={librarySwipeHandlers.onPointerDown}
-          onPointerMove={librarySwipeHandlers.onPointerMove}
-          onPointerUp={librarySwipeHandlers.onPointerUp}
-          onTouchCancel={librarySwipeHandlers.onTouchCancel}
-          onTouchEnd={librarySwipeHandlers.onTouchEnd}
-          onTouchMove={librarySwipeHandlers.onTouchMove}
-          onTouchStart={librarySwipeHandlers.onTouchStart}
           className={isImmersiveRoute ? 'min-h-screen' : 'min-h-screen touch-pan-y pb-24'}
         >
           {children}
@@ -574,13 +583,13 @@ function SidebarDrawer({
           <div className="flex w-full items-start justify-between gap-3">
             <h2
               data-testid="mobile-menu-title"
-              className="h-[46.4px] w-fit text-left [--title-scale:1.45] sm:[--title-scale:1.16]"
+              className="muzio-sheet-title h-[46.4px] w-fit text-left [--title-scale:1.45] sm:[--title-scale:1.16]"
             >
               <span className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
                 <span className="scale-[calc(1/var(--title-scale))]">{sidebar.title}</span>
               </span>
             </h2>
-            <button type="button" aria-label="Close navigation" onClick={onClose} className="muzio-settings-button flex h-[46.4px] w-[46.4px] shrink-0 items-center justify-center">
+            <button type="button" aria-label="Close navigation" onClick={onClose} className="muzio-sheet-header-action muzio-settings-button flex h-[46.4px] w-[46.4px] shrink-0 items-center justify-center">
               <CloseGlyph aria-hidden className="h-[21.1px] w-[21.1px]" />
             </button>
           </div>
@@ -629,7 +638,7 @@ function SidebarDrawer({
 }
 
 const LIBRARY_SWIPE_BLOCK_SELECTOR =
-  'input,select,textarea,video,audio,[role="slider"],[contenteditable="true"],[data-no-menu-swipe],[data-allow-scroll],[data-row-action],[data-row-options-shell]';
+  '.muzio-side-sheet,.muzio-modal-backdrop,[role="dialog"],input,select,textarea,video,audio,[role="slider"],[contenteditable="true"],[data-no-menu-swipe],[data-allow-scroll],[data-row-action],[data-row-options-shell]';
 
 function useLibrarySwipe({
   enabled,

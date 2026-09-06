@@ -89,7 +89,7 @@ export function PlaylistDrawer({
       >
         <div className="mb-1 flex shrink-0 flex-col items-start gap-3">
           <div className="flex w-full items-center justify-between gap-3">
-          <h2 className="h-[46.4px] min-w-0 flex-1 [--title-scale:1.45] sm:[--title-scale:1.16]">
+          <h2 className="muzio-sheet-title h-[46.4px] min-w-0 flex-1 [--title-scale:1.45] sm:[--title-scale:1.16]">
             <button
               type="button"
               aria-label="Close playlist"
@@ -100,7 +100,7 @@ export function PlaylistDrawer({
               <span className="min-w-0 truncate scale-[calc(1/var(--title-scale))]">{title}</span>
             </button>
           </h2>
-          <button type="button" aria-label={onBack ? 'Back to navigation' : 'Close playlist panel'} onClick={onBack ?? onClose} className="muzio-settings-button flex h-[46.4px] w-[46.4px] shrink-0 items-center justify-center text-foreground">
+          <button type="button" aria-label={onBack ? 'Back to navigation' : 'Close playlist panel'} onClick={onBack ?? onClose} className="muzio-sheet-header-action muzio-settings-button flex h-[46.4px] w-[46.4px] shrink-0 items-center justify-center text-foreground">
             {onBack ? <ArrowLeft aria-hidden className="h-[21.1px] w-[21.1px]" /> : <CloseGlyph aria-hidden className="h-[21.1px] w-[21.1px]" />}
           </button>
           </div>

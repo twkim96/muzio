@@ -15,7 +15,7 @@
         android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize"
+            android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:exported="true"
             android:supportsPictureInPicture="true">
             <intent-filter>

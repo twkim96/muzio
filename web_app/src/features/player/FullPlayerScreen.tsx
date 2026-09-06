@@ -323,7 +323,7 @@ export function FullPlayerScreen({
                 </ActionButton>
               </div>
             {openPopover === 'timer' && (
-              <ActionPopoverPanel onClose={() => setOpenPopover(null)}>
+              <ActionPopoverPanel timer onClose={() => setOpenPopover(null)}>
                 <SleepTimerPopover
                   customMinutes={customMinutes}
                   sleepTimer={snapshot.sleepTimer}
@@ -577,16 +577,16 @@ function ActionButton({
   );
 }
 
-function ActionPopoverPanel({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+function ActionPopoverPanel({ children, onClose, timer = false }: { children: ReactNode; onClose: () => void; timer?: boolean }) {
   return (
     <div
       data-glass
-      className="muzio-popover absolute left-1/2 top-16 z-30 w-[min(20rem,86vw)] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/24 bg-[#111113] p-4 text-left text-foreground shadow-2xl shadow-black/90 backdrop-blur-[96px] [-webkit-backdrop-filter:saturate(1.55)_blur(96px)] [backdrop-filter:saturate(1.55)_blur(96px)]"
+      className={`muzio-popover absolute left-1/2 top-16 z-30 w-[min(20rem,86vw)] -translate-x-1/2 overflow-hidden rounded-2xl p-4 text-left text-foreground ${timer ? 'muzio-timer-popover' : 'border border-white/24 bg-[#111113] shadow-2xl shadow-black/90 backdrop-blur-[96px]'}`}
     >
-      <div
+      {!timer && <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(255,255,255,0.18),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.10),rgba(255,255,255,0.025))] opacity-90 blur-3xl"
-      />
+      />}
       <div className="relative">
         <div className="mb-2 flex justify-end"><button type="button" aria-label="Close player panel" onClick={onClose} className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-white/10"><CloseGlyph className="h-5 w-5" /></button></div>
         {children}
