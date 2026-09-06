@@ -96,10 +96,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const videoItems = libraryStores.video(itemsFromLibraryState);
   const imageItems = libraryStores.image(itemsFromLibraryState);
   const audioPresentation = libraryStores.audio(
-    (state) => state.presentation,
+    (state) => activeAudioMediaId === null ? undefined : state.presentation.get(activeAudioMediaId),
   );
   const videoPresentation = libraryStores.video(
-    (state) => state.presentation,
+    (state) => activeVideoMediaId === null ? undefined : state.presentation.get(activeVideoMediaId),
   );
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
@@ -153,7 +153,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       if (mediaId === null) continue;
       const item = items.find((candidate) => candidate.id === mediaId);
       if (item === undefined || !isPlayableLibraryItem(item)) continue;
-      const thumbnail = presentation.get(item.id) ?? item.thumbnail;
+      const thumbnail = presentation ?? item.thumbnail;
       updateSourcePresentation(
         playbackSourceFromLibraryItem(
           thumbnail === undefined ? item : { ...item, thumbnail },
@@ -334,7 +334,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {!isImmersiveRoute && (
           <header className="sticky top-3 z-30 mx-auto mt-3 max-w-7xl px-3 sm:px-8 lg:px-10">
             {section !== null && (
-              <div className="mb-2 h-[46.4px] w-fit [--title-scale:1.45] sm:[--title-scale:1.16] md:absolute md:top-[5.8px] md:mb-0">
+              <div className="absolute top-[5.8px] hidden h-[46.4px] w-fit [--title-scale:1.16] md:block">
                 <h1 className="w-fit text-lg font-semibold tracking-tight sm:text-xl">
                   <button
                     type="button"
@@ -385,7 +385,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               to="/settings"
               aria-label="Settings"
               onClick={closeDrawer}
-              className="muzio-settings-button absolute right-3 top-0 flex h-[46.4px] w-[46.4px] items-center justify-center text-foreground sm:right-8 md:top-[5.8px] lg:right-10"
+              className="muzio-settings-button absolute right-3 top-[5.8px] hidden h-[46.4px] w-[46.4px] items-center justify-center text-foreground min-[480px]:flex sm:right-8 lg:right-10"
             >
               <GearSix aria-hidden className="h-[21.1px] w-[21.1px]" />
             </NavLink>

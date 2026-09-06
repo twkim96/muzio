@@ -29,7 +29,7 @@ export interface RemotePlaybackSource {
   title?: string;
   artist?: string;
   album?: string;
-  /** Immutable same-origin JPEG extracted from embedded audio cover art. */
+  /** Ready same-origin audio cover art or generated video thumbnail. */
   artworkUrl?: string;
   /** Best known media duration from library metadata, used as a resume fallback. */
   durationSec?: number;
@@ -92,7 +92,7 @@ export function remoteSourceFromLibraryItem(
   mimeType?: string,
 ): RemotePlaybackSource {
   const resolvedMimeType = mimeType ?? item.mimeType;
-  const artworkUrl = audioArtworkUrl(item);
+  const artworkUrl = playbackArtworkUrl(item);
   return {
     kind: 'remote',
     mediaId: item.id,
@@ -112,11 +112,11 @@ export function remoteSourceFromLibraryItem(
   };
 }
 
-function audioArtworkUrl(item: PlayableLibraryItem): string | undefined {
+function playbackArtworkUrl(item: PlayableLibraryItem): string | undefined {
   const thumbnail = item.thumbnail;
+  const expectedKind = item.type === 'audio' ? 'embedded-artwork' : 'generated-frame';
   if (
-    item.type !== 'audio' ||
-    thumbnail?.kind !== 'embedded-artwork' ||
+    thumbnail?.kind !== expectedKind ||
     thumbnail.status !== 'ready'
   ) {
     return undefined;

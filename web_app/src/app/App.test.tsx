@@ -135,10 +135,51 @@ function renderApp(pathname: string) {
     </BackendStatusProvider>,
   );
 
-  return { playerStore };
+  return { playerStore, libraryStores };
 }
 
 describe('App routes', () => {
+  test('updates the mini-player when a video thumbnail becomes ready', async () => {
+    const { playerStore, libraryStores } = renderApp('/library/video');
+    await waitFor(() => expect(libraryStores.video.getState().status).toBe('ok'));
+    act(() => {
+      playerStore.getState().seedSource({
+        kind: 'remote',
+        mediaId: 'v1',
+        mediaType: 'video',
+        url: '/api/media/v1',
+        name: 'clip.mp4',
+      });
+    });
+    expect(screen.queryByTestId('mini-player-artwork')).not.toBeInTheDocument();
+
+    act(() => {
+      if (videoResult.kind !== 'ok') throw new Error('Missing video fixture');
+      libraryStores.video.getState().applyChanges({
+        kind: 'ok',
+        revision: 1,
+        deletedIds: [],
+        resetRequired: false,
+        upserts: [{
+          ...videoResult.items[0],
+          thumbnail: {
+            url: '/api/thumbnails/v1?v=frame&state=ready',
+            kind: 'generated-frame',
+            status: 'ready',
+            cacheKey: 'frame',
+          },
+        }],
+      });
+    });
+    await waitFor(() => expect(screen.getByTestId('mini-player-artwork')).toHaveAttribute(
+      'src', '/api/thumbnails/v1?v=frame&state=ready',
+    ));
+    expect(selectActiveState(playerStore.getState()).source?.url).toBe('/api/media/v1');
+    fireEvent.error(screen.getByTestId('mini-player-artwork'));
+    expect(screen.queryByTestId('mini-player-artwork')).not.toBeInTheDocument();
+    expect(screen.getByTestId('open-full-player')).toBeInTheDocument();
+  });
+
   test('redirects the root route to the music library', async () => {
     renderApp('/');
 

@@ -93,6 +93,22 @@ describe('remoteSourceFromLibraryItem', () => {
 });
 
 describe('playbackSourceFromLibraryItem', () => {
+  test.each(['ready', 'pending', 'unavailable'])('handles %s video thumbnails', (status) => {
+    const source = playbackSourceFromLibraryItem({
+      ...sampleItem,
+      type: 'video',
+      thumbnail: {
+        url: `/api/thumbnails/v1?v=frame&state=${status}`,
+        kind: 'generated-frame',
+        status,
+        cacheKey: 'frame',
+      },
+    });
+    expect(source.artworkUrl).toBe(
+      status === 'ready' ? '/api/thumbnails/v1?v=frame&state=ready' : undefined,
+    );
+  });
+
   test('creates a remote source synchronously', () => {
     const source = playbackSourceFromLibraryItem(sampleItem);
     expect(source).not.toBeInstanceOf(Promise);
