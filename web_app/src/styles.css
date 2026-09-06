@@ -392,3 +392,8 @@ html:has(.muzio-side-sheet, .muzio-modal-backdrop) { overflow: hidden; }
     color: rgb(var(--muted) / .4);
   }
 }
+
+.muzio-settings-button.muzio-media-collapse { top: 16px; left: 16px; }
+@media (min-width: 640px) {
+  .muzio-settings-button.muzio-media-collapse { top: 24px; left: 24px; }
+}

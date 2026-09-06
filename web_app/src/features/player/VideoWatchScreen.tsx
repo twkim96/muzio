@@ -1,3 +1,4 @@
+import { MediaCollapseButton } from '../../core/ui/MediaCollapseButton';
 import {
   useCallback,
   useEffect,
@@ -150,6 +151,7 @@ export function VideoWatchScreen({
         className={`muzio-video-page relative z-10 h-[100svh] overflow-hidden bg-[var(--color-bg)] lg:h-screen ${watchGesture.motionClassName}`}
         style={watchGesture.motionStyle}
       >
+        <MediaCollapseButton label="Collapse video player" onCollapse={onCollapse} />
         <main
           ref={layoutRef}
           data-testid="video-watch-layout"
@@ -192,9 +194,6 @@ export function VideoWatchScreen({
                 >
                   {title}
                 </h1>
-                <p className="mt-1 break-words text-sm leading-5 text-[var(--color-muted)]">
-                  {sourceDetail}
-                </p>
                 <ExternalPlaybackActions source={source} title={title} />
               </div>
               <VideoOptimizationPanel source={source} positionSec={positionSec} playability={playability} />

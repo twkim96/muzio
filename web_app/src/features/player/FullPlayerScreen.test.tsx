@@ -274,7 +274,7 @@ describe('FullPlayerScreen', () => {
     });
     renderScreen(store);
     expect(screen.getByTestId('now-playing-art')).toBeInTheDocument();
-    expect(screen.queryByTestId('player-close')).not.toBeInTheDocument();
+    expect(screen.getByTestId('player-close')).toBeInTheDocument();
     expect(screen.queryByTestId('video-viewport')).not.toBeInTheDocument();
   });
 
@@ -958,7 +958,7 @@ describe('FullPlayerScreen', () => {
           Node.DOCUMENT_POSITION_FOLLOWING,
       ),
     ).toBe(true);
-    expect(screen.queryByTestId('player-close')).not.toBeInTheDocument();
+    expect(screen.getByTestId('player-close')).toBeInTheDocument();
     expect(screen.queryByTestId('now-playing-art')).not.toBeInTheDocument();
   });
 
@@ -1107,6 +1107,7 @@ describe('FullPlayerScreen', () => {
     renderScreen(store);
     const summary = await screen.findByTestId('video-summary');
     expect(summary).toContainElement(screen.getByTestId('video-player-title'));
+    expect(summary.querySelector('p')).toBeNull();
     expect(summary).toContainElement(screen.getByTestId('video-open-stream'));
     expect(summary).toContainElement(screen.getByTestId('video-share-stream'));
     const layout = screen.getByTestId('video-watch-layout');

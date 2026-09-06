@@ -1,3 +1,4 @@
+import { MediaCollapseButton } from '../../core/ui/MediaCollapseButton';
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -58,6 +59,7 @@ export function ImageViewerScreen({
       >
         <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/70 to-transparent" />
 
+        <MediaCollapseButton label="Close image viewer" testId="image-viewer-close" onCollapse={close} />
         {image !== null && (
           <button
             type="button"

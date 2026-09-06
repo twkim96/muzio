@@ -299,7 +299,7 @@ describe('App routes', () => {
     expect(screen.queryByTestId('player-library-backdrop')).not.toBeInTheDocument();
     expect(within(screen.getByTestId('library-list')).getByText('song.mp3')).toBeInTheDocument();
 
-    expect(screen.queryByTestId('player-close')).not.toBeInTheDocument();
+    expect(screen.getByTestId('player-close')).toBeInTheDocument();
     const player = screen.getByTestId('player-screen');
     fireEvent.touchStart(player, { touches: [{ clientX: 100, clientY: 40 }] });
     fireEvent.touchMove(player, { touches: [{ clientX: 100, clientY: 300 }] });
@@ -339,7 +339,7 @@ describe('App routes', () => {
 
     expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
 
-    expect(screen.queryByTestId('player-close')).not.toBeInTheDocument();
+    expect(screen.getByTestId('player-close')).toBeInTheDocument();
     const player = screen.getByTestId('player-screen');
     fireEvent.touchStart(player, { touches: [{ clientX: 100, clientY: 40 }] });
     fireEvent.touchMove(player, { touches: [{ clientX: 100, clientY: 300 }] });
@@ -772,7 +772,7 @@ describe('App routes', () => {
     expect(screen.queryByTestId('mini-player')).not.toBeInTheDocument();
     expect(selectActiveState(playerStore.getState()).source?.mediaId).toBe('a1');
 
-    expect(screen.queryByTestId('image-viewer-close')).not.toBeInTheDocument();
+    expect(screen.getByTestId('image-viewer-close')).toBeInTheDocument();
     const viewer = screen.getByTestId('image-viewer');
     fireEvent.touchStart(viewer, { touches: [{ clientX: 100, clientY: 40 }] });
     fireEvent.touchMove(viewer, { touches: [{ clientX: 100, clientY: 300 }] });

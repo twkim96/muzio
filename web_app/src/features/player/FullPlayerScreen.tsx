@@ -1,3 +1,4 @@
+import { MediaCollapseButton } from '../../core/ui/MediaCollapseButton';
 import {
   useEffect,
   useRef,
@@ -220,6 +221,7 @@ export function FullPlayerScreen({
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_15%,rgba(174,174,174,0.14),transparent_34%),linear-gradient(135deg,rgba(255,55,85,0.16),transparent_28%),linear-gradient(215deg,rgba(90,120,96,0.28),transparent_42%)]" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/22 via-transparent to-black/30" />
 
+        <MediaCollapseButton label="Collapse music player" onCollapse={collapsePlayer} />
         <main
           data-testid="music-player-content"
           className="relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center px-6 py-10 [--player-art-width:min(26rem,38vh,78vw)] sm:px-10 sm:py-10 sm:[--player-art-width:min(34rem,48vh,78vw)]"
