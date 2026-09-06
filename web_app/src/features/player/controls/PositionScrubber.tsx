@@ -164,10 +164,10 @@ export function PositionScrubber({ positionSec, durationSec, disabled }: Props) 
         <div
           data-testid="full-scrub-preview"
           data-glass
-          className="pointer-events-none fixed left-1/2 top-1/2 z-[80] flex h-24 min-w-40 -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-2 rounded-2xl border border-white/15 bg-zinc-950/78 px-5 text-lg font-semibold tabular-nums text-white shadow-2xl shadow-black/35 backdrop-blur-[34px]"
+          className="muzio-dialog pointer-events-none fixed left-1/2 top-1/2 z-[80] flex h-24 min-w-40 -translate-x-1/2 -translate-y-1/2 items-center justify-center gap-2 rounded-2xl border border-white/15 bg-zinc-950/78 px-5 text-lg font-semibold tabular-nums text-foreground shadow-2xl shadow-black/35 backdrop-blur-[34px]"
         >
           <span>{formatTime(previewValue)}</span>
-          <span className="text-white/55">/</span>
+          <span className="text-muted">/</span>
           <span>{formatTime(durationSec)}</span>
         </div>
       )}

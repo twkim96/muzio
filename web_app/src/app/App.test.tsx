@@ -148,6 +148,52 @@ describe('App routes', () => {
     expect(screen.getByRole('heading', { name: 'Music' })).toBeInTheDocument();
   });
 
+  test('opens the topbar search, filters the library, and preserves a closed query', async () => {
+    renderApp('/library/music');
+
+    await waitFor(() => {
+      expect(screen.getByText('second.mp3')).toBeInTheDocument();
+    });
+
+    const searchButton = screen.getByRole('button', { name: 'Search Music' });
+    fireEvent.click(searchButton);
+    const filter = screen.getByLabelText('Filter Music');
+    expect(filter).toHaveFocus();
+    fireEvent.change(filter, { target: { value: 'second' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('second.mp3')).toBeInTheDocument();
+      expect(screen.queryByText('song.mp3')).not.toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(filter, { key: 'Escape' });
+    expect(screen.queryByLabelText('Filter Music')).not.toBeInTheDocument();
+    expect(searchButton).toHaveAttribute('aria-pressed', 'true');
+    await waitFor(() => expect(searchButton).toHaveFocus());
+  });
+
+  test('menu button controls the drawer and restores focus after backdrop close', async () => {
+    renderApp('/library/music');
+
+    const menuButton = screen.getByTestId('navigation-menu-button');
+    expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(menuButton);
+    expect(menuButton).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('mobile-navigation')).toBeInTheDocument();
+
+    const drawer = screen.getByTestId('mobile-navigation');
+    const controls = within(drawer).getAllByRole('button');
+    controls[controls.length - 1].focus();
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab' });
+    expect(controls[0]).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab', shiftKey: true });
+    expect(controls[controls.length - 1]).toHaveFocus();
+
+    fireEvent.click(screen.getByTestId('mobile-navigation').parentElement as HTMLElement);
+    expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
+    await waitFor(() => expect(menuButton).toHaveFocus());
+  });
+
   test('opens the full player as an overlay over the existing library route', async () => {
     const { playerStore } = renderApp('/library/music');
     act(() => {
@@ -216,51 +262,14 @@ describe('App routes', () => {
     expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
   });
 
-  test('lowers the mobile peek drawer on menu screens', async () => {
-    renderApp('/library/music');
-
-    await waitFor(() => {
-      expect(screen.getByTestId('mobile-menu-peek')).toBeInTheDocument();
-    });
-
-    const shell = screen.getByTestId('mobile-menu-peek').closest('[style]');
-    expect(shell).not.toBeNull();
-    expect((shell as HTMLElement).style.getPropertyValue('--mobile-drawer-top')).toBe(
-      '13.75rem',
-    );
-    expect(
-      (shell as HTMLElement).style.getPropertyValue('--mobile-drawer-open-top'),
-    ).toBe('10.75rem');
-    expect(screen.getByTestId('mobile-menu-peek').className).toContain(
-      'top-[var(--mobile-drawer-top)]',
-    );
-  });
-
-  test('uses the same mobile drawer placement on settings', async () => {
-    renderApp('/settings');
-
-    await waitFor(() => {
-      expect(screen.getByTestId('mobile-menu-peek')).toBeInTheDocument();
-    });
-
-    const shell = screen.getByTestId('mobile-menu-peek').closest('[style]');
-    expect(shell).not.toBeNull();
-    expect((shell as HTMLElement).style.getPropertyValue('--mobile-drawer-top')).toBe(
-      '13.75rem',
-    );
-    expect(
-      (shell as HTMLElement).style.getPropertyValue('--mobile-drawer-open-top'),
-    ).toBe('10.75rem');
-  });
-
   test('mobile navigation shows one section title and opens queue from the bottom actions', async () => {
     renderApp('/library/music');
 
     await waitFor(() => {
-      expect(screen.getByTestId('mobile-menu-peek')).toBeInTheDocument();
+      expect(screen.getByTestId('navigation-menu-button')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByTestId('mobile-menu-peek'));
+    fireEvent.click(screen.getByTestId('navigation-menu-button'));
     const navigation = screen.getByTestId('mobile-navigation');
     expect(within(navigation).getAllByText('Music')).toHaveLength(1);
     expect(within(navigation).queryByText('Library')).not.toBeInTheDocument();
@@ -273,8 +282,10 @@ describe('App routes', () => {
     const bottomActions = within(navigation).getByTestId('menu-bottom-actions');
     expect(bottomActions.className).toContain('grid-cols-2');
     const actionButtons = within(bottomActions).getAllByRole('button');
-    expect(actionButtons[0]).toHaveTextContent('Refresh');
-    expect(actionButtons[1]).toHaveTextContent('Queue');
+    expect(within(bottomActions).getByTestId('menu-settings-button')).toHaveTextContent(
+      'Setting',
+    );
+    expect(actionButtons[0]).toHaveTextContent('Queue');
     fireEvent.click(within(navigation).getByTestId('menu-queue-button'));
 
     expect(screen.queryByTestId('mobile-navigation')).not.toBeInTheDocument();
@@ -286,11 +297,7 @@ describe('App routes', () => {
   test('creates a custom playlist from the mobile menu plus button', async () => {
     renderApp('/library/music');
 
-    await waitFor(() => {
-      expect(screen.getByTestId('mobile-menu-peek')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByTestId('mobile-menu-peek'));
+    fireEvent.click(screen.getByTestId('navigation-menu-button'));
     fireEvent.click(
       within(screen.getByTestId('mobile-navigation')).getByLabelText(
         'Create playlist',
@@ -308,11 +315,7 @@ describe('App routes', () => {
   test('mobile menu edit mode renames and deletes custom playlists only after confirmation', async () => {
     renderApp('/library/music');
 
-    await waitFor(() => {
-      expect(screen.getByTestId('mobile-menu-peek')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByTestId('mobile-menu-peek'));
+    fireEvent.click(screen.getByTestId('navigation-menu-button'));
     const navigation = screen.getByTestId('mobile-navigation');
     expect(within(navigation).getByTestId('mobile-menu-title')).toHaveClass(
       'text-left',
@@ -369,7 +372,7 @@ describe('App routes', () => {
       expect(screen.getByText('second.mp3')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByTestId('mobile-menu-peek'));
+    fireEvent.click(screen.getByTestId('navigation-menu-button'));
     fireEvent.click(within(screen.getByTestId('mobile-navigation')).getByText('Road'));
 
     const drawer = screen.getByTestId('playlist-drawer');
@@ -396,7 +399,7 @@ describe('App routes', () => {
     });
     fireEvent.click(screen.getByLabelText('Like song.mp3'));
 
-    fireEvent.click(screen.getByTestId('mobile-menu-peek'));
+    fireEvent.click(screen.getByTestId('navigation-menu-button'));
     const navigation = screen.getByTestId('mobile-navigation');
     fireEvent.click(within(navigation).getByText('Liked Music'));
 
@@ -504,18 +507,14 @@ describe('App routes', () => {
     });
     const navigation = screen.getByTestId('mobile-navigation');
     expect(within(navigation).getByText('Backend Status')).toBeInTheDocument();
-    expect(within(navigation).getByTestId('menu-refresh-button')).toBeInTheDocument();
+    expect(within(navigation).getByTestId('menu-settings-button')).toBeInTheDocument();
     expect(within(navigation).getByTestId('menu-queue-button')).toBeInTheDocument();
   });
 
   test('video mobile menu exposes the recently watching playlist', async () => {
     renderApp('/library/video');
 
-    await waitFor(() => {
-      expect(screen.getByTestId('mobile-menu-peek')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByTestId('mobile-menu-peek'));
+    fireEvent.click(screen.getByTestId('navigation-menu-button'));
 
     expect(
       within(screen.getByTestId('mobile-navigation')).getByText(
@@ -564,7 +563,7 @@ describe('App routes', () => {
       });
     });
 
-    fireEvent.click(screen.getByTestId('mobile-menu-peek'));
+    fireEvent.click(screen.getByTestId('navigation-menu-button'));
     const navigation = screen.getByTestId('mobile-navigation');
     const entry = within(navigation).getByRole('button', {
       name: /Recently Watching/,
@@ -580,50 +579,14 @@ describe('App routes', () => {
     ]);
   });
 
-  test('refreshes all libraries from the menu refresh button', async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          audioRoots: [],
-          videoRoots: [],
-          imageRoots: [],
-          itemCount: 9,
-          persistent: true,
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      ),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-    renderApp('/library/music');
-
-    await waitFor(() => {
-      expect(screen.getByTestId('menu-refresh-button')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByTestId('menu-refresh-button'));
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/settings/media-roots',
-        expect.objectContaining({ method: 'POST' }),
-      );
-      expect(screen.getByTestId('menu-refresh-status')).toHaveTextContent(
-        'Refreshed 9 items.',
-      );
-    });
-  });
-
   test('prevents top-level downward touchmove for mobile pull-to-refresh', async () => {
     renderApp('/library/music');
 
     await waitFor(() => {
-      expect(screen.getByTestId('mobile-menu-peek')).toBeInTheDocument();
+      expect(screen.getByTestId('navigation-menu-button')).toBeInTheDocument();
     });
 
-    const target = screen.getByTestId('mobile-menu-peek');
+    const target = screen.getByTestId('navigation-menu-button');
     const start = new Event('touchstart', { bubbles: true, cancelable: true });
     Object.defineProperty(start, 'touches', {
       value: [{ clientY: 100 }],

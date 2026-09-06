@@ -49,3 +49,15 @@
 - 기본 좌우 padding과 Videos 목록 폭은 유지하며 늘어난 폭은 영상 영역에 배분한다. 기존 영상 높이 제한, 제목·액션 공간 확보와 페이지 스크롤 동작을 유지한다.
 - 제품 버전은 1.4.4를 유지하고 PWA cache revision을 1.4.4-r3로 갱신한다.
 - 검증 완료: FullPlayerScreen 42 tests와 TypeScript/Vite build 통과. 실제 Edge 1720px 화면에서 scroll container left=0 / right=1720 / max-width=none, scrollbar width=15px 확인. 배포된 service worker cache는 1.4.4-r3.
+
+## 추가 패치 - ui-kit 글래스 테마와 상단 탐색 (동일 1.4.4)
+
+- Web Reader ui-kit의 glass 재질, grain 배경과 Pretendard 로컬 폰트를 적용했다. 기존 사용자 지정 색상은 유지한다.
+- 상단 Music/Video/Image 바의 왼쪽에 메뉴 아이콘, 오른쪽에 돋보기 검색을 배치했다. 검색 팝업은 입력 포커스, Escape/외부 클릭 닫기, 필터 유지 표시와 초기화를 지원한다.
+- 사이드바는 기본 숨김이며 아이콘으로 연다. Settings는 메뉴 하단의 기존 Refresh 자리에 있고 실제 새로고침은 설정 Media Folders에 남아 있다.
+- 설정, 재생목록 생성/수정/삭제/추가, Queue, 플레이어 컨트롤/팝오버, 이미지 뷰어 버튼과 비디오 정보까지 공통 재질을 연결했다.
+- 메뉴 키보드 포커스 순환, 작은 화면의 상단바, 미니 플레이어 중앙 정렬을 보완했다.
+- 검증: frontend 50 files / 530 tests, TypeScript/Vite staging build, version surfaces 통과. Backend는 변경하지 않았다.
+- 브라우저: 320px 상단바 horizontal overflow 없음, 390px 검색/메뉴와 desktop 설정/재생목록 생성/음악 플레이어 확인. 1920×360 비디오 페이지 width=1920, 액션 bottom=344, wheel 후 video top=-235로 기존 크기/스크롤 계약 유지.
+- 제품 버전 1.4.4, PWA shell revision 1.4.4-r4.
+- 배포 완료: 실제 서비스 sw.js는 1.4.4-r4이며 상단바/검색 팝업의 blur(1.5px), saturate(0.9), contrast(0.82)와 로컬 Pretendard 적용을 확인했다. 이전 build는 dist/web-backup-1.4.4-r3-20260906-095638에 보존했다.

@@ -215,7 +215,7 @@ export function FullPlayerScreen({
     >
       <div
         data-testid="player-motion-layer"
-        className={`relative z-10 min-h-screen overflow-hidden bg-surface ${dismissGesture.motionClassName}`}
+        className={`muzio-player-page relative z-10 min-h-screen overflow-hidden bg-surface ${dismissGesture.motionClassName}`}
         style={dismissGesture.motionStyle}
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_15%,rgba(174,174,174,0.14),transparent_34%),linear-gradient(135deg,rgba(255,55,85,0.16),transparent_28%),linear-gradient(215deg,rgba(90,120,96,0.28),transparent_42%)]" />
@@ -346,12 +346,12 @@ export function FullPlayerScreen({
                   <p className="font-semibold">More actions</p>
                   {(playlists?.playlists.length ?? 0) > 0 ? (
                     <div className="grid gap-1">
-                      <span className="text-xs text-white/55">Add to Playlist</span>
+                      <span className="text-xs text-muted">Add to Playlist</span>
                       {playlists?.playlists.map((playlist) => (
                         <button
                           key={playlist.id}
                           type="button"
-                          className="rounded-lg px-3 py-2 text-left hover:bg-white/10"
+                          className="muzio-control rounded-lg px-3 py-2 text-left hover:bg-white/10"
                           onClick={() => {
                             playlists.addItem(playlist.id, currentLikeKey);
                             setMoreMessage(`Added to ${playlist.name}.`);
@@ -362,14 +362,14 @@ export function FullPlayerScreen({
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-white/55">Create a playlist from the Music menu first.</p>
+                    <p className="text-xs text-muted">Create a playlist from the Music menu first.</p>
                   )}
-                  <button type="button" className="rounded-lg px-3 py-2 text-left hover:bg-white/10" onClick={() => openPlaybackStream(source.url)}>
+                  <button type="button" className="muzio-control rounded-lg px-3 py-2 text-left hover:bg-white/10" onClick={() => openPlaybackStream(source.url)}>
                     Open stream
                   </button>
                   <button
                     type="button"
-                    className="rounded-lg px-3 py-2 text-left hover:bg-white/10"
+                    className="muzio-control rounded-lg px-3 py-2 text-left hover:bg-white/10"
                     onClick={() => {
                       void shareOrCopyPlaybackStream(sourceName, source.url).then((result) => {
                         if (result === 'cancelled') return;
@@ -379,18 +379,18 @@ export function FullPlayerScreen({
                   >
                     Share or copy stream URL
                   </button>
-                  <button type="button" aria-expanded={showTrackInfo} className="rounded-lg px-3 py-2 text-left hover:bg-white/10" onClick={() => setShowTrackInfo((current) => !current)}>
+                  <button type="button" aria-expanded={showTrackInfo} className="muzio-control rounded-lg px-3 py-2 text-left hover:bg-white/10" onClick={() => setShowTrackInfo((current) => !current)}>
                     Track information
                   </button>
                   {showTrackInfo && (
                     <dl data-testid="track-information" className="grid gap-1 rounded-lg bg-black/20 p-3 text-xs">
-                      <div><dt className="text-white/50">Title</dt><dd>{source.title ?? source.name}</dd></div>
-                      <div><dt className="text-white/50">Artist</dt><dd>{source.artist ?? 'Unknown'}</dd></div>
-                      {source.album && <div><dt className="text-white/50">Album</dt><dd>{source.album}</dd></div>}
-                      <div><dt className="text-white/50">File</dt><dd className="break-all">{source.relativePath ?? source.name}</dd></div>
+                      <div><dt className="text-muted">Title</dt><dd>{source.title ?? source.name}</dd></div>
+                      <div><dt className="text-muted">Artist</dt><dd>{source.artist ?? 'Unknown'}</dd></div>
+                      {source.album && <div><dt className="text-muted">Album</dt><dd>{source.album}</dd></div>}
+                      <div><dt className="text-muted">File</dt><dd className="break-all">{source.relativePath ?? source.name}</dd></div>
                     </dl>
                   )}
-                  {moreMessage !== '' && <p role="status" className="text-xs text-white/60">{moreMessage}</p>}
+                  {moreMessage !== '' && <p role="status" className="text-xs text-muted">{moreMessage}</p>}
                 </div>
               </ActionPopoverPanel>
             )}
@@ -431,12 +431,12 @@ export function FullPlayerScreen({
               <div
                 data-testid="full-network-hint"
                 role="status"
-                className="mt-2 flex min-h-8 items-center justify-between gap-2 rounded-xl border border-white/15 bg-zinc-950/72 px-2.5 py-1.5 text-sm text-white shadow-sm shadow-black/15 backdrop-blur max-sm:flex-col max-sm:items-stretch"
+                className="muzio-panel mt-2 flex min-h-8 items-center justify-between gap-2 rounded-xl border border-white/15 bg-zinc-950/72 px-2.5 py-1.5 text-sm text-foreground shadow-sm shadow-black/15 backdrop-blur max-sm:flex-col max-sm:items-stretch"
               >
                 <span className="min-w-0 truncate">{networkHint.message}</span>
                 <button
                   type="button"
-                  className="shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-xs font-semibold text-white hover:bg-white/10 max-sm:self-start"
+                  className="muzio-control shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-xs font-semibold text-foreground hover:bg-white/10 max-sm:self-start"
                   onClick={() => {
                     void retryActivePlayback();
                   }}
@@ -474,7 +474,7 @@ export function FullPlayerScreen({
               data-testid="play-pause"
               data-status={state.status.kind}
               aria-label={playLabel}
-              className="inline-flex h-16 w-16 items-center justify-center text-white drop-shadow-[0_10px_24px_rgba(0,0,0,0.28)] transition hover:scale-[1.03] hover:text-white/90 disabled:opacity-50 sm:h-20 sm:w-20"
+              className="muzio-control muzio-primary inline-flex h-16 w-16 items-center justify-center text-white drop-shadow-[0_10px_24px_rgba(0,0,0,0.28)] transition hover:scale-[1.03] hover:text-white/90 disabled:opacity-50 sm:h-20 sm:w-20"
               onClick={() => {
                 void snapshot.togglePlayPause();
               }}
@@ -553,7 +553,7 @@ function DismissButton({
       type="button"
       data-testid="player-close"
       aria-label={label}
-      className="absolute left-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full text-white/88 transition hover:bg-white/10 hover:text-white sm:left-6 sm:top-6"
+      className="muzio-control absolute left-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full text-white/88 transition hover:bg-white/10 hover:text-white sm:left-6 sm:top-6"
       onClick={onCollapse}
     >
       <DownChevronIcon />
@@ -586,7 +586,7 @@ function ActionButton({
       aria-expanded={expanded}
       data-testid={testId}
       disabled={disabled}
-      className="inline-flex h-10 min-w-0 items-center justify-center rounded-full text-xl leading-none text-white/72 transition hover:bg-white/[0.055] hover:text-white aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-35 sm:h-12 sm:text-2xl"
+      className="muzio-control inline-flex h-10 min-w-0 items-center justify-center rounded-full text-xl leading-none text-white/72 transition hover:bg-white/[0.055] hover:text-white aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-35 sm:h-12 sm:text-2xl"
       onClick={onClick}
     >
       {children}
@@ -598,7 +598,7 @@ function ActionPopoverPanel({ children }: { children: ReactNode }) {
   return (
     <div
       data-glass
-      className="absolute left-1/2 top-16 z-30 w-[min(20rem,86vw)] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/24 bg-[#111113] p-4 text-left text-white shadow-2xl shadow-black/90 backdrop-blur-[96px] [-webkit-backdrop-filter:saturate(1.55)_blur(96px)] [backdrop-filter:saturate(1.55)_blur(96px)]"
+      className="muzio-popover absolute left-1/2 top-16 z-30 w-[min(20rem,86vw)] -translate-x-1/2 overflow-hidden rounded-2xl border border-white/24 bg-[#111113] p-4 text-left text-foreground shadow-2xl shadow-black/90 backdrop-blur-[96px] [-webkit-backdrop-filter:saturate(1.55)_blur(96px)] [backdrop-filter:saturate(1.55)_blur(96px)]"
     >
       <div
         aria-hidden
@@ -635,8 +635,8 @@ function TransportButton({
       disabled={disabled}
       className={
         size === 'skip'
-          ? 'inline-flex h-12 w-12 items-center justify-center rounded-xl text-white/64 transition hover:bg-white/[0.055] hover:text-white disabled:cursor-not-allowed disabled:opacity-45 sm:h-14 sm:w-14'
-          : 'inline-flex h-10 w-10 items-center justify-center rounded-xl text-3xl leading-none text-white/56 transition hover:bg-white/[0.055] hover:text-white aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-45 sm:h-12 sm:w-12 sm:text-4xl'
+          ? 'muzio-control inline-flex h-12 w-12 items-center justify-center rounded-xl text-white/64 transition hover:bg-white/[0.055] hover:text-white disabled:cursor-not-allowed disabled:opacity-45 sm:h-14 sm:w-14'
+          : 'muzio-control inline-flex h-10 w-10 items-center justify-center rounded-xl text-3xl leading-none text-white/56 transition hover:bg-white/[0.055] hover:text-white aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-45 sm:h-12 sm:w-12 sm:text-4xl'
       }
       onClick={onClick}
     >
@@ -705,7 +705,7 @@ function VolumePopover({
         data-testid="mute-toggle"
         aria-label={muted ? 'Unmute' : 'Mute'}
         aria-pressed={muted}
-        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg leading-none text-white/80 hover:bg-white/10 aria-pressed:text-accent sm:h-9 sm:w-9"
+        className="muzio-control inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg leading-none text-white/80 hover:bg-white/10 aria-pressed:text-accent sm:h-9 sm:w-9"
         onClick={onMute}
       >
         <VolumeGlyph muted={muted} className="h-5 w-5" />
@@ -746,7 +746,7 @@ function VolumePopover({
         aria-label="Volume"
         className="min-w-0 flex-1 touch-none accent-accent"
       />
-      <span className="w-9 text-right text-xs tabular-nums text-white/55">
+      <span className="w-9 text-right text-xs tabular-nums text-muted">
         {Math.round(volume * 100)}%
       </span>
     </section>
@@ -778,7 +778,7 @@ function SleepTimerPopover({
         <h2 className="text-sm font-semibold">Sleep timer</h2>
         <span
           data-testid="sleep-timer-status"
-          className="text-xs tabular-nums text-white/60"
+          className="text-xs tabular-nums text-muted"
         >
           {sleepTimer.kind === 'running'
             ? formatTime(sleepTimer.remainingSec)
@@ -792,7 +792,7 @@ function SleepTimerPopover({
           <button
             key={minutes}
             type="button"
-            className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10"
+            className="muzio-control rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10"
             onClick={() => onStart(minutes)}
           >
             {minutes}m
@@ -800,7 +800,7 @@ function SleepTimerPopover({
         ))}
         <button
           type="button"
-          className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10"
+          className="muzio-control rounded-full border border-white/15 px-3 py-1.5 text-xs font-semibold hover:bg-white/10"
           onClick={onCancel}
         >
           Cancel
@@ -814,11 +814,11 @@ function SleepTimerPopover({
           value={customMinutes}
           onChange={(event) => onCustomMinutes(event.target.value)}
           aria-label="Custom timer minutes"
-          className="w-20 rounded-full border border-white/15 bg-transparent px-3 py-1 text-sm"
+          className="muzio-control w-20 rounded-full border border-white/15 bg-transparent px-3 py-1 text-sm"
         />
         <button
           type="button"
-          className="rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-white/80"
+          className="muzio-control muzio-primary rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-white/80"
           onClick={applyCustom}
         >
           Set

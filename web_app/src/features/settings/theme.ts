@@ -17,9 +17,9 @@ export interface ThemeSettings {
 
 export const DARK_THEME_SETTINGS: ThemeSettings = {
   mode: 'dark',
-  surfaceColor: '#1f1f1f',
-  foregroundColor: '#ededed',
-  mutedColor: '#aeaeae',
+  surfaceColor: '#141517',
+  foregroundColor: '#d2d3d6',
+  mutedColor: '#a4a5a9',
   accentColor: '#fa2d48',
 };
 
@@ -121,6 +121,9 @@ export function applyThemeSettings(settings: ThemeSettings) {
   const root = document.documentElement;
   const isDark = next.mode === 'dark' || (next.mode === 'custom' && isDarkSurface(next));
   root.classList.toggle('dark', isDark);
+  root.classList.add('wr-kit');
+  root.dataset.material = 'glass';
+  root.dataset.texture = 'grain';
   root.dataset.theme = next.mode;
   root.style.setProperty('--surface', hexToRgbChannels(next.surfaceColor));
   root.style.setProperty('--foreground', hexToRgbChannels(next.foregroundColor));

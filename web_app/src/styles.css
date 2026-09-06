@@ -1,4 +1,11 @@
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+@import "./design/kit-tokens.css";
+
+@font-face {
+  font-family: "Pretendard Variable";
+  src: url("/fonts/PretendardVariable.woff2") format("woff2");
+  font-weight: 45 920;
+  font-display: swap;
+}
 
 @tailwind base;
 @tailwind components;
@@ -12,15 +19,15 @@
   --surface: 255 255 255;
   --foreground: 9 9 11;    /* zinc-950 */
   --muted: 113 113 122;    /* zinc-500 */
-  --color-bg: #0A0A0B;
-  --color-fg: #F4F4F5;
-  --color-muted: #A1A1AA;
-  --color-control: #18181B;
-  --color-popover: #111113;
-  --color-control-hover: #27272A;
-  --color-accent: #FF3B5F;
-  --color-accent-surface: rgba(255, 59, 95, 0.14);
-  --color-border: rgba(255, 255, 255, 0.12);
+  --color-bg: rgb(var(--surface));
+  --color-fg: rgb(var(--foreground));
+  --color-muted: rgb(var(--muted));
+  --color-control: color-mix(in srgb, rgb(var(--foreground)) 5%, rgb(var(--surface) / 0.42));
+  --color-popover: rgb(var(--surface) / 0.86);
+  --color-control-hover: rgb(var(--foreground) / 0.09);
+  --color-accent: rgb(var(--accent));
+  --color-accent-surface: rgb(var(--accent) / 0.12);
+  --color-border: rgb(var(--foreground) / 0.18);
   --video-watch-max-width: 96rem;
   --video-watch-sidebar-width: 24rem;
   --video-watch-gutter: 1.5rem;
@@ -102,7 +109,7 @@
     color: rgb(var(--foreground));
     overscroll-behavior: none;
     font-family:
-      "Apple SD Gothic Neo", "Pretendard Variable", Pretendard, -apple-system,
+      "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", -apple-system,
       BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "AppleGothic",
       "Helvetica Neue", "Segoe UI", Roboto, "Noto Sans KR", "Malgun Gothic",
       Arial, sans-serif;
@@ -117,4 +124,166 @@
   select {
     font: inherit;
   }
+}
+
+/* Web Reader ui-kit: glass material adapted to Muzio's existing theme settings.
+   Keep the material on html so body portals inherit the same palette. */
+html.wr-kit {
+  --viewer-theme-bg: rgb(var(--surface));
+  --viewer-theme-text: rgb(var(--foreground));
+  --viewer-theme-border: rgb(var(--foreground) / 0.18);
+  --viewer-theme-secondary: color-mix(in srgb, rgb(var(--foreground)) 8%, rgb(var(--surface)));
+  --viewer-shelf-glass-surface: rgb(var(--surface) / 0.24);
+  --viewer-shelf-glass-ink: rgb(var(--foreground) / 0.96);
+  --viewer-shelf-glass-shadow: rgb(0 0 0 / 0.24);
+  --accent-400: rgb(var(--accent));
+  --accent-500: rgb(var(--accent));
+  --accent-600: rgb(var(--accent));
+  --muzio-glass-ring: linear-gradient(164deg, rgb(255 255 255 / .5) 8.97%, rgb(255 255 255 / .05) 33.82%, transparent 54.53%, rgb(255 255 255 / .05) 75.25%, rgb(255 255 255 / .2) 91.82%);
+  --muzio-overlay-surface: color-mix(in srgb, var(--app-menu-surface) 20%, rgb(var(--surface) / .94));
+}
+html.wr-kit[data-theme='custom'][data-texture='grain'] {
+  --viewer-theme-texture: radial-gradient(circle at 20% 30%, rgb(var(--foreground) / .08) 0 1px, transparent 1px), radial-gradient(circle at 80% 70%, rgb(var(--foreground) / .05) 0 1px, transparent 1px), radial-gradient(circle at 45% 80%, rgb(var(--foreground) / .045) 0 1px, transparent 1px);
+  --viewer-theme-texture-size: 14px 14px;
+}
+body {
+  background-image: var(--viewer-theme-texture);
+  background-size: var(--viewer-theme-texture-size);
+  background-attachment: fixed;
+}
+/* Let the single background texture show through the app's page shells. */
+.wr-kit #root > div,
+.wr-kit #root .min-h-screen.bg-zinc-50 {
+  background-color: transparent;
+  color: var(--viewer-theme-text);
+}
+.wr-kit .app-top-fade::before { display: none; }
+
+.wr-kit :is(.muzio-panel, .muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search) {
+  background: var(--app-menu-surface);
+  border: 1px solid var(--app-menu-border);
+  border-radius: 14px;
+  color: var(--app-menu-ink);
+  box-shadow: var(--app-menu-panel-shadow);
+  -webkit-backdrop-filter: var(--app-menu-filter);
+  backdrop-filter: var(--app-menu-filter);
+  isolation: isolate;
+}
+.wr-kit :is(.muzio-panel, .muzio-dock) { position: relative; }
+.wr-kit .muzio-dialog:not(.absolute):not(.fixed):not(.relative) { position: relative; }
+.wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-sidebar, .muzio-search) {
+  /* A little more ink behind dense overlay text keeps underlying rows legible. */
+  background: var(--muzio-overlay-surface);
+}
+.wr-kit :is(.muzio-panel, .muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search, .muzio-control)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--muzio-glass-ring);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+.wr-kit .muzio-topbar {
+  border-radius: 0;
+  border-width: 0 0 1px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / .08), inset 0 1px rgb(255 255 255 / .15);
+}
+.wr-kit .muzio-dock {
+  border-radius: 14px;
+  box-shadow: var(--app-menu-dock-shadow), inset 0 1px rgb(255 255 255 / .2);
+}
+.wr-kit .muzio-drawer { border-radius: 0 14px 14px 0; }
+.wr-kit .muzio-search { border-radius: 20px; }
+.wr-kit .muzio-search > .muzio-dialog { border-radius: 20px; }
+.wr-kit :is(.muzio-control, .muzio-primary, .muzio-danger) {
+  border: 1px solid var(--app-menu-control-border);
+  border-radius: 8px;
+  color: var(--app-menu-ink);
+  background: var(--app-menu-control-surface);
+  box-shadow: var(--app-menu-control-shadow);
+  -webkit-backdrop-filter: var(--app-menu-filter);
+  backdrop-filter: var(--app-menu-filter);
+}
+.wr-kit .muzio-control { isolation: isolate; }
+.wr-kit .muzio-control:not(.absolute):not(.fixed):not(.relative) { position: relative; }
+.wr-kit :is(.muzio-primary, .muzio-control[aria-pressed='true']) {
+  background: color-mix(in srgb, var(--accent-500) 12%, var(--app-menu-control-surface));
+  border-color: color-mix(in srgb, var(--accent-500) 42%, var(--app-menu-control-border));
+  color: color-mix(in srgb, var(--accent-500) 68%, var(--viewer-theme-text));
+}
+.wr-kit .muzio-danger {
+  background: color-mix(in srgb, #ef4444 16%, var(--app-menu-control-surface));
+  border-color: color-mix(in srgb, #ef4444 42%, var(--app-menu-control-border));
+  color: color-mix(in srgb, #ef4444 78%, var(--viewer-theme-text));
+}
+.wr-kit :is(.muzio-dialog, .muzio-popover, .muzio-sidebar, .muzio-drawer, .muzio-search) :is(input:not([type='range']):not([type='checkbox']):not([type='color']), select, textarea) {
+  border: 1px solid var(--app-menu-control-border);
+  border-radius: 8px;
+  background: var(--app-menu-control-surface);
+  color: var(--viewer-theme-text);
+}
+.wr-kit :is(input, textarea)::placeholder { color: rgb(var(--muted)); }
+.wr-kit select option { background: rgb(var(--surface)); color: rgb(var(--foreground)); }
+.wr-kit :is(.muzio-player-page, .muzio-video-page) {
+  background-color: var(--viewer-theme-bg);
+  background-image: var(--viewer-theme-texture);
+  background-size: var(--viewer-theme-texture-size);
+}
+.wr-kit .muzio-player-page .text-white { color: var(--viewer-theme-text); }
+.wr-kit :is(.muzio-dialog, .muzio-popover, .muzio-drawer, .muzio-player-page) [class*='text-white/'] {
+  color: rgb(var(--muted));
+}
+.wr-kit :is(.muzio-dialog, .muzio-popover, .muzio-drawer) .text-white { color: var(--viewer-theme-text); }
+.wr-kit :is(.muzio-panel, .muzio-dialog, .muzio-drawer, .muzio-popover) [class*='border-white/'] { border-color: var(--viewer-theme-border); }
+.wr-kit :is(.muzio-sidebar, .muzio-topbar) a[aria-current='page'] {
+  background: rgb(var(--accent) / .12);
+  color: color-mix(in srgb, rgb(var(--accent)) 68%, rgb(var(--foreground)));
+}
+.wr-kit :is(.muzio-sidebar, .muzio-topbar) button[aria-pressed='true'] { color: rgb(var(--accent)); }
+/* Vidstack keeps white transport glyphs legible over the picture; its menus
+   share the application's material, including menus portalled to body. */
+.wr-kit .vds-menu-items {
+  --media-menu-bg: var(--muzio-overlay-surface);
+  --media-menu-border: 1px solid var(--app-menu-border);
+  --media-menu-border-radius: 14px;
+  --media-menu-text-color: var(--viewer-theme-text);
+  --media-menu-text-secondary-color: rgb(var(--muted));
+  --media-menu-section-bg: var(--app-menu-control-surface);
+  --media-menu-item-hover-bg: rgb(var(--foreground) / .08);
+}
+.wr-kit .vds-menu-items[data-root] {
+  box-shadow: var(--app-menu-panel-shadow);
+  -webkit-backdrop-filter: var(--app-menu-filter);
+  backdrop-filter: var(--app-menu-filter);
+}
+.wr-kit :where(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid rgb(var(--accent));
+  outline-offset: 3px;
+}
+@media (hover: hover) {
+  .wr-kit :is(.muzio-control, .muzio-primary, .muzio-danger):not(:disabled):hover { filter: brightness(1.12); }
+  .wr-kit :is(.muzio-popover, .muzio-drawer, .muzio-sidebar) button:not(:disabled):hover { background-color: rgb(var(--foreground) / .08); }
+}
+@media (max-width: 639px) {
+  .wr-kit .muzio-dialog { border-radius: 22px; max-height: 82svh; overflow-y: auto; }
+  .wr-kit .muzio-dock { border-radius: 14px; }
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .wr-kit :is(.muzio-panel, .muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search) { background-color: var(--viewer-theme-bg); }
+}
+.no-glass :is([data-glass], .muzio-panel, .muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search, .muzio-control) {
+  background-color: rgb(var(--surface));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+@media (prefers-reduced-transparency: reduce) {
+  .wr-kit :is(.muzio-panel, .muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-sidebar, .muzio-search) { background-color: var(--viewer-theme-bg); backdrop-filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wr-kit *, .wr-kit *::before { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }

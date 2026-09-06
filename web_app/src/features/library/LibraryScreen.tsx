@@ -1,4 +1,6 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { MagnifyingGlass } from '@phosphor-icons/react/dist/csr/MagnifyingGlass';
 
 import type {
   LibraryFetchResult,
@@ -8,6 +10,7 @@ import type {
 import { contentKeyForLibraryItem } from '../../core/media/contentIdentity';
 import type { PlaylistRecord } from '../../core/storage/playlistRepository';
 import { CloseGlyph, SortGlyph } from '../../core/ui/AppIcons';
+import { useSearchHost } from '../../app/SearchHostContext';
 import { usePlaylists } from '../playlists/PlaylistContext';
 import { useLibraryStores } from './LibraryContext';
 import { VirtualizedLibraryList } from './VirtualizedLibraryList';
@@ -53,9 +56,10 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   const [addModalItems, setAddModalItems] = useState<LibraryItem[] | null>(null);
   const [addTargetPlaylistId, setAddTargetPlaylistId] = useState('');
   const [newPlaylistName, setNewPlaylistName] = useState('');
+  const searchHost = useSearchHost();
 
   // Auto-load on first mount of each type. Switching between music and video
-  // does not re-fetch; the shared menu refresh explicitly reloads the stores.
+  // does not re-fetch; the settings screen refresh invalidates stale stores.
   useEffect(() => {
     if (status === 'idle') {
       void load();
@@ -148,7 +152,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
               <button
                 type="button"
                 data-testid="selection-add-to-playlist"
-                className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-4 text-sm font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
+                className="muzio-control inline-flex h-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-4 text-sm font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
                 onClick={() => openAddModal(selectedItems)}
               >
                 Add to Playlist
@@ -156,7 +160,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
               <button
                 type="button"
                 aria-label="Clear selection"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-lg font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
+                className="muzio-control inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-lg font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
                 onClick={clearSelection}
               >
                 <CloseGlyph className="h-5 w-5" />
@@ -168,23 +172,29 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
             data-testid="sort-toggle"
             aria-label={`Sort ${meta.title}: ${sortLabel}`}
             title={sortLabel}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-lg font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
+            className="muzio-control inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-lg font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
             onClick={toggleSort}
           >
             <SortGlyph className="h-5 w-5" />
           </button>
         </div>
       </header>
-
-      <div className="mb-6 border-b border-zinc-300/80 pb-2 dark:border-white/20">
-        <input
-          aria-label={`Filter ${meta.title}`}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Filter"
-          className="min-w-0 flex-1 bg-transparent px-0 py-2.5 text-base outline-none placeholder:text-muted focus:text-zinc-950 dark:focus:text-foreground"
+      {searchHost === null ? (
+        <StandaloneLibrarySearch
+          title={meta.title}
+          query={query}
+          onQueryChange={setQuery}
         />
-      </div>
+      ) : (
+        createPortal(
+          <LibrarySearchControl
+            title={meta.title}
+            query={query}
+            onQueryChange={setQuery}
+          />,
+          searchHost,
+        )
+      )}
 
       <LibraryBody
         type={type}
@@ -210,6 +220,118 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
           targetPlaylistId={addTargetPlaylistId}
         />
       )}
+    </div>
+  );
+}
+
+function LibrarySearchControl({
+  onQueryChange,
+  query,
+  title,
+}: {
+  onQueryChange: (query: string) => void;
+  query: string;
+  title: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const controlRef = useRef<HTMLDivElement | null>(null);
+
+  const close = () => {
+    setOpen(false);
+    requestAnimationFrame(() => buttonRef.current?.focus());
+  };
+  useEffect(() => {
+    if (!open) return;
+    inputRef.current?.focus();
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !controlRef.current?.contains(event.target)) {
+        close();
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={controlRef} className="muzio-search relative flex items-center">
+      <button
+        ref={buttonRef}
+        type="button"
+        data-testid="search-toggle"
+        aria-label={`Search ${title}`}
+        aria-expanded={open}
+        aria-pressed={query.trim() !== ''}
+        data-active={query.trim() !== '' ? 'true' : 'false'}
+        className="muzio-control inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-lg shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 aria-pressed:text-accent dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <MagnifyingGlass aria-hidden className="h-5 w-5" weight="regular" />
+      </button>
+      {open && (
+        <div
+          role="dialog"
+          aria-label={`${title} search`}
+          data-testid="search-popover"
+          className="muzio-dialog absolute right-0 top-12 z-40 flex w-[min(19rem,calc(100vw-2rem))] items-center gap-2 rounded-2xl border border-zinc-200/70 bg-white/90 px-3 py-2 shadow-xl shadow-black/10 backdrop-blur-xl dark:border-white/10 dark:bg-surface/95"
+        >
+          <input
+            ref={inputRef}
+            aria-label={`Filter ${title}`}
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Filter"
+            className="min-w-0 flex-1 bg-transparent px-1 py-2 text-base outline-none placeholder:text-muted focus:text-zinc-950 dark:focus:text-foreground"
+          />
+          {query !== '' && (
+            <button
+              type="button"
+              aria-label={`Clear filter ${title}`}
+              className="muzio-control inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
+              onClick={() => {
+                onQueryChange('');
+                inputRef.current?.focus();
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StandaloneLibrarySearch({
+  onQueryChange,
+  query,
+  title,
+}: {
+  onQueryChange: (query: string) => void;
+  query: string;
+  title: string;
+}) {
+  return (
+    <div className="muzio-search mb-6 border-b border-zinc-300/80 pb-2 dark:border-white/20">
+      <label className="sr-only" htmlFor={`standalone-filter-${title}`}>
+        Filter {title}
+      </label>
+      <input
+        id={`standalone-filter-${title}`}
+        aria-label={`Filter ${title}`}
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+        placeholder="Filter"
+        className="min-w-0 w-full bg-transparent px-0 py-2.5 text-base outline-none placeholder:text-muted focus:text-zinc-950 dark:focus:text-foreground"
+      />
     </div>
   );
 }
@@ -334,7 +456,7 @@ function AddToPlaylistModal({
     >
       <section
         data-glass
-        className="w-full max-w-sm rounded-2xl border border-white/14 bg-[#111113]/94 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-[76px]"
+        className="muzio-dialog w-full max-w-sm rounded-2xl border border-white/14 bg-[#111113]/94 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-[76px]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
@@ -342,7 +464,7 @@ function AddToPlaylistModal({
           <button
             type="button"
             aria-label="Close add to playlist"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
+            className="muzio-control inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
             onClick={onClose}
           >
             <CloseGlyph className="h-5 w-5" />
@@ -375,7 +497,7 @@ function AddToPlaylistModal({
         <button
           type="button"
           data-testid="add-playlist-confirm"
-          className="inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
+          className="muzio-control muzio-primary inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
           onClick={onConfirm}
         >
           Confirm

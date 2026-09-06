@@ -80,13 +80,13 @@ export function PlaylistDrawer({
         data-glass
         data-no-menu-swipe
         aria-label={title}
-        className="absolute bottom-0 left-0 top-0 flex w-[min(24rem,88vw)] flex-col border-r border-white/14 bg-[#111113]/94 text-white shadow-2xl shadow-black/60 backdrop-blur-[76px] [-webkit-backdrop-filter:saturate(1.35)_blur(76px)]"
+        className="muzio-drawer absolute bottom-0 left-0 top-0 flex w-[min(24rem,88vw)] flex-col border-r border-white/14 bg-[#111113]/94 text-foreground shadow-2xl shadow-black/60 backdrop-blur-[76px] [-webkit-backdrop-filter:saturate(1.35)_blur(76px)]"
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
           <div className="min-w-0">
             <h2 className="truncate text-lg font-semibold">{title}</h2>
-            <p className="text-xs text-white/55">{items.length} items</p>
+            <p className="text-xs text-muted">{items.length} items</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {editable && (
@@ -94,7 +94,7 @@ export function PlaylistDrawer({
                 type="button"
                 data-testid="playlist-drawer-edit"
                 aria-pressed={editing}
-                className="inline-flex h-9 items-center justify-center rounded-full px-3 text-sm font-semibold text-white/65 hover:bg-white/10 hover:text-white aria-pressed:text-accent"
+                className="muzio-control inline-flex h-9 items-center justify-center rounded-full px-3 text-sm font-semibold text-muted hover:bg-white/10 hover:text-foreground aria-pressed:text-accent"
                 onClick={() => {
                   setEditing((current) => !current);
                   setSelectedKeys(new Set());
@@ -108,7 +108,7 @@ export function PlaylistDrawer({
                 type="button"
                 data-testid="playlist-drawer-delete"
                 disabled={selectedCount === 0}
-                className="inline-flex h-9 items-center justify-center rounded-full px-3 text-sm font-semibold text-accent hover:bg-accent/10 disabled:opacity-45"
+                className="muzio-control muzio-danger inline-flex h-9 items-center justify-center rounded-full px-3 text-sm font-semibold text-accent hover:bg-accent/10 disabled:opacity-45"
                 onClick={() => setConfirmDelete(true)}
               >
                 Delete
@@ -117,7 +117,7 @@ export function PlaylistDrawer({
             <button
               type="button"
               aria-label="Close playlist"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10 hover:text-white"
+              className="muzio-control inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-muted hover:bg-white/10 hover:text-foreground"
               onClick={onClose}
             >
               ×
@@ -127,7 +127,7 @@ export function PlaylistDrawer({
         {items.length === 0 ? (
           <p
             data-testid="playlist-drawer-empty"
-            className="px-5 py-5 text-sm text-white/55"
+            className="px-5 py-5 text-sm text-muted"
           >
             No items.
           </p>
@@ -148,7 +148,7 @@ export function PlaylistDrawer({
                     onPlayItem(item);
                   }}
                 >
-                  <span className="flex h-11 w-11 items-center justify-center rounded-md bg-white/10 text-lg text-white/75">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-md bg-white/10 text-lg text-muted">
                     {editing && selectedKeys.has(contentKeyForLibraryItem(item))
                       ? '✓'
                       : item.type === 'image'
@@ -161,12 +161,12 @@ export function PlaylistDrawer({
                     <span className="block truncate text-sm font-medium">
                       {item.metadata?.title || item.name}
                     </span>
-                    <span className="block truncate text-xs text-white/50">
+                    <span className="block truncate text-xs text-muted">
                       {[item.metadata?.artist, item.metadata?.album].filter(Boolean).join(' · ') || item.rootName}
                     </span>
                   </span>
                   {item.type !== 'image' && (
-                    <span className="text-xs tabular-nums text-white/45">
+                    <span className="text-xs tabular-nums text-muted">
                       {formatDuration(item.metadata?.durationSec)}
                     </span>
                   )}
@@ -177,7 +177,7 @@ export function PlaylistDrawer({
                       type="button"
                       aria-label={`Move ${item.name} up`}
                       disabled={index === 0}
-                      className="h-7 w-8 rounded text-sm hover:bg-white/10 disabled:opacity-30"
+                      className="muzio-control h-7 w-8 rounded text-sm hover:bg-white/10 disabled:opacity-30"
                       onClick={() => onMoveItem?.(contentKeyForLibraryItem(item), 'up')}
                     >
                       ↑
@@ -186,7 +186,7 @@ export function PlaylistDrawer({
                       type="button"
                       aria-label={`Move ${item.name} down`}
                       disabled={index === items.length - 1}
-                      className="h-7 w-8 rounded text-sm hover:bg-white/10 disabled:opacity-30"
+                      className="muzio-control h-7 w-8 rounded text-sm hover:bg-white/10 disabled:opacity-30"
                       onClick={() => onMoveItem?.(contentKeyForLibraryItem(item), 'down')}
                     >
                       ↓
@@ -205,16 +205,16 @@ export function PlaylistDrawer({
           >
             <section
               data-glass
-              className="w-full max-w-xs rounded-2xl border border-white/14 bg-[#111113]/96 p-4 shadow-2xl shadow-black/60 backdrop-blur-[76px]"
+              className="muzio-dialog w-full max-w-xs rounded-2xl border border-white/14 bg-[#111113]/96 p-4 text-foreground shadow-2xl shadow-black/60 backdrop-blur-[76px]"
             >
               <h3 className="text-base font-semibold">Delete Items</h3>
-              <p className="mt-2 text-sm text-white/60">
+              <p className="mt-2 text-sm text-muted">
                 Delete {selectedCount} selected items from this playlist?
               </p>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  className="inline-flex h-10 items-center justify-center rounded-full border border-white/14 px-4 text-sm font-semibold text-white/70 hover:bg-white/10"
+                  className="muzio-control inline-flex h-10 items-center justify-center rounded-full border border-white/14 px-4 text-sm font-semibold text-muted hover:bg-white/10"
                   onClick={() => setConfirmDelete(false)}
                 >
                   Cancel
@@ -222,7 +222,7 @@ export function PlaylistDrawer({
                 <button
                   type="button"
                   data-testid="playlist-drawer-confirm-delete"
-                  className="inline-flex h-10 items-center justify-center rounded-full bg-accent px-4 text-sm font-semibold text-white hover:bg-accent/85"
+                  className="muzio-control muzio-danger inline-flex h-10 items-center justify-center rounded-full bg-accent px-4 text-sm font-semibold text-white hover:bg-accent/85"
                   onClick={confirmRemoveItems}
                 >
                   Delete

@@ -95,13 +95,13 @@ export function QueueDrawer({
         data-glass
         data-allow-scroll
         data-testid="music-now-playing"
-        className="absolute bottom-0 left-0 top-0 flex w-[min(24rem,92vw)] flex-col border-r border-white/16 bg-zinc-950/78 px-5 py-5 text-white shadow-2xl shadow-black/55 backdrop-blur-[34px] sm:w-[25rem]"
+        className="muzio-drawer absolute bottom-0 left-0 top-0 flex w-[min(24rem,92vw)] flex-col border-r border-white/16 bg-zinc-950/78 px-5 py-5 text-foreground shadow-2xl shadow-black/55 backdrop-blur-[34px] sm:w-[25rem]"
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between gap-3 border-b border-white/12 pb-4">
           <div className="min-w-0">
             <h2 className="text-lg font-semibold">Queue</h2>
-            <p className="truncate text-sm text-white/60">
+            <p className="truncate text-sm text-muted">
               {current === null
                 ? 'Empty'
                 : `${currentIndex + 1}/${queue.length} · ${current.name}`}
@@ -112,7 +112,7 @@ export function QueueDrawer({
               <button
                 type="button"
                 data-testid="clear-music-queue"
-                className="rounded-full px-3 py-1 text-sm text-accent hover:bg-white/12"
+                className="muzio-control muzio-danger rounded-full px-3 py-1 text-sm text-accent hover:bg-white/12"
                 onClick={clearMusicQueue}
               >
                 Clear
@@ -121,7 +121,7 @@ export function QueueDrawer({
             <button
               type="button"
               aria-label="Close queue"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl leading-none text-white/70 hover:bg-white/12 hover:text-white"
+              className="muzio-control inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl leading-none text-muted hover:bg-white/12 hover:text-foreground"
               onClick={onClose}
             >
               <CloseGlyph className="h-5 w-5" />
@@ -130,7 +130,7 @@ export function QueueDrawer({
         </div>
 
         {queue.length === 0 ? (
-          <p className="text-sm text-white/60">Add music from the library.</p>
+          <p className="text-sm text-muted">Add music from the library.</p>
         ) : (
           <ol
             ref={listRef}
@@ -197,7 +197,7 @@ function QueueRow({
       >
         <span
           className={`text-center text-sm tabular-nums ${
-            current ? 'text-accent' : 'text-white/45'
+            current ? 'text-accent' : 'text-muted'
           }`}
         >
           {current ? <PlayGlyph className="mx-auto h-4 w-4" /> : index + 1}
@@ -206,7 +206,7 @@ function QueueRow({
           <span className="block truncate text-sm font-medium">
             {track.name}
           </span>
-          <span className="block truncate text-xs text-white/50">{detail}</span>
+          <span className="block truncate text-xs text-muted">{detail}</span>
         </span>
       </button>
     </li>

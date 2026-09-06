@@ -514,7 +514,7 @@ function LibraryRowActions({
           aria-label={`${liked ? 'Unlike' : 'Like'} ${item.name}`}
           aria-pressed={liked}
           title={liked ? 'Unlike' : 'Like'}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full text-lg text-muted hover:bg-zinc-200/70 hover:text-accent aria-pressed:text-accent dark:hover:bg-white/10"
+          className="muzio-control inline-flex h-9 w-9 items-center justify-center rounded-full text-lg text-muted hover:bg-zinc-200/70 hover:text-accent aria-pressed:text-accent dark:hover:bg-white/10"
           onClick={(e) => {
             e.stopPropagation();
             toggleLike(likeKey);
@@ -531,7 +531,7 @@ function LibraryRowActions({
           data-testid="library-item-more"
           aria-label={`More options for ${item.name}`}
           title="More"
-          className="relative hidden h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-muted hover:bg-zinc-200/70 hover:text-zinc-950 dark:hover:bg-white/10 dark:hover:text-foreground sm:inline-flex"
+          className="muzio-control relative hidden h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-muted hover:bg-zinc-200/70 hover:text-zinc-950 dark:hover:bg-white/10 dark:hover:text-foreground sm:inline-flex"
           onClick={(event) => {
             event.stopPropagation();
             toggleOptions();
@@ -547,12 +547,12 @@ function LibraryRowActions({
             data-testid="library-row-menu"
             data-row-action
             data-row-options-shell
-            className="fixed z-[80] min-w-44 rounded-xl border border-white/14 bg-[#111113]/96 p-1 text-sm text-white shadow-2xl shadow-black/40 backdrop-blur-[34px]"
+            className="muzio-popover fixed z-[80] min-w-44 rounded-xl border border-white/14 bg-[#111113]/96 p-1 text-sm text-foreground shadow-2xl shadow-black/40 backdrop-blur-[34px]"
             style={menuPosition}
           >
             <button
               type="button"
-              className="flex w-full rounded-lg px-3 py-2 text-left font-semibold hover:bg-white/10"
+              className="muzio-control flex w-full rounded-lg px-3 py-2 text-left font-semibold hover:bg-white/10"
               onClick={(event) => {
                 event.stopPropagation();
                 onOpenAddToPlaylist();

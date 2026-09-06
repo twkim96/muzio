@@ -62,7 +62,7 @@ export function ImageViewerScreen({
           type="button"
           data-testid="image-viewer-close"
           aria-label="Close image viewer"
-          className="absolute left-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full text-white/88 transition hover:bg-white/10 hover:text-white sm:left-6 sm:top-6"
+          className="muzio-control absolute left-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full text-white/88 transition hover:bg-white/10 hover:text-white sm:left-6 sm:top-6"
           onClick={close}
         >
           <DownChevronIcon />
@@ -74,7 +74,7 @@ export function ImageViewerScreen({
             data-testid="image-viewer-favorite"
             aria-label={`${likedMediaIds.includes(contentKeyForLibraryItem(image)) ? 'Remove from' : 'Add to'} favorites`}
             aria-pressed={likedMediaIds.includes(contentKeyForLibraryItem(image))}
-            className="absolute right-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full text-white/88 transition hover:bg-white/10 hover:text-white aria-pressed:text-accent sm:right-6 sm:top-6"
+            className="muzio-control absolute right-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full text-white/88 transition hover:bg-white/10 hover:text-white aria-pressed:text-accent sm:right-6 sm:top-6"
             onClick={() => toggleLike(contentKeyForLibraryItem(image))}
           >
             <LikeGlyph

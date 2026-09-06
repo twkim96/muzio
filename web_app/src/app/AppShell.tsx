@@ -3,15 +3,14 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type TouchEvent as ReactTouchEvent,
 } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { List } from '@phosphor-icons/react/dist/csr/List';
 
 import type { LibraryItem } from '../core/api/libraryClient';
-import { refreshMediaRoots, type MediaRootsResult } from '../core/api/mediaRootsClient';
 import {
   isPlayableLibraryItem,
   playbackSourceFromLibraryItem,
@@ -31,12 +30,12 @@ import {
   resolvePlaylistItemsFromIndex,
 } from '../features/playlists/smartCollections';
 import { backgroundLocationFrom } from './backgroundLocation';
+import { SearchHostProvider } from './SearchHostContext';
 
 const primaryTabs = [
   { to: '/library/music', label: 'Music', match: '/library/music' },
   { to: '/library/video', label: 'Video', match: '/library/video' },
   { to: '/library/image', label: 'Image', match: '/library/image' },
-  { to: '/settings', label: 'Setting', match: '/settings' },
 ] as const;
 
 const sideSections = {
@@ -115,8 +114,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [renameTarget, setRenameTarget] = useState<PlaylistMenuEntry | null>(null);
   const [renamePlaylistName, setRenamePlaylistName] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<PlaylistMenuEntry | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [refreshMessage, setRefreshMessage] = useState('');
+  const [searchHost, setSearchHost] = useState<HTMLElement | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const shellLocation = backgroundLocationFrom(location) ?? location;
@@ -127,6 +126,23 @@ export function AppShell({ children }: { children: ReactNode }) {
   const sidebar = section === null ? null : sideSections[section];
   const hasMobileMenu = sidebar !== null;
   const canCreatePlaylist = section === 'music' || section === 'video';
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    requestAnimationFrame(() => menuButtonRef.current?.focus());
+  };
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeDrawer();
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [drawerOpen]);
+  useEffect(() => {
+    if (section === null || isImmersiveRoute) {
+      closeDrawer();
+    }
+  }, [isImmersiveRoute, section]);
   useEffect(() => {
     for (const [mediaId, items, presentation] of [
       [activeAudioMediaId, audioItems, audioPresentation],
@@ -213,40 +229,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       }),
     ];
   }, [imageCollections, playableItemIndex, playlists.playlists, section, smartCollections]);
-  const shellStyle = {
-    '--app-sidebar-width': sidebar === null ? '0px' : '18rem',
-    '--mobile-drawer-top': hasMobileMenu ? '13.75rem' : '6.25rem',
-    '--mobile-drawer-open-top': hasMobileMenu ? '10.75rem' : '5.5rem',
-  } as CSSProperties;
   const menuSwipeHandlers = useLeftToRightMenuSwipe({
     enabled: hasMobileMenu && !isImmersiveRoute && !drawerOpen,
     onOpen: () => setDrawerOpen(true),
   });
 
-  const handleRefreshLibraries = async () => {
-    if (refreshing) return;
-    setRefreshing(true);
-    setRefreshMessage('');
-    try {
-      const result = await refreshMediaRoots();
-      if (result.kind !== 'ok') {
-        setRefreshMessage(describeRefreshError(result));
-        return;
-      }
-      await Promise.all([
-        libraryStores.audio.getState().load({ preserveResult: true }),
-        libraryStores.video.getState().load({ preserveResult: true }),
-        libraryStores.image.getState().load({ preserveResult: true }),
-      ]);
-      setRefreshMessage(
-        `Refreshed ${result.settings.itemCount ?? 0} items.${describeRefreshWarnings(
-          result.settings,
-        )}`,
-      );
-    } finally {
-      setRefreshing(false);
-    }
-  };
   const openPlaylist = (entry: PlaylistMenuEntry) => {
     setPlaylistDrawer({
       kind: entry.kind,
@@ -340,92 +327,68 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div
-      style={shellStyle}
-      className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-surface dark:text-foreground"
-    >
-      <div
-        className={
-          sidebar === null
-            ? 'min-h-screen'
-            : 'lg:grid lg:min-h-screen lg:grid-cols-[var(--app-sidebar-width)_minmax(0,1fr)]'
-        }
-      >
-        {sidebar !== null && (
-          <aside className="hidden p-3 pr-0 lg:block">
-            <nav
-              aria-label={`${sidebar.title} navigation`}
-              data-glass
-              className="sticky top-3 flex h-[calc(100vh-1.5rem)] flex-col rounded-2xl border border-zinc-200/70 bg-white/64 px-5 py-7 shadow-sm backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.055]"
-            >
-              <SidebarContent
-                canCreatePlaylist={canCreatePlaylist}
-                editing={menuEditing}
-                onCreatePlaylist={() => setCreatePlaylistOpen(true)}
-                onDeletePlaylist={setDeleteTarget}
-                onEditToggle={() => setMenuEditing((editing) => !editing)}
-                onOpenPlaylist={openPlaylist}
-                onOpenQueue={() => setQueueOpen(true)}
-                onRenamePlaylist={openRenamePlaylist}
-                onRefreshLibraries={() => void handleRefreshLibraries()}
-                playlistEntries={playlistEntries}
-                refreshBusy={refreshing}
-                refreshMessage={refreshMessage}
-                sidebar={sidebar}
+    <SearchHostProvider host={searchHost}>
+      <div className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-surface dark:text-foreground">
+        {!isImmersiveRoute && (
+          <header className="muzio-topbar app-top-fade sticky top-0 z-30 px-3 py-3 sm:px-4">
+            <div className="relative flex h-11 items-center justify-between gap-2">
+              {hasMobileMenu ? (
+                <button
+                  ref={menuButtonRef}
+                  type="button"
+                  aria-label="Open navigation"
+                  aria-expanded={drawerOpen}
+                  aria-controls="app-sidebar-drawer"
+                  data-testid="navigation-menu-button"
+                  className="muzio-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-xl shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
+                  onClick={() => setDrawerOpen((open) => !open)}
+                >
+                  <List aria-hidden className="h-5 w-5" weight="regular" />
+                </button>
+              ) : (
+                <span className="h-10 w-10 shrink-0" aria-hidden />
+              )}
+              <SegmentedTabs onNavigate={closeDrawer} />
+              <div
+                ref={setSearchHost}
+                data-testid="search-host"
+                className="flex h-10 w-10 shrink-0 items-center justify-end"
               />
-            </nav>
-          </aside>
+            </div>
+          </header>
         )}
 
-        <div className="min-w-0">
-          {!isImmersiveRoute && (
-            <header className="app-top-fade sticky top-0 z-30 px-4 py-3">
-              <div className="relative flex h-11 items-center justify-center">
-                <SegmentedTabs />
-              </div>
-            </header>
-          )}
+        {sidebar !== null && !isImmersiveRoute && drawerOpen && (
+          <SidebarDrawer
+            modalOpen={createPlaylistOpen || renameTarget !== null || deleteTarget !== null}
+            canCreatePlaylist={canCreatePlaylist}
+            editing={menuEditing}
+            onClose={closeDrawer}
+            onCreatePlaylist={() => setCreatePlaylistOpen(true)}
+            onDeletePlaylist={setDeleteTarget}
+            onEditToggle={() => setMenuEditing((editing) => !editing)}
+            onOpenPlaylist={openPlaylist}
+            onOpenQueue={() => setQueueOpen(true)}
+            onRenamePlaylist={openRenamePlaylist}
+            playlistEntries={playlistEntries}
+            sidebar={sidebar}
+          />
+        )}
 
-          {sidebar !== null && !isImmersiveRoute && (
-            <MobilePeekDrawer
-              canCreatePlaylist={canCreatePlaylist}
-              editing={menuEditing}
-              open={drawerOpen}
-              onCreatePlaylist={() => setCreatePlaylistOpen(true)}
-              onDeletePlaylist={setDeleteTarget}
-              onEditToggle={() => setMenuEditing((editing) => !editing)}
-              onOpenPlaylist={openPlaylist}
-              onOpenQueue={() => setQueueOpen(true)}
-              onRenamePlaylist={openRenamePlaylist}
-              onRefreshLibraries={() => void handleRefreshLibraries()}
-              playlistEntries={playlistEntries}
-              refreshBusy={refreshing}
-              refreshMessage={refreshMessage}
-              sidebar={sidebar}
-              setOpen={setDrawerOpen}
-            />
-          )}
-
-          <main
-            data-testid="app-main"
-            onPointerCancel={menuSwipeHandlers.onPointerCancel}
-            onPointerDown={menuSwipeHandlers.onPointerDown}
-            onPointerMove={menuSwipeHandlers.onPointerMove}
-            onPointerUp={menuSwipeHandlers.onPointerUp}
-            onTouchCancel={menuSwipeHandlers.onTouchCancel}
-            onTouchEnd={menuSwipeHandlers.onTouchEnd}
-            onTouchMove={menuSwipeHandlers.onTouchMove}
-            onTouchStart={menuSwipeHandlers.onTouchStart}
-            className={
-              isImmersiveRoute
-                ? 'min-h-screen'
-                : 'min-h-[calc(100vh-4.25rem)] touch-pan-y pb-24'
-            }
-          >
-            {children}
-          </main>
-        </div>
-      </div>
+        <main
+          data-testid="app-main"
+          onPointerCancel={menuSwipeHandlers.onPointerCancel}
+          onPointerDown={menuSwipeHandlers.onPointerDown}
+          onPointerMove={menuSwipeHandlers.onPointerMove}
+          onPointerUp={menuSwipeHandlers.onPointerUp}
+          onTouchCancel={menuSwipeHandlers.onTouchCancel}
+          onTouchEnd={menuSwipeHandlers.onTouchEnd}
+          onTouchMove={menuSwipeHandlers.onTouchMove}
+          onTouchStart={menuSwipeHandlers.onTouchStart}
+          className={isImmersiveRoute ? 'min-h-screen' : 'min-h-screen touch-pan-y pb-24'}
+        >
+          {children}
+        </main>
       <QueueDrawer open={queueOpen} onClose={() => setQueueOpen(false)} />
       <PlaylistDrawer
         editable={playlistDrawer?.kind === 'custom'}
@@ -465,7 +428,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           onConfirm={submitDeletePlaylist}
         />
       )}
-    </div>
+      </div>
+    </SearchHostProvider>
   );
 }
 
@@ -473,143 +437,134 @@ function itemsFromLibraryState(state: LibraryState): LibraryItem[] {
   return state.result?.kind === 'ok' ? state.result.items : EMPTY_LIBRARY_ITEMS;
 }
 
-function MobilePeekDrawer({
+function SidebarDrawer({
+  modalOpen,
   canCreatePlaylist,
   editing,
-  open,
+  onClose,
   onCreatePlaylist,
   onDeletePlaylist,
   onEditToggle,
   onOpenPlaylist,
   onOpenQueue,
   onRenamePlaylist,
-  onRefreshLibraries,
   playlistEntries,
-  refreshBusy,
-  refreshMessage,
   sidebar,
-  setOpen,
 }: {
+  modalOpen: boolean;
   canCreatePlaylist: boolean;
   editing: boolean;
-  open: boolean;
+  onClose: () => void;
   onCreatePlaylist: () => void;
   onDeletePlaylist: (entry: PlaylistMenuEntry) => void;
   onEditToggle: () => void;
   onOpenPlaylist: (entry: PlaylistMenuEntry) => void;
   onOpenQueue: () => void;
   onRenamePlaylist: (entry: PlaylistMenuEntry) => void;
-  onRefreshLibraries: () => void;
   playlistEntries: PlaylistMenuEntry[];
-  refreshBusy: boolean;
-  refreshMessage: string;
   sidebar: (typeof sideSections)[keyof typeof sideSections];
-  setOpen: (open: boolean) => void;
 }) {
-  const dragStartXRef = useRef<number | null>(null);
+  const drawerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const drawer = drawerRef.current;
+    if (!drawer || modalOpen) return;
+    const controls = () => Array.from(drawer.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled)',
+    ));
+    drawer.querySelector<HTMLElement>('[aria-label="Close navigation"]')?.focus();
+    const trapFocus = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      const items = controls();
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && (document.activeElement === first || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', trapFocus);
+    return () => document.removeEventListener('keydown', trapFocus);
+  }, [modalOpen]);
 
   return (
-    <div className="lg:hidden">
-      {!open && (
-        <button
-          type="button"
-          data-testid="mobile-menu-peek"
-          aria-label="Open navigation"
-          className="fixed left-0 top-[var(--mobile-drawer-top)] z-40 h-28 w-5 rounded-r-2xl border-y border-r border-zinc-200/70 bg-white/72 shadow-lg shadow-black/10 backdrop-blur-xl transition hover:w-7 dark:border-white/10 dark:bg-white/[0.09]"
-          onClick={() => setOpen(true)}
-          onPointerDown={(event) => {
-            dragStartXRef.current = event.clientX;
-            event.currentTarget.setPointerCapture?.(event.pointerId);
-          }}
-          onPointerMove={(event) => {
-            const startX = dragStartXRef.current;
-            if (startX === null) return;
-            if (event.clientX - startX > 12) {
-              setOpen(true);
-              dragStartXRef.current = null;
-            }
-          }}
-          onPointerUp={() => {
-            dragStartXRef.current = null;
-          }}
-        />
-      )}
-      {open && (
-        <div
-          className="fixed inset-0 z-50 bg-black/35"
-          role="presentation"
-          onClick={() => {
-            setOpen(false);
-            if (editing) onEditToggle();
-          }}
-        >
-          <nav
-            aria-label="Mobile navigation"
-            data-testid="mobile-navigation"
-            data-glass
-            className="absolute bottom-2 left-2 top-[var(--mobile-drawer-open-top)] flex w-[min(20rem,84vw)] flex-col overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/88 px-5 py-5 text-zinc-950 shadow-2xl shadow-black/20 backdrop-blur-xl dark:border-white/10 dark:bg-surface/94 dark:text-foreground"
-            onClick={(event) => event.stopPropagation()}
+    <div
+      className="fixed inset-0 z-50 bg-black/35"
+      role="presentation"
+      onClick={() => {
+        onClose();
+        if (editing) onEditToggle();
+      }}
+    >
+      <nav
+        id="app-sidebar-drawer"
+        ref={drawerRef}
+        aria-label="Navigation"
+        aria-modal="true"
+        data-testid="mobile-navigation"
+        data-glass
+        className="muzio-sidebar absolute inset-y-2 left-2 flex w-[min(20rem,84vw)] flex-col overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/88 px-5 py-5 text-zinc-950 shadow-2xl shadow-black/20 backdrop-blur-xl dark:border-white/10 dark:bg-surface/94 dark:text-foreground"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
+          <span
+            data-testid="mobile-menu-title"
+            className="min-w-0 flex-1 truncate text-left text-2xl font-semibold"
           >
-            <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
-              <span
-                data-testid="mobile-menu-title"
-                className="min-w-0 flex-1 truncate text-left text-2xl font-semibold"
+            {sidebar.title}
+          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            {canCreatePlaylist && (
+              <button
+                type="button"
+                data-testid="playlist-create-open"
+                aria-label="Create playlist"
+                className="muzio-control inline-flex h-10 w-10 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
+                onClick={onCreatePlaylist}
               >
-                {sidebar.title}
-              </span>
-              <div className="flex shrink-0 items-center gap-2">
-                {canCreatePlaylist && (
-                  <button
-                    type="button"
-                    data-testid="playlist-create-open"
-                    aria-label="Create playlist"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
-                    onClick={onCreatePlaylist}
-                  >
-                    +
-                  </button>
-                )}
-                {canCreatePlaylist && (
-                  <button
-                    type="button"
-                    data-testid="playlist-edit-toggle"
-                    aria-pressed={editing}
-                    className="inline-flex h-10 items-center justify-center rounded-full px-3 text-sm font-semibold text-muted hover:bg-zinc-200/70 aria-pressed:text-accent dark:hover:bg-white/10"
-                    onClick={onEditToggle}
-                  >
-                    Edit
-                  </button>
-                )}
-                <button
-                  type="button"
-                  aria-label="Close navigation"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
-                  onClick={() => setOpen(false)}
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-            <SidebarContent
-              canCreatePlaylist={canCreatePlaylist}
-              editing={editing}
-              onCreatePlaylist={onCreatePlaylist}
-              onDeletePlaylist={onDeletePlaylist}
-              onNavigate={() => setOpen(false)}
-              onEditToggle={onEditToggle}
-              onOpenPlaylist={onOpenPlaylist}
-              onOpenQueue={onOpenQueue}
-              onRenamePlaylist={onRenamePlaylist}
-              onRefreshLibraries={onRefreshLibraries}
-              playlistEntries={playlistEntries}
-              refreshBusy={refreshBusy}
-              refreshMessage={refreshMessage}
-              sidebar={sidebar}
-              showTitle={false}
-            />
-          </nav>
+                +
+              </button>
+            )}
+            {canCreatePlaylist && (
+              <button
+                type="button"
+                data-testid="playlist-edit-toggle"
+                aria-pressed={editing}
+                className="muzio-control inline-flex h-10 items-center justify-center rounded-full px-3 text-sm font-semibold text-muted hover:bg-zinc-200/70 aria-pressed:text-accent dark:hover:bg-white/10"
+                onClick={onEditToggle}
+              >
+                Edit
+              </button>
+            )}
+            <button
+              type="button"
+              aria-label="Close navigation"
+              className="muzio-control inline-flex h-10 w-10 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
+              onClick={onClose}
+            >
+              ×
+            </button>
+          </div>
         </div>
-      )}
+        <SidebarContent
+          canCreatePlaylist={canCreatePlaylist}
+          editing={editing}
+          onCreatePlaylist={onCreatePlaylist}
+          onDeletePlaylist={onDeletePlaylist}
+          onNavigate={onClose}
+          onEditToggle={onEditToggle}
+          onOpenPlaylist={onOpenPlaylist}
+          onOpenQueue={onOpenQueue}
+          onRenamePlaylist={onRenamePlaylist}
+          playlistEntries={playlistEntries}
+          sidebar={sidebar}
+          showTitle={false}
+        />
+      </nav>
     </div>
   );
 }
@@ -724,7 +679,7 @@ function canScrollUp(target: Element): boolean {
   return window.scrollY > 0 || document.documentElement.scrollTop > 0;
 }
 
-function SegmentedTabs() {
+function SegmentedTabs({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
   const activeLocation = backgroundLocationFrom(location) ?? location;
   return (
@@ -739,10 +694,11 @@ function SegmentedTabs() {
           <NavLink
             key={tab.to}
             to={tab.to}
+            onClick={onNavigate}
             className={
               active
-                ? 'rounded-full bg-white/62 px-5 py-2 text-sm font-semibold text-zinc-950 shadow-sm dark:bg-white/[0.10] dark:text-foreground'
-                : 'rounded-full px-5 py-2 text-sm font-semibold text-zinc-500 hover:text-zinc-950 dark:text-muted dark:hover:text-foreground'
+                ? 'rounded-full bg-white/62 px-3 py-2 text-sm font-semibold text-zinc-950 shadow-sm sm:px-5 dark:bg-white/[0.10] dark:text-foreground'
+                : 'rounded-full px-3 py-2 text-sm font-semibold text-zinc-500 hover:text-zinc-950 sm:px-5 dark:text-muted dark:hover:text-foreground'
             }
           >
             {tab.label}
@@ -763,10 +719,7 @@ function SidebarContent({
   onOpenPlaylist,
   onOpenQueue,
   onRenamePlaylist,
-  onRefreshLibraries,
   playlistEntries,
-  refreshBusy,
-  refreshMessage,
   showTitle = true,
   sidebar,
 }: {
@@ -779,10 +732,7 @@ function SidebarContent({
   onOpenPlaylist: (entry: PlaylistMenuEntry) => void;
   onOpenQueue: () => void;
   onRenamePlaylist: (entry: PlaylistMenuEntry) => void;
-  onRefreshLibraries: () => void;
   playlistEntries: PlaylistMenuEntry[];
-  refreshBusy: boolean;
-  refreshMessage: string;
   showTitle?: boolean;
   sidebar: (typeof sideSections)[keyof typeof sideSections];
 }) {
@@ -809,7 +759,7 @@ function SidebarContent({
                 type="button"
                 data-testid="playlist-create-open"
                 aria-label="Create playlist"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
+                className="muzio-control inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-muted hover:bg-zinc-200/70 dark:hover:bg-white/10"
                 onClick={onCreatePlaylist}
               >
                 +
@@ -820,7 +770,7 @@ function SidebarContent({
                 type="button"
                 data-testid="playlist-edit-toggle"
                 aria-pressed={editing}
-                className="inline-flex h-9 items-center justify-center rounded-full px-3 text-sm font-semibold text-muted hover:bg-zinc-200/70 aria-pressed:text-accent dark:hover:bg-white/10"
+                className="muzio-control inline-flex h-9 items-center justify-center rounded-full px-3 text-sm font-semibold text-muted hover:bg-zinc-200/70 aria-pressed:text-accent dark:hover:bg-white/10"
                 onClick={onEditToggle}
               >
                 Edit
@@ -902,32 +852,22 @@ function SidebarContent({
         </div>
       </div>
       <div className="mt-auto flex shrink-0 flex-col items-stretch gap-2 border-t border-zinc-200/70 pt-3 dark:border-white/10">
-        {refreshMessage !== '' && (
-          <span
-            data-testid="menu-refresh-status"
-            className="max-w-full text-right text-xs text-muted"
-          >
-            {refreshMessage}
-          </span>
-        )}
         <div
           data-testid="menu-bottom-actions"
           className="grid grid-cols-2 gap-2"
         >
-          <button
-            type="button"
-            data-testid="menu-refresh-button"
-            disabled={refreshBusy}
-            aria-label="Refresh libraries"
-            className="inline-flex h-9 min-w-0 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-3 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.07] dark:text-foreground dark:hover:bg-white/10"
-            onClick={onRefreshLibraries}
+          <Link
+            to="/settings"
+            onClick={onNavigate}
+            data-testid="menu-settings-button"
+            className="muzio-control inline-flex h-9 min-w-0 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-3 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:text-foreground dark:hover:bg-white/10"
           >
-            {refreshBusy ? 'Refreshing...' : 'Refresh'}
-          </button>
+            Setting
+          </Link>
           <button
             type="button"
             data-testid="menu-queue-button"
-            className="inline-flex h-9 min-w-0 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-3 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:text-foreground dark:hover:bg-white/10"
+            className="muzio-control inline-flex h-9 min-w-0 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-3 text-sm font-semibold text-zinc-800 shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:text-foreground dark:hover:bg-white/10"
             onClick={handleOpenQueue}
           >
             Queue
@@ -957,7 +897,7 @@ function CreatePlaylistModal({
     >
       <section
         data-glass
-        className="w-full max-w-sm rounded-2xl border border-white/14 bg-[#111113]/94 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-[76px]"
+        className="muzio-dialog w-full max-w-sm rounded-2xl border border-white/14 bg-[#111113]/94 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-[76px]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
@@ -965,7 +905,7 @@ function CreatePlaylistModal({
           <button
             type="button"
             aria-label="Close create playlist"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
+            className="muzio-control inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
             onClick={onClose}
           >
             ×
@@ -981,7 +921,7 @@ function CreatePlaylistModal({
         <button
           type="button"
           data-testid="playlist-create-submit"
-          className="inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
+          className="muzio-control muzio-primary inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
           onClick={onSubmit}
         >
           Create
@@ -1014,7 +954,7 @@ function PlaylistNameModal({
     >
       <section
         data-glass
-        className="w-full max-w-sm rounded-2xl border border-white/14 bg-[#111113]/94 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-[76px]"
+        className="muzio-dialog w-full max-w-sm rounded-2xl border border-white/14 bg-[#111113]/94 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-[76px]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
@@ -1022,7 +962,7 @@ function PlaylistNameModal({
           <button
             type="button"
             aria-label={`Close ${title}`}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
+            className="muzio-control inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
             onClick={onClose}
           >
             ×
@@ -1038,7 +978,7 @@ function PlaylistNameModal({
         <button
           type="button"
           data-testid="playlist-rename-submit"
-          className="inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
+          className="muzio-control muzio-primary inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
           onClick={onSubmit}
         >
           {submitLabel}
@@ -1069,7 +1009,7 @@ function ConfirmModal({
     >
       <section
         data-glass
-        className="w-full max-w-sm rounded-2xl border border-white/14 bg-[#111113]/94 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-[76px]"
+        className="muzio-dialog w-full max-w-sm rounded-2xl border border-white/14 bg-[#111113]/94 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-[76px]"
         onClick={(event) => event.stopPropagation()}
       >
         <h2 className="text-lg font-semibold">{title}</h2>
@@ -1077,7 +1017,7 @@ function ConfirmModal({
         <div className="mt-4 grid grid-cols-2 gap-2">
           <button
             type="button"
-            className="inline-flex h-10 items-center justify-center rounded-full border border-white/14 px-4 text-sm font-semibold text-white/75 hover:bg-white/10"
+            className="muzio-control inline-flex h-10 items-center justify-center rounded-full border border-white/14 px-4 text-sm font-semibold text-white/75 hover:bg-white/10"
             onClick={onClose}
           >
             Cancel
@@ -1085,7 +1025,7 @@ function ConfirmModal({
           <button
             type="button"
             data-testid="confirm-submit"
-            className="inline-flex h-10 items-center justify-center rounded-full bg-accent px-4 text-sm font-semibold text-white hover:bg-accent/85"
+            className="muzio-control muzio-danger inline-flex h-10 items-center justify-center rounded-full bg-accent px-4 text-sm font-semibold text-white hover:bg-accent/85"
             onClick={onConfirm}
           >
             {confirmLabel}
@@ -1094,33 +1034,6 @@ function ConfirmModal({
       </section>
     </div>
   );
-}
-
-function describeRefreshError(result: Exclude<MediaRootsResult, { kind: 'ok' }>) {
-  if (result.kind === 'unreachable') {
-    return `Refresh failed: ${result.message}`;
-  }
-  if (result.message && result.message.trim() !== '') {
-    return `Refresh failed: HTTP ${result.statusCode} ${result.message.trim()}`;
-  }
-  return `Refresh failed: HTTP ${result.statusCode}`;
-}
-
-function describeRefreshWarnings(
-  settings: Extract<MediaRootsResult, { kind: 'ok' }>['settings'],
-): string {
-  const warnings: string[] = [];
-  if (settings.degradedRoots.length > 0) {
-    warnings.push(
-      `Kept last known files for ${settings.degradedRoots
-        .map((root) => `${root.path} (${root.error})`)
-        .join('; ')}.`,
-    );
-  }
-  if (settings.index.lastError) {
-    warnings.push(`Library index write is delayed: ${settings.index.lastError}`);
-  }
-  return warnings.length === 0 ? '' : ` ${warnings.join(' ')}`;
 }
 
 function sectionForPath(pathname: string): 'music' | 'video' | 'image' | 'settings' | null {

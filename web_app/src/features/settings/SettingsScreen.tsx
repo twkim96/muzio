@@ -251,10 +251,10 @@ export function SettingsScreen() {
         </p>
       </header>
 
-      <div className="grid max-w-5xl">
+      <div className="grid max-w-5xl gap-4">
         <section
           id="appearance"
-          className="border-t border-zinc-200/70 py-6 dark:border-white/10"
+          className="muzio-panel border-t border-zinc-200/70 px-4 py-6 dark:border-white/10 sm:px-6"
         >
           <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -276,7 +276,7 @@ export function SettingsScreen() {
                 type="button"
                 data-testid="theme-reset"
                 disabled={themeStatus === 'loading' || themeStatus === 'saving'}
-                className="inline-flex h-9 items-center justify-center rounded-full border border-zinc-300 px-4 text-sm font-semibold text-foreground hover:bg-zinc-200/70 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10"
+                className="muzio-control inline-flex h-9 items-center justify-center rounded-full border border-zinc-300 px-4 text-sm font-semibold text-foreground hover:bg-zinc-200/70 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10"
                 onClick={() => void resetTheme()}
               >
                 Reset
@@ -295,9 +295,9 @@ export function SettingsScreen() {
                   aria-checked={active}
                   data-testid={`theme-option-${option.value}`}
                   className={[
-                    'rounded-xl border p-4 text-left transition',
+                    'muzio-control rounded-xl border p-4 text-left transition',
                     active
-                      ? 'border-accent bg-accent/10 ring-2 ring-accent/30'
+                      ? 'muzio-primary border-accent bg-accent/10 ring-2 ring-accent/30'
                       : 'border-zinc-200 bg-transparent hover:border-zinc-300 dark:border-white/10 dark:hover:border-white/20',
                   ].join(' ')}
                   onClick={() => updateThemePreset(option.settings)}
@@ -348,7 +348,7 @@ export function SettingsScreen() {
 
         <section
           id="backend-status"
-          className="border-t border-zinc-200/70 py-6 dark:border-white/10"
+          className="muzio-panel border-t border-zinc-200/70 px-4 py-6 dark:border-white/10 sm:px-6"
         >
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -363,7 +363,7 @@ export function SettingsScreen() {
               type="button"
               data-testid="test-button"
               disabled={backend.isProbing}
-              className="inline-flex h-10 items-center justify-center rounded-full bg-accent px-5 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
+              className="muzio-control muzio-primary inline-flex h-10 items-center justify-center rounded-full bg-accent px-5 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
               onClick={() => backend.testConnection()}
             >
               {backend.isProbing ? 'Testing...' : 'Test'}
@@ -382,7 +382,7 @@ export function SettingsScreen() {
 
         <section
           id="media-folders"
-          className="border-t border-zinc-200/70 py-6 dark:border-white/10"
+          className="muzio-panel border-t border-zinc-200/70 px-4 py-6 dark:border-white/10 sm:px-6"
         >
           <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -397,7 +397,7 @@ export function SettingsScreen() {
                 type="button"
                 data-testid="refresh-media-roots"
                 disabled={mediaRootsBusy}
-                className="inline-flex h-10 items-center justify-center rounded-full border border-zinc-300 px-5 text-sm font-semibold text-foreground shadow-sm hover:bg-zinc-200/70 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10"
+                className="muzio-control inline-flex h-10 items-center justify-center rounded-full border border-zinc-300 px-5 text-sm font-semibold text-foreground shadow-sm hover:bg-zinc-200/70 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/10"
                 onClick={() => void refreshCurrentMediaRoots()}
               >
                 {mediaRootsStatus === 'refreshing' ? 'Refreshing...' : 'Refresh'}
@@ -406,7 +406,7 @@ export function SettingsScreen() {
                 type="button"
                 data-testid="save-media-roots"
                 disabled={mediaRootsBusy}
-                className="inline-flex h-10 items-center justify-center rounded-full bg-accent px-5 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
+                className="muzio-control muzio-primary inline-flex h-10 items-center justify-center rounded-full bg-accent px-5 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
                 onClick={() => void saveMediaRoots()}
               >
                 {mediaRootsStatus === 'saving' ? 'Saving...' : 'Save'}
@@ -458,7 +458,7 @@ export function SettingsScreen() {
 
         <section
           id="runtime-notes"
-          className="border-t border-zinc-200/70 py-6 dark:border-white/10"
+          className="muzio-panel border-t border-zinc-200/70 px-4 py-6 dark:border-white/10 sm:px-6"
         >
           <div className="mb-5">
             <h2 className="text-2xl font-semibold">Runtime Notes</h2>
@@ -505,7 +505,7 @@ function ThemeColorInput({
   };
 
   return (
-    <label className="rounded-xl border border-zinc-200/70 p-4 dark:border-white/10">
+    <label className="muzio-panel rounded-xl border border-zinc-200/70 p-4 dark:border-white/10">
       <span className="flex items-start justify-between gap-4">
         <span>
           <span className="block text-base font-semibold">{label}</span>
@@ -562,13 +562,13 @@ function RootListEditor({
     onChange(visibleRoots.filter((_, current) => current !== index));
   };
   return (
-    <div>
+    <div className="muzio-panel p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h3 className="text-lg font-semibold">{label}</h3>
         <button
           type="button"
           data-testid={`${testPrefix}-add`}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 text-xl font-semibold hover:bg-zinc-200/70 dark:border-white/10 dark:hover:bg-white/10"
+          className="muzio-control inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 text-xl font-semibold hover:bg-zinc-200/70 dark:border-white/10 dark:hover:bg-white/10"
           onClick={() => onChange([...visibleRoots, ''])}
         >
           +
@@ -588,7 +588,7 @@ function RootListEditor({
             <button
               type="button"
               aria-label={`Remove ${label} ${index + 1}`}
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted hover:bg-zinc-200/70 hover:text-zinc-950 dark:hover:bg-white/10 dark:hover:text-foreground"
+              className="muzio-control inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted hover:bg-zinc-200/70 hover:text-zinc-950 dark:hover:bg-white/10 dark:hover:text-foreground"
               onClick={() => removeRoot(index)}
             >
               ×
@@ -602,7 +602,7 @@ function RootListEditor({
 
 function RuntimeItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border-t border-zinc-200/70 py-4 dark:border-white/10">
+    <div className="muzio-panel border-t border-zinc-200/70 px-4 py-4 dark:border-white/10">
       <dt className="text-xs font-semibold uppercase tracking-wide text-muted">
         {label}
       </dt>
