@@ -736,8 +736,8 @@ function SegmentedTabs({ onNavigate }: { onNavigate?: () => void }) {
             onClick={onNavigate}
             className={
               active
-                ? 'rounded-full bg-white/62 px-3 py-2 text-sm font-semibold text-zinc-950 shadow-sm sm:px-5 dark:bg-white/[0.10] dark:text-foreground'
-                : 'rounded-full px-3 py-2 text-sm font-semibold text-zinc-500 hover:text-zinc-950 sm:px-5 dark:text-muted dark:hover:text-foreground'
+                ? 'rounded-full bg-white/62 px-3 py-2 max-[359px]:px-2.5 text-base font-medium leading-5 text-zinc-950 shadow-sm sm:px-5 dark:bg-white/[0.10] dark:text-foreground'
+                : 'rounded-full px-3 py-2 max-[359px]:px-2.5 text-base font-medium leading-5 text-zinc-500 hover:text-zinc-950 sm:px-5 dark:text-muted dark:hover:text-foreground'
             }
           >
             {tab.label}
