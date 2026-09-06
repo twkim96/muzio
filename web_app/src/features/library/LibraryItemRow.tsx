@@ -347,27 +347,25 @@ function LibraryItemRowComponent({
             <LibraryThumbnail item={item} />
             <div className="min-w-0">
               <p
+                data-testid="audio-row-title"
                 className="truncate text-base font-medium tracking-normal text-zinc-950 dark:text-foreground"
-                title={item.relativePath}
+                title={displayTitle}
               >
-                {directory && <span className="text-muted">{directory}</span>}
                 {displayTitle}
               </p>
               <p
                 data-testid="audio-mobile-metadata"
-                className="truncate text-sm text-muted xl:hidden"
+                className="flex min-w-0 items-baseline gap-1 text-sm text-muted xl:hidden"
               >
                 {metadata?.artist && (
                   <>
-                    <span>{metadata.artist}</span>
-                    <span aria-hidden className="text-[10px] text-muted/40"> | </span>
+                    <span className="min-w-0 truncate" title={metadata.artist}>{metadata.artist}</span>
+                    <span aria-hidden className="shrink-0 text-[10px] text-muted/40"> | </span>
                   </>
                 )}
-                <span>{formatSize(item.sizeBytes)}</span>
-                <span aria-hidden className="text-[10px] text-muted/40"> | </span>
-                <span>{formatModified(item.modifiedAt)}</span>
-                <span aria-hidden className="text-[10px] text-muted/40"> | </span>
-                <span>{item.rootName}</span>
+                <span className="shrink-0">{formatSize(item.sizeBytes)}</span>
+                <span aria-hidden className="shrink-0 text-[10px] text-muted/40"> | </span>
+                <span className="min-w-0 max-w-[45%] truncate" title={item.rootName}>{item.rootName}</span>
               </p>
             </div>
             <p className="library-column hidden min-w-0 text-left text-sm text-muted xl:block">
@@ -387,7 +385,7 @@ function LibraryItemRowComponent({
         {item.type === 'audio' && (
           <div
             data-row-options-shell
-            className="relative flex w-[5.75rem] shrink-0 items-center justify-end gap-0.5 sm:w-[6.75rem]"
+            className="relative flex w-9 shrink-0 items-center justify-end gap-0.5 sm:w-[6.75rem]"
           >
             <LibraryRowActions
               item={item}

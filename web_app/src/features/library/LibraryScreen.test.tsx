@@ -260,7 +260,8 @@ describe('LibraryScreen', () => {
       expect(screen.getAllByTestId('library-item')).toHaveLength(2);
     });
     expect(screen.getByText('song.mp3')).toBeInTheDocument();
-    expect(screen.getByText('Album/')).toBeInTheDocument();
+    expect(screen.queryByText('Album/')).not.toBeInTheDocument();
+    expect(screen.getByText('track.mp3')).toBeInTheDocument();
   });
 
   test('sorts by column text in both directions and preserves filtering', async () => {
@@ -547,8 +548,10 @@ describe('LibraryScreen', () => {
       );
     });
     expect(screen.getByTestId('library-item')).toHaveStyle({ height: '54px' });
+    expect(screen.getByTestId('audio-row-title')).toHaveTextContent(/^Song$/);
+    expect(screen.getByTestId('audio-mobile-metadata')).not.toHaveTextContent('2026-08-10');
     expect(screen.getByTestId('audio-mobile-metadata')).toHaveTextContent(
-      'Artist | 1.0 KB | 2026-08-10 | music',
+      'Artist | 1.0 KB | music',
     );
     expect(
       screen.getByTestId('audio-mobile-metadata'),
@@ -556,6 +559,20 @@ describe('LibraryScreen', () => {
     expect(
       screen.getByTestId('audio-mobile-metadata'),
     ).not.toHaveTextContent('2m');
+  });
+
+  test('shows the filename without parent directories when a song has no title metadata', async () => {
+    renderScreen('audio', {
+      kind: 'ok',
+      items: [{
+        id: 'untagged', type: 'audio', rootName: 'Phone',
+        relativePath: 'EHGC/EHG collection 2/Track.mp3', name: 'Track.mp3',
+        sizeBytes: 1024, modifiedAt: '2026-08-10T00:00:00Z',
+      }],
+    });
+
+    expect(await screen.findByTestId('audio-row-title')).toHaveTextContent(/^Track\.mp3$/);
+    expect(screen.getByTestId('audio-mobile-metadata')).toHaveTextContent(/^1\.0 KB \| Phone$/);
   });
 
   test('uses artist, size, modified date, and library columns on desktop', async () => {
