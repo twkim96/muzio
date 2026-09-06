@@ -336,6 +336,27 @@ html.wr-kit {
   .muzio-glass-action:not(:disabled):hover, .muzio-modal-close:hover { opacity: .78; }
 }
 html:has(.muzio-side-sheet, .muzio-modal-backdrop) { overflow: hidden; }
+/* Match Web Reader's wider desktop filter sheet and compact facet tags. */
+@media (min-width: 640px) {
+  .wr-kit [data-testid='library-filter-panel'] .muzio-modal-sheet {
+    width: min(36rem, calc(100% - 40px));
+    max-height: min(82dvh, calc(100% - 40px));
+  }
+  [data-testid='library-filter-panel'] .muzio-modal-body { padding: 16px; }
+  [data-testid='library-filter-panel'] .muzio-modal-body .muzio-glass-action {
+    min-height: 32px;
+    padding: 6px 12px;
+    gap: 6px;
+    font-size: 12px;
+  }
+  [data-testid='library-filter-panel'] [aria-label='Sorting'] .grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+  [data-testid='library-filter-panel'] [aria-label='Sorting'] .grid .muzio-glass-action {
+    min-height: 48px;
+    padding: 8px 4px;
+  }
+}
 @media (max-width: 639px) {
   .muzio-sheet-title, .muzio-sheet-header-action, .muzio-selection-action {
     zoom: .8;

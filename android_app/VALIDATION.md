@@ -121,3 +121,20 @@ SHA-256: `03834f3f93339756abb1c004bc0f8283e716ae155e1694583710e5d3118433ec`
 - Artifact: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc8.apk`
 - Size: 23,157,603 bytes.
 - SHA-256: `32d657ec20bcd532c4336e39dd23e2503d679f52e1a80654096240f3fdd2e0fa`
+
+
+## Shared web release and filter layout — 2026-09-07 / versionCode 9
+
+- Web release now serves 1.4.5-r4. Production HTTPS health and served JS/CSS
+  byte parity passed. Local-folder settings remain hidden in the web browser.
+- Desktop filter: 576 × 700px at 1440 × 1000, six sort columns, compact tags,
+  body height/scrollHeight both 556px. Mobile retains 372px width at 412px and
+  three sort columns. Artist pagination, tag search and sort synchronization
+  were checked in the deployed web UI.
+- Settings removes the empty filter host: topbar width 396.19 → 352.19px,
+  search retained; returning to Music restores the filter button.
+- Affected App suite: 32 tests passed. TypeScript/Vite/web deployment and final
+  Android APK assembly passed. Samsung update install and Activity launch
+  succeeded; package reports versionCode 9 / 1.4.5-web-dev.
+- Artifact: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc9.apk`
+- SHA-256: `802a0c04ddedeb1dc43454aed08d0f1307c7030c4cc0b047d8ace503f8e83d2d`

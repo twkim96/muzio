@@ -142,6 +142,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isPlayerRoute = shellLocation.pathname.startsWith('/player');
   const isImageViewerRoute = shellLocation.pathname.startsWith('/image/');
   const isImmersiveRoute = isPlayerRoute || isImageViewerRoute;
+  const hasLibraryFilter = shellLocation.pathname.startsWith('/library/');
   const section = sectionForPath(shellLocation.pathname);
   const sidebar = section === null ? null : sideSections[section];
   const hasMobileMenu = sidebar !== null;
@@ -415,7 +416,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     <span className="h-10 w-10 shrink-0" aria-hidden />
                   )}
                   <SegmentedTabs onNavigate={closeDrawer} />
-                  <div ref={setFilterHost} data-testid="filter-host" className="flex h-10 w-10 shrink-0 items-center" />
+                  {hasLibraryFilter && <div ref={setFilterHost} data-testid="filter-host" className="flex h-10 w-10 shrink-0 items-center" />}
                   <div
                     ref={setSearchHost}
                     data-testid="search-host"
