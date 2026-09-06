@@ -503,14 +503,14 @@ function VideoUpNextList({
       data-testid="video-side-list"
       data-no-dismiss-gesture
       aria-label="Video list"
-      className={`mt-4 min-w-0 touch-pan-y ${theaterMode ? '' : 'lg:sticky lg:top-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:mt-0'}`}
+      className={`mt-4 min-w-0 touch-pan-y ${theaterMode ? '' : 'lg:sticky lg:top-0 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:mt-0 lg:flex lg:h-[calc(100svh-var(--video-watch-top)-2rem)] lg:min-h-0 lg:flex-col'}`}
     >
-      <h2 className="mb-3 text-base font-semibold text-[var(--color-fg)]">
+      <h2 className="mb-3 shrink-0 text-base font-semibold text-[var(--color-fg)]">
         Videos
       </h2>
       <div
         data-testid="video-side-scrollport"
-        className={`min-h-0 touch-pan-y pr-1 ${theaterMode ? '' : 'lg:max-h-[var(--video-watch-list-desktop-max-height)] lg:overflow-y-auto lg:overscroll-contain'}`}
+        className={`min-h-0 touch-pan-y pr-1 ${theaterMode ? '' : 'lg:flex-1 lg:overflow-y-auto lg:overscroll-contain'}`}
       >
         {status === 'loading' && visibleItems.length === 0 ? (
           <p className="text-sm text-[var(--color-muted)]">Loading videos...</p>

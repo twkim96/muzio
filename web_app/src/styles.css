@@ -36,7 +36,6 @@
   --video-watch-radius: 0.75rem;
   --video-watch-row-radius: 0.5rem;
   --video-watch-list-desktop-top: 4rem;
-  --video-watch-list-desktop-max-height: calc(100vh - 7rem);
   color-scheme: light;
 }
 
