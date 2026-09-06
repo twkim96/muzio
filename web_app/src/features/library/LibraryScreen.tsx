@@ -10,6 +10,7 @@ import type {
 import { contentKeyForLibraryItem } from '../../core/media/contentIdentity';
 import type { PlaylistRecord } from '../../core/storage/playlistRepository';
 import { CloseGlyph } from '../../core/ui/AppIcons';
+import { GlassModal } from '../../core/ui/GlassModal';
 import { useSearchHost } from '../../app/SearchHostContext';
 import { usePlaylists } from '../playlists/PlaylistContext';
 import { useLibraryStores } from './LibraryContext';
@@ -389,60 +390,46 @@ function AddToPlaylistModal({
   targetPlaylistId: string;
 }) {
   return (
-    <div
-      data-testid="add-to-playlist-modal"
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4"
-      onClick={onClose}
-    >
-      <section
-        data-glass
-        className="muzio-dialog w-full max-w-sm rounded-2xl border border-white/14 bg-[#111113]/94 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-[76px]"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Add to Playlist</h2>
-          <button
-            type="button"
-            aria-label="Close add to playlist"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
-            onClick={onClose}
-          >
-            <CloseGlyph className="h-5 w-5" />
-          </button>
-        </div>
-        <p className="mb-3 text-sm text-white/60">{itemCount} selected</p>
-        {playlists.length > 0 ? (
-          <select
-            data-testid="add-playlist-select"
-            aria-label="Playlist"
-            value={targetPlaylistId}
-            onChange={(event) => onTargetPlaylist(event.target.value)}
-            className="mb-3 w-full rounded-full border border-white/15 bg-[#111113] px-4 py-2 text-sm"
-          >
-            {playlists.map((playlist) => (
-              <option key={playlist.id} value={playlist.id}>
-                {playlist.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            data-testid="add-playlist-create-name"
-            aria-label="New playlist name"
-            value={newPlaylistName}
-            onChange={(event) => onNewPlaylistName(event.target.value)}
-            className="mb-3 w-full rounded-full border border-white/15 bg-transparent px-4 py-2 text-sm outline-none"
-          />
-        )}
+    <GlassModal
+      testId="add-to-playlist-modal"
+      title="Add to Playlist"
+      closeLabel="Close add to playlist"
+      onClose={onClose}
+      footer={
         <button
           type="button"
           data-testid="add-playlist-confirm"
-          className="inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
+          className="muzio-glass-action"
           onClick={onConfirm}
         >
           Confirm
         </button>
-      </section>
-    </div>
+      }
+    >
+      <p className="mb-3 text-sm text-white/60">{itemCount} selected</p>
+      {playlists.length > 0 ? (
+        <select
+          data-testid="add-playlist-select"
+          aria-label="Playlist"
+          value={targetPlaylistId}
+          onChange={(event) => onTargetPlaylist(event.target.value)}
+          className="muzio-glass-input w-full px-4 py-2 text-sm"
+        >
+          {playlists.map((playlist) => (
+            <option key={playlist.id} value={playlist.id}>
+              {playlist.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          data-testid="add-playlist-create-name"
+          aria-label="New playlist name"
+          value={newPlaylistName}
+          onChange={(event) => onNewPlaylistName(event.target.value)}
+          className="muzio-glass-input w-full px-4 py-2 text-sm outline-none"
+        />
+      )}
+    </GlassModal>
   );
 }

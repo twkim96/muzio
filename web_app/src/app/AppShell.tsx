@@ -37,6 +37,7 @@ import {
   resolvePlaylistItemsFromIndex,
 } from '../features/playlists/smartCollections';
 import { backgroundLocationFrom } from './backgroundLocation';
+import { GlassModal } from '../core/ui/GlassModal';
 import { QueueGlyph } from '../core/ui/AppIcons';
 import { SearchHostProvider } from './SearchHostContext';
 
@@ -141,13 +142,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     requestAnimationFrame(() => (navigationTriggerRef.current ?? menuButtonRef.current)?.focus());
   };
   useEffect(() => {
-    if (!drawerOpen) return;
+    if (!drawerOpen || createPlaylistOpen || renameTarget !== null || deleteTarget !== null) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') closeDrawer();
     };
     document.addEventListener('keydown', closeOnEscape);
     return () => document.removeEventListener('keydown', closeOnEscape);
-  }, [drawerOpen]);
+  }, [drawerOpen, createPlaylistOpen, renameTarget, deleteTarget]);
   useEffect(() => {
     if (section === null || isImmersiveRoute) {
       closeDrawer();
@@ -552,7 +553,7 @@ function SidebarDrawer({
         aria-modal="true"
         data-testid="mobile-navigation"
         data-glass
-        className="muzio-sidebar absolute inset-y-2 left-2 flex w-[min(20rem,84vw)] flex-col overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/88 px-5 py-5 text-zinc-950 shadow-2xl shadow-black/20 backdrop-blur-xl dark:border-white/10 dark:bg-surface/94 dark:text-foreground"
+        className="muzio-sidebar muzio-side-sheet flex flex-col overflow-hidden rounded-2xl border border-zinc-200/70 bg-white/88 px-5 py-5 text-zinc-950 shadow-2xl shadow-black/20 backdrop-blur-xl dark:border-white/10 dark:bg-surface/94 dark:text-foreground"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-1 flex shrink-0 flex-col items-start gap-3">
@@ -944,55 +945,24 @@ function CreatePlaylistModal({
   onSubmit: () => void;
 }) {
   return (
-    <div
-      data-testid="playlist-create-modal"
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4"
-      onClick={onClose}
-    >
-      <section
-        data-glass
-        className="muzio-dialog w-full max-w-sm rounded-2xl border border-white/14 bg-[#111113]/94 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-[76px]"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">New Playlist</h2>
-          <button
-            type="button"
-            aria-label="Close create playlist"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </div>
-        <input
-          data-testid="playlist-create-name"
-          aria-label="Playlist name"
-          value={name}
-          onChange={(event) => onName(event.target.value)}
-          className="mb-3 w-full rounded-full border border-white/15 bg-transparent px-4 py-2 text-sm outline-none"
-        />
-        <button
-          type="button"
-          data-testid="playlist-create-submit"
-          className="inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
-          onClick={onSubmit}
-        >
+    <GlassModal
+      testId="playlist-create-modal"
+      title="New Playlist"
+      closeLabel="Close create playlist"
+      onClose={onClose}
+      footer={
+        <button type="button" data-testid="playlist-create-submit" className="muzio-glass-action" onClick={onSubmit}>
           Create
         </button>
-      </section>
-    </div>
+      }
+    >
+      <input data-testid="playlist-create-name" aria-label="Playlist name" value={name}
+        onChange={(event) => onName(event.target.value)} className="muzio-glass-input" />
+    </GlassModal>
   );
 }
 
-function PlaylistNameModal({
-  name,
-  onClose,
-  onName,
-  onSubmit,
-  submitLabel,
-  title,
-}: {
+function PlaylistNameModal({ name, onClose, onName, onSubmit, submitLabel, title }: {
   name: string;
   onClose: () => void;
   onName: (name: string) => void;
@@ -1001,54 +971,20 @@ function PlaylistNameModal({
   title: string;
 }) {
   return (
-    <div
-      data-testid="playlist-rename-modal"
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4"
-      onClick={onClose}
-    >
-      <section
-        data-glass
-        className="muzio-dialog w-full max-w-sm rounded-2xl border border-white/14 bg-[#111113]/94 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-[76px]"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <button
-            type="button"
-            aria-label={`Close ${title}`}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-white/70 hover:bg-white/10"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </div>
-        <input
-          data-testid="playlist-rename-name"
-          aria-label="Playlist name"
-          value={name}
-          onChange={(event) => onName(event.target.value)}
-          className="mb-3 w-full rounded-full border border-white/15 bg-transparent px-4 py-2 text-sm outline-none"
-        />
-        <button
-          type="button"
-          data-testid="playlist-rename-submit"
-          className="inline-flex h-10 w-full items-center justify-center rounded-full bg-white px-4 text-sm font-semibold text-zinc-950 hover:bg-white/85"
-          onClick={onSubmit}
-        >
+    <GlassModal testId="playlist-rename-modal" title={title} onClose={onClose}
+      footer={
+        <button type="button" data-testid="playlist-rename-submit" className="muzio-glass-action" onClick={onSubmit}>
           {submitLabel}
         </button>
-      </section>
-    </div>
+      }
+    >
+      <input data-testid="playlist-rename-name" aria-label="Playlist name" value={name}
+        onChange={(event) => onName(event.target.value)} className="muzio-glass-input" />
+    </GlassModal>
   );
 }
 
-function ConfirmModal({
-  confirmLabel,
-  message,
-  onClose,
-  onConfirm,
-  title,
-}: {
+function ConfirmModal({ confirmLabel, message, onClose, onConfirm, title }: {
   confirmLabel: string;
   message: string;
   onClose: () => void;
@@ -1056,37 +992,14 @@ function ConfirmModal({
   title: string;
 }) {
   return (
-    <div
-      data-testid="confirm-modal"
-      className="fixed inset-0 z-[75] flex items-center justify-center bg-black/45 px-4"
-      onClick={onClose}
+    <GlassModal testId="confirm-modal" title={title} onClose={onClose} alert
+      footer={<>
+        <button type="button" className="muzio-glass-action muzio-glass-action-secondary" onClick={onClose}>Cancel</button>
+        <button type="button" data-testid="confirm-submit" className="muzio-glass-action" onClick={onConfirm}>{confirmLabel}</button>
+      </>}
     >
-      <section
-        data-glass
-        className="muzio-dialog w-full max-w-sm rounded-2xl border border-white/14 bg-[#111113]/94 p-4 text-white shadow-2xl shadow-black/60 backdrop-blur-[76px]"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <h2 className="text-lg font-semibold">{title}</h2>
-        <p className="mt-2 text-sm text-white/65">{message}</p>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            className="inline-flex h-10 items-center justify-center rounded-full border border-white/14 px-4 text-sm font-semibold text-white/75 hover:bg-white/10"
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            data-testid="confirm-submit"
-            className="inline-flex h-10 items-center justify-center rounded-full bg-accent px-4 text-sm font-semibold text-white hover:bg-accent/85"
-            onClick={onConfirm}
-          >
-            {confirmLabel}
-          </button>
-        </div>
-      </section>
-    </div>
+      <p className="text-sm text-muted">{message}</p>
+    </GlassModal>
   );
 }
 

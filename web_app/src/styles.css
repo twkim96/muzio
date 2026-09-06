@@ -257,6 +257,115 @@ html.wr-kit {
 @media (max-width: 639px) {
   .wr-kit .muzio-dialog { border-radius: 22px; max-height: 82svh; overflow-y: auto; }
 }
+/* UI-kit dialog and floating sheet recipes, shared by navigation and playlists. */
+.muzio-side-sheet {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 8px;
+  width: min(20rem, 84vw);
+  min-height: 0;
+}
+.muzio-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  top: var(--modal-viewport-top, 0px);
+  bottom: auto;
+  height: var(--modal-viewport-height, 100dvh);
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / .35);
+}
+.wr-kit .muzio-modal-sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(24rem, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  overflow: hidden;
+  background: var(--app-menu-surface);
+}
+.muzio-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--app-menu-border);
+}
+.muzio-modal-header h2 { min-width: 0; font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+.muzio-modal-body { min-height: 0; padding: 20px; overflow-y: auto; overscroll-behavior: contain; }
+.muzio-modal-footer {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--app-menu-border);
+  background: var(--app-menu-footer-surface);
+  box-shadow: var(--app-menu-footer-shadow);
+}
+.muzio-glass-action, .muzio-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid color-mix(in srgb, rgb(var(--accent)) 42%, var(--app-menu-control-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, rgb(var(--accent)) 12%, var(--app-menu-control-surface));
+  color: color-mix(in srgb, rgb(var(--accent)) 68%, var(--viewer-theme-text));
+  box-shadow: var(--app-menu-control-shadow);
+  font-size: 14px;
+  font-weight: 600;
+}
+.muzio-glass-action-secondary, .muzio-modal-close {
+  border-color: var(--app-menu-control-border);
+  background: var(--app-menu-control-surface);
+  color: var(--app-menu-ink);
+}
+.muzio-modal-close { width: 40px; min-height: 40px; padding: 0; flex-shrink: 0; border-radius: 50%; }
+.muzio-glass-input { width: 100%; min-height: 44px; padding: 10px 12px; font-size: 16px; }
+.muzio-glass-action:disabled { opacity: .4; cursor: not-allowed; }
+@media (hover: hover) {
+  .muzio-glass-action:not(:disabled):hover, .muzio-modal-close:hover { opacity: .78; }
+}
+html:has(.muzio-side-sheet, .muzio-modal-backdrop) { overflow: hidden; }
+@media (max-width: 639px) {
+  .wr-kit .muzio-side-sheet {
+    top: auto;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: 20px;
+    right: 20px;
+    width: auto;
+    height: min(36rem, 60dvh);
+    max-height: calc(100dvh - 24px);
+    border-radius: 22px;
+  }
+  .muzio-modal-backdrop {
+    align-items: flex-end;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  .wr-kit .muzio-modal-sheet {
+    width: calc(100% - 40px);
+    max-height: min(60dvh, calc(100% - 24px));
+    border-radius: 22px;
+    overflow: hidden;
+  }
+  .muzio-modal-header { padding: 12px; }
+  .muzio-modal-header h2 { font-size: 16px; }
+  .muzio-modal-body { padding: 16px; }
+  .muzio-modal-footer { padding: 12px 16px; }
+  .wr-kit:has(.muzio-side-sheet, .muzio-modal-sheet) [data-testid='mini-player'] {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
 @supports not (backdrop-filter: blur(1px)) {
   .wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-title, .muzio-settings-button, .muzio-sidebar, .muzio-search) { background-color: var(--viewer-theme-bg); }
 }

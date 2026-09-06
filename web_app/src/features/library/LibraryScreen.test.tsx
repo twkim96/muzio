@@ -15,6 +15,7 @@ import { createPlayerStore } from '../player/playerStore';
 import { PlaylistProvider } from '../playlists/PlaylistContext';
 import { ProgressProvider } from '../progress/ProgressContext';
 import type { ProgressRepository } from '../../core/storage/progressRepository';
+import { GlassModal } from '../../core/ui/GlassModal';
 
 function buildStores(audio: LibraryFetchResult, video: LibraryFetchResult, image: LibraryFetchResult) {
   return {
@@ -771,6 +772,7 @@ describe('LibraryScreen', () => {
   });
 
   test('row add to library creates a custom playlist with the selected item', async () => {
+    setNonMobileViewport(true);
     renderScreen('audio', {
       kind: 'ok',
       items: [
@@ -799,6 +801,14 @@ describe('LibraryScreen', () => {
 
     fireEvent.click(screen.getByTestId('library-item-more'));
     fireEvent.click(screen.getByText('Add to Playlist'));
+    expect(screen.getByTestId('add-to-playlist-modal').parentElement).toBe(document.body);
+    expect(screen.getByRole('dialog', { name: 'Add to Playlist' })).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByTestId('add-playlist-create-name')).toHaveFocus();
+    screen.getByTestId('add-playlist-confirm').focus();
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab' });
+    expect(screen.getByLabelText('Close add to playlist')).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab', shiftKey: true });
+    expect(screen.getByTestId('add-playlist-confirm')).toHaveFocus();
     expect(
       screen.getByLabelText('Close add to playlist').querySelector('svg'),
     ).not.toBeNull();
@@ -812,6 +822,46 @@ describe('LibraryScreen', () => {
     );
     expect(stored.playlists[0].name).toBe('Night');
     expect(stored.playlists[0].items).toHaveLength(1);
+  });
+
+  test('stacked glass modals isolate dismissal and restore focus and scroll', () => {
+    setNonMobileViewport(true);
+    const closeParent = vi.fn();
+    const closeChild = vi.fn();
+    const underlyingPointer = vi.fn();
+    const trigger = document.createElement('button');
+    document.body.append(trigger);
+    trigger.focus();
+    const overflow = document.body.style.overflow;
+    const modal = (child: boolean) => (
+      <div onPointerDown={underlyingPointer}>
+        <GlassModal testId="parent-modal" title="Parent" onClose={closeParent}>
+          <input aria-label="Parent name" />
+          {child && <GlassModal testId="child-modal" title="Child" onClose={closeChild} alert>
+            <input aria-label="Child name" />
+          </GlassModal>}
+        </GlassModal>
+      </div>
+    );
+    const view = render(modal(false));
+    expect(screen.getByLabelText('Parent name')).toHaveFocus();
+    view.rerender(modal(true));
+    expect(screen.getByRole('alertdialog', { name: 'Child' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Child name')).toHaveFocus();
+    fireEvent.pointerDown(screen.getByLabelText('Close Child'));
+    expect(underlyingPointer).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('parent-modal'));
+    expect(closeParent).not.toHaveBeenCalled();
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(closeChild).toHaveBeenCalledTimes(1);
+    expect(closeParent).not.toHaveBeenCalled();
+    view.rerender(modal(false));
+    expect(screen.getByLabelText('Parent name')).toHaveFocus();
+    expect(document.body.style.overflow).toBe('hidden');
+    view.unmount();
+    expect(trigger).toHaveFocus();
+    expect(document.body.style.overflow).toBe(overflow);
+    trigger.remove();
   });
 
   test('short mobile hold does not enter selection mode', async () => {

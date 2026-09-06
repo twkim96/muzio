@@ -4,6 +4,7 @@ import type { LibraryItem } from '../../core/api/libraryClient';
 import { contentKeyForLibraryItem } from '../../core/media/contentIdentity';
 import { formatDuration } from '../library/formatLibraryItem';
 import { ImageGlyph } from '../../core/ui/AppIcons';
+import { GlassModal } from '../../core/ui/GlassModal';
 
 export function PlaylistDrawer({
   editable = false,
@@ -80,21 +81,29 @@ export function PlaylistDrawer({
         data-glass
         data-no-menu-swipe
         aria-label={title}
-        className="muzio-drawer absolute bottom-0 left-0 top-0 flex w-[min(24rem,88vw)] flex-col border-r border-white/14 bg-[#111113]/94 text-foreground shadow-2xl shadow-black/60 backdrop-blur-[76px] [-webkit-backdrop-filter:saturate(1.35)_blur(76px)]"
+        className="muzio-sidebar muzio-side-sheet flex flex-col overflow-hidden px-5 py-5 text-foreground"
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-          <div className="min-w-0">
-            <h2 className="truncate text-lg font-semibold">{title}</h2>
-            <p className="text-xs text-muted">{items.length} items</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
+        <div className="mb-1 flex shrink-0 flex-col items-start gap-3">
+          <h2 className="h-[46.4px] w-full min-w-0 [--title-scale:1.45] sm:[--title-scale:1.16]">
+            <button
+              type="button"
+              aria-label="Close playlist"
+              title={title}
+              onClick={onClose}
+              className="muzio-title relative flex h-8 w-fit max-w-[calc(100%/var(--title-scale))] origin-top-left scale-[var(--title-scale)] items-center px-4 text-left text-lg font-semibold tracking-tight sm:h-10 sm:text-xl"
+            >
+              <span className="min-w-0 truncate scale-[calc(1/var(--title-scale))]">{title}</span>
+            </button>
+          </h2>
+          <div className="flex min-h-12 w-full min-w-0 flex-wrap items-center gap-2">
+            <p className="mr-auto text-sm text-muted">{items.length} items</p>
             {editable && (
               <button
                 type="button"
                 data-testid="playlist-drawer-edit"
                 aria-pressed={editing}
-                className="inline-flex h-9 items-center justify-center rounded-full px-3 text-sm font-semibold text-muted hover:bg-white/10 hover:text-foreground aria-pressed:text-accent"
+                className="muzio-glass-action muzio-glass-action-secondary aria-pressed:text-accent"
                 onClick={() => {
                   setEditing((current) => !current);
                   setSelectedKeys(new Set());
@@ -108,31 +117,23 @@ export function PlaylistDrawer({
                 type="button"
                 data-testid="playlist-drawer-delete"
                 disabled={selectedCount === 0}
-                className="inline-flex h-9 items-center justify-center rounded-full px-3 text-sm font-semibold text-accent hover:bg-accent/10 disabled:opacity-45"
+                className="muzio-glass-action disabled:opacity-45"
                 onClick={() => setConfirmDelete(true)}
               >
                 Delete
               </button>
             )}
-            <button
-              type="button"
-              aria-label="Close playlist"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-2xl text-muted hover:bg-white/10 hover:text-foreground"
-              onClick={onClose}
-            >
-              ×
-            </button>
           </div>
         </div>
         {items.length === 0 ? (
           <p
             data-testid="playlist-drawer-empty"
-            className="px-5 py-5 text-sm text-muted"
+            className="py-5 text-sm text-muted"
           >
             No items.
           </p>
         ) : (
-          <ol className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+          <ol className="-mx-2 min-h-0 flex-1 overflow-y-auto overscroll-contain py-3">
             {items.map((item, index) => (
               <li key={item.id} className="flex items-center gap-1">
                 <button
@@ -197,41 +198,36 @@ export function PlaylistDrawer({
             ))}
           </ol>
         )}
-        {confirmDelete && (
-          <div
-            data-testid="playlist-drawer-confirm"
-            className="absolute inset-0 z-10 flex items-center justify-center bg-black/45 px-4"
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <section
-              data-glass
-              className="muzio-dialog w-full max-w-xs rounded-2xl border border-white/14 bg-[#111113]/96 p-4 text-foreground shadow-2xl shadow-black/60 backdrop-blur-[76px]"
-            >
-              <h3 className="text-base font-semibold">Delete Items</h3>
-              <p className="mt-2 text-sm text-muted">
-                Delete {selectedCount} selected items from this playlist?
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  className="inline-flex h-10 items-center justify-center rounded-full border border-white/14 px-4 text-sm font-semibold text-muted hover:bg-white/10"
-                  onClick={() => setConfirmDelete(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  data-testid="playlist-drawer-confirm-delete"
-                  className="inline-flex h-10 items-center justify-center rounded-full bg-accent px-4 text-sm font-semibold text-white hover:bg-accent/85"
-                  onClick={confirmRemoveItems}
-                >
-                  Delete
-                </button>
-              </div>
-            </section>
-          </div>
-        )}
       </aside>
+      {confirmDelete && (
+        <GlassModal
+          testId="playlist-drawer-confirm"
+          title="Delete Items"
+          onClose={() => setConfirmDelete(false)}
+          alert
+          footer={
+            <>
+              <button
+                type="button"
+                className="muzio-glass-action muzio-glass-action-secondary"
+                onClick={() => setConfirmDelete(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                data-testid="playlist-drawer-confirm-delete"
+                className="muzio-glass-action"
+                onClick={confirmRemoveItems}
+              >
+                Delete
+              </button>
+            </>
+          }
+        >
+          Delete {selectedCount} selected items from this playlist?
+        </GlassModal>
+      )}
     </div>
   );
 }

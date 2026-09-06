@@ -132,7 +132,7 @@ export function QueueDrawer({
         data-glass
         data-allow-scroll
         data-testid="music-now-playing"
-        className="muzio-sidebar absolute inset-y-2 left-2 flex w-[min(20rem,84vw)] flex-col overflow-hidden rounded-2xl outline-none border border-zinc-200/70 bg-white/88 px-5 py-5 text-zinc-950 shadow-2xl shadow-black/20 backdrop-blur-xl dark:border-white/10 dark:bg-surface/94 dark:text-foreground"
+        className="muzio-sidebar muzio-side-sheet flex flex-col overflow-hidden rounded-2xl outline-none border border-zinc-200/70 bg-white/88 px-5 py-5 text-zinc-950 shadow-2xl shadow-black/20 backdrop-blur-xl dark:border-white/10 dark:bg-surface/94 dark:text-foreground"
         onPointerDown={(event) => event.stopPropagation()}
       >
         <div className="mb-1 flex shrink-0 flex-col items-start gap-3">
