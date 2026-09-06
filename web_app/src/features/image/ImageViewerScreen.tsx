@@ -2,7 +2,6 @@ import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { buildStreamingUrl } from '../../core/playback/source/source';
-import { DownChevronIcon } from '../../core/ui/AppIcons';
 import { LikeGlyph } from '../../core/ui/AppIcons';
 import { contentKeyForLibraryItem } from '../../core/media/contentIdentity';
 import { useLibraryStores } from '../library/LibraryContext';
@@ -49,24 +48,15 @@ export function ImageViewerScreen({
   return (
     <div
       data-testid="image-viewer"
-      className="relative min-h-screen touch-pan-x overflow-hidden overscroll-y-contain bg-transparent text-white"
+      className="relative min-h-[var(--media-view-height,100dvh)] touch-pan-x overflow-hidden overscroll-y-contain bg-transparent text-white"
       {...dismissGesture.bind}
     >
       <div
         data-testid="image-viewer-motion-layer"
-        className={`relative z-10 min-h-screen bg-black px-4 py-4 sm:px-6 sm:py-6 ${dismissGesture.motionClassName}`}
+        className={`relative z-10 min-h-[var(--media-view-height,100dvh)] bg-black px-4 py-4 sm:px-6 sm:py-6 ${dismissGesture.motionClassName}`}
         style={dismissGesture.motionStyle}
       >
         <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/70 to-transparent" />
-        <button
-          type="button"
-          data-testid="image-viewer-close"
-          aria-label="Close image viewer"
-          className="absolute left-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full text-white/88 transition hover:bg-white/10 hover:text-white sm:left-6 sm:top-6"
-          onClick={close}
-        >
-          <DownChevronIcon />
-        </button>
 
         {image !== null && (
           <button
@@ -99,7 +89,7 @@ export function ImageViewerScreen({
           </StatusMessage>
         )}
         {image !== null && (
-          <main className="relative z-10 mx-auto flex min-h-[calc(100vh-2rem)] max-w-6xl flex-col justify-center gap-4 pt-12">
+          <main className="relative z-10 mx-auto flex min-h-[calc(var(--media-view-height,100dvh)-2rem)] sm:min-h-[calc(var(--media-view-height,100dvh)-3rem)] max-w-6xl flex-col justify-center gap-4 pt-12">
             <h1
               data-testid="image-viewer-title"
               className="truncate px-14 text-center text-lg font-semibold text-white sm:text-2xl"
@@ -112,7 +102,7 @@ export function ImageViewerScreen({
               src={buildStreamingUrl(image.id)}
               alt={image.metadata?.title || image.name}
               decoding="async"
-              className="mx-auto max-h-[82vh] max-w-full rounded-2xl object-contain shadow-2xl shadow-black/40"
+              className="mx-auto max-h-[max(0px,calc(var(--media-view-height,100dvh)-10rem))] sm:max-h-[max(0px,calc(var(--media-view-height,100dvh)-11rem))] max-w-full rounded-2xl object-contain shadow-2xl shadow-black/40"
             />
             <p className="mx-auto max-w-5xl truncate px-4 text-center text-sm text-white/60">
               {image.rootName} · {image.relativePath}
@@ -126,7 +116,7 @@ export function ImageViewerScreen({
 
 function StatusMessage({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-screen items-center justify-center px-6 text-center text-sm text-white/70">
+    <div className="flex min-h-[var(--media-view-height,100dvh)] items-center justify-center px-6 text-center text-sm text-white/70">
       <p>{children}</p>
     </div>
   );

@@ -25,7 +25,6 @@ import { useDocumentHorizontalDrag } from './controls/useDocumentHorizontalDrag'
 import { formatTime } from './formatTime';
 import { usePlaybackNetworkHint } from './playbackNetworkStatus';
 import {
-  DownChevronIcon,
   LikeGlyph,
   MoreGlyph,
   MusicGlyph,
@@ -210,21 +209,20 @@ export function FullPlayerScreen({
     <div
       ref={shellRef}
       data-testid="player-screen"
-      className="relative min-h-screen touch-pan-x overflow-hidden overscroll-y-contain bg-transparent text-foreground"
+      className="relative min-h-[var(--media-view-height,100dvh)] touch-pan-x overflow-hidden overscroll-y-contain bg-transparent text-foreground"
       {...dismissGesture.bind}
     >
       <div
         data-testid="player-motion-layer"
-        className={`muzio-player-page relative z-10 min-h-screen overflow-hidden bg-surface ${dismissGesture.motionClassName}`}
+        className={`muzio-player-page relative z-10 min-h-[var(--media-view-height,100dvh)] overflow-hidden bg-surface ${dismissGesture.motionClassName}`}
         style={dismissGesture.motionStyle}
       >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_15%,rgba(174,174,174,0.14),transparent_34%),linear-gradient(135deg,rgba(255,55,85,0.16),transparent_28%),linear-gradient(215deg,rgba(90,120,96,0.28),transparent_42%)]" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/22 via-transparent to-black/30" />
-        <DismissButton label="Collapse music player" onCollapse={collapsePlayer} />
 
         <main
           data-testid="music-player-content"
-          className="relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col justify-center px-6 py-10 [--player-art-width:min(26rem,38vh,78vw)] sm:px-10 sm:py-10 sm:[--player-art-width:min(34rem,48vh,78vw)]"
+          className="relative z-10 mx-auto flex min-h-[var(--media-view-height,100dvh)] w-full max-w-5xl flex-col justify-center px-6 py-10 [--player-art-width:min(26rem,calc(var(--media-view-height,100dvh)*0.38),78vw)] sm:px-10 sm:py-10 sm:[--player-art-width:min(34rem,calc(var(--media-view-height,100dvh)*0.48),78vw)]"
         >
           <NowPlayingArtwork artworkUrl={source?.artworkUrl} />
 
@@ -399,7 +397,7 @@ export function FullPlayerScreen({
           {playability === 'no' && (
             <p
               data-testid="unsupported-banner"
-              className="mx-auto mt-4 w-[min(26rem,38vh,78vw)] text-sm text-amber-200 sm:w-[min(34rem,48vh,78vw)]"
+              className="mx-auto mt-4 w-[min(26rem,calc(var(--media-view-height,100dvh)*0.38),78vw)] text-sm text-amber-200 sm:w-[min(34rem,calc(var(--media-view-height,100dvh)*0.48),78vw)]"
             >
               The browser reports that this format may not play. Direct play
               will still be attempted.
@@ -409,7 +407,7 @@ export function FullPlayerScreen({
             <FallbackStatusView fallbackState={fallbackState} />
           )}
 
-          <div className="mx-auto mt-4 w-[min(26rem,38vh,78vw)] sm:w-[min(34rem,48vh,78vw)]">
+          <div className="mx-auto mt-4 w-[min(26rem,calc(var(--media-view-height,100dvh)*0.38),78vw)] sm:w-[min(34rem,calc(var(--media-view-height,100dvh)*0.48),78vw)]">
             <PositionScrubber
               positionSec={state.positionSec}
               durationSec={state.durationSec}
@@ -449,7 +447,7 @@ export function FullPlayerScreen({
 
             <div
               data-testid="transport-controls"
-              className="mx-auto mt-5 flex w-[min(26rem,38vh,78vw)] items-center justify-between sm:w-[min(34rem,48vh,78vw)]"
+              className="mx-auto mt-5 flex w-[min(26rem,calc(var(--media-view-height,100dvh)*0.38),78vw)] items-center justify-between sm:w-[min(34rem,calc(var(--media-view-height,100dvh)*0.48),78vw)]"
             >
             <TransportButton
               label="Shuffle"
@@ -538,26 +536,6 @@ function NowPlayingArtwork({ artworkUrl }: { artworkUrl?: string }) {
         <MusicGlyph className="h-16 w-16" />
       )}
     </div>
-  );
-}
-
-function DismissButton({
-  label,
-  onCollapse,
-}: {
-  label: string;
-  onCollapse: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      data-testid="player-close"
-      aria-label={label}
-      className="absolute left-4 top-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full text-white/88 transition hover:bg-white/10 hover:text-white sm:left-6 sm:top-6"
-      onClick={onCollapse}
-    >
-      <DownChevronIcon />
-    </button>
   );
 }
 

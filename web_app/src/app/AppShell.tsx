@@ -15,6 +15,7 @@ import { ClockCounterClockwise } from '@phosphor-icons/react/dist/csr/ClockCount
 import { Playlist } from '@phosphor-icons/react/dist/csr/Playlist';
 import { ImageSquare } from '@phosphor-icons/react/dist/csr/ImageSquare';
 import { DownloadSimple } from '@phosphor-icons/react/dist/csr/DownloadSimple';
+import { MagnifyingGlass } from '@phosphor-icons/react/dist/csr/MagnifyingGlass';
 import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
 import { GearSix } from '@phosphor-icons/react/dist/csr/GearSix';
 
@@ -87,6 +88,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const libraryStores = useLibraryLiveSync();
   const playlists = usePlaylists();
   const playerStore = usePlayerStore();
+  const activeMedia = playerStore((state) => state.active);
   const likedMediaIds = playerStore((state) => state.likedMediaIds);
   const activityRecords = playerStore((state) => state.activityRecords);
   const playMusicQueue = playerStore((state) => state.playMusicQueue);
@@ -130,11 +132,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navigationTriggerRef = useRef<HTMLButtonElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
+  useEffect(() => { playerOverlay.close(); }, [location.pathname, playerOverlay.close]);
   const shellLocation = backgroundLocationFrom(location) ?? location;
   const isPlayerRoute = shellLocation.pathname.startsWith('/player');
   const isImageViewerRoute = shellLocation.pathname.startsWith('/image/');
   const isImmersiveRoute = isPlayerRoute || isImageViewerRoute;
-  const section = sectionForPath(shellLocation.pathname);
+  const viewingImage = location.pathname.startsWith('/image/');
+  const viewingMedia = playerOverlay.isOpen || isPlayerRoute || viewingImage;
+  const section = viewingImage ? 'image' : playerOverlay.isOpen || isPlayerRoute
+    ? activeMedia === 'video' ? 'video' : 'music'
+    : sectionForPath(shellLocation.pathname);
   const sidebar = section === null ? null : sideSections[section];
   const hasMobileMenu = sidebar !== null;
   const canCreatePlaylist = section === 'music' || section === 'video';
@@ -151,10 +158,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => document.removeEventListener('keydown', closeOnEscape);
   }, [drawerOpen, createPlaylistOpen, renameTarget, deleteTarget]);
   useEffect(() => {
-    if (section === null || isImmersiveRoute) {
+    if (section === null) {
       closeDrawer();
     }
-  }, [isImmersiveRoute, section]);
+  }, [section]);
   useEffect(() => {
     for (const [mediaId, items, presentation] of [
       [activeAudioMediaId, audioItems, audioPresentation],
@@ -338,11 +345,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     playerOverlay.open();
   };
 
+  const leaveMediaView = () => {
+    closeDrawer();
+    playerOverlay.close();
+  };
+
   return (
     <SearchHostProvider host={searchHost} popoverHost={searchPopoverHost}>
-      <div className="min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-surface dark:text-foreground">
-        {!isImmersiveRoute && (
-          <header className="sticky top-3 z-30 mx-auto mt-3 max-w-7xl px-3 sm:px-8 lg:px-10">
+      <div data-media-view={viewingMedia || undefined} className="muzio-app-shell min-h-screen bg-zinc-50 text-zinc-950 transition-colors dark:bg-surface dark:text-foreground">
+        {(
+          <header className="sticky top-3 z-[60] mx-auto mt-3 max-w-7xl px-3 sm:px-8 lg:px-10">
             {section !== null && (
               <div className="absolute top-[5.8px] hidden h-[46.4px] w-fit [--title-scale:1.16] md:block">
                 <h1 className="w-fit text-lg font-semibold tracking-tight sm:text-xl">
@@ -384,12 +396,24 @@ export function AppShell({ children }: { children: ReactNode }) {
                   ) : (
                     <span className="h-10 w-10 shrink-0" aria-hidden />
                   )}
-                  <SegmentedTabs onNavigate={closeDrawer} />
+                  <SegmentedTabs onNavigate={leaveMediaView} activePath={section ? `/library/${section}` : undefined} />
                   <div
+                    onClickCapture={() => {
+                      if (viewingMedia) {
+                        playerOverlay.close();
+                        if (viewingImage || isPlayerRoute) navigate(`/library/${section}`);
+                      }
+                    }}
                     ref={setSearchHost}
                     data-testid="search-host"
                     className="flex h-10 w-10 shrink-0 items-center justify-end"
-                  />
+                  >
+                    {isImmersiveRoute && (
+                      <button type="button" aria-label={`Search ${sideSections[section ?? 'music'].title}`} className="flex h-10 w-10 items-center justify-center text-foreground">
+                        <MagnifyingGlass aria-hidden className="h-6 w-6" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
               <div ref={setSearchPopoverHost} />
@@ -397,7 +421,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <NavLink
               to="/settings"
               aria-label="Settings"
-              onClick={closeDrawer}
+              onClick={leaveMediaView}
               className="muzio-settings-button absolute right-3 top-[5.8px] hidden h-[46.4px] w-[46.4px] items-center justify-center text-foreground min-[480px]:flex sm:right-8 lg:right-10"
             >
               <GearSix aria-hidden className="h-[21.1px] w-[21.1px]" />
@@ -405,7 +429,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </header>
         )}
 
-        {sidebar !== null && !isImmersiveRoute && drawerOpen && (
+        {sidebar !== null && drawerOpen && (
           <SidebarDrawer
             modalOpen={createPlaylistOpen || renameTarget !== null || deleteTarget !== null}
             canCreatePlaylist={canCreatePlaylist}
@@ -541,7 +565,7 @@ function SidebarDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/35"
+      className="fixed inset-0 z-[70] bg-black/35"
       role="presentation"
       onClick={() => {
         onClose();
@@ -724,7 +748,7 @@ function canScrollUp(target: Element): boolean {
   return window.scrollY > 0 || document.documentElement.scrollTop > 0;
 }
 
-function SegmentedTabs({ onNavigate }: { onNavigate?: () => void }) {
+function SegmentedTabs({ onNavigate, activePath }: { onNavigate?: () => void; activePath?: string }) {
   const location = useLocation();
   const activeLocation = backgroundLocationFrom(location) ?? location;
   return (
@@ -733,11 +757,12 @@ function SegmentedTabs({ onNavigate }: { onNavigate?: () => void }) {
       className="inline-flex min-w-0 items-center"
     >
       {primaryTabs.map((tab) => {
-        const active = activeLocation.pathname.startsWith(tab.match);
+        const active = (activePath ?? activeLocation.pathname).startsWith(tab.match);
         return (
-          <NavLink
+          <Link
             key={tab.to}
             to={tab.to}
+            aria-current={active ? 'page' : undefined}
             onClick={onNavigate}
             className={
               active
@@ -746,7 +771,7 @@ function SegmentedTabs({ onNavigate }: { onNavigate?: () => void }) {
             }
           >
             {tab.label}
-          </NavLink>
+          </Link>
         );
       })}
     </nav>
