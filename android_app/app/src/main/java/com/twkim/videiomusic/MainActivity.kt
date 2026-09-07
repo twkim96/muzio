@@ -1,6 +1,13 @@
 package com.twkim.videiomusic
 
 import android.Manifest
+import android.app.PendingIntent
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import android.graphics.drawable.Icon
+import androidx.core.content.ContextCompat
 import android.app.PictureInPictureParams
 import android.content.res.Configuration
 import android.util.Rational
@@ -50,6 +57,18 @@ class MainActivity : ComponentActivity() {
     private var reply: JavaScriptReplyProxy? = null
     private var profile = ServerProfile()
     private var origin = BundledWebPolicy.SETUP_ORIGIN
+    private val pipControlAction get() = "$packageName.VIDEO_PIP_CONTROL"
+    private val pipControlReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != pipControlAction || !isInPictureInPictureMode || setup) return
+            val command = intent.getStringExtra("command")
+            if (command != "play" && command != "pause") return
+            // PiP is paused at the Activity level. Resume the WebView before
+            // delivering controls, and never route them through the music session.
+            web?.onResume()
+            web?.evaluateJavascript("window.dispatchEvent(new CustomEvent('muzio-video-control',{detail:'$command'}));", null)
+        }
+    }
     private var videoPlaying = false
     private var videoAspect = Rational(16, 9)
     private var setup = true
@@ -57,6 +76,7 @@ class MainActivity : ComponentActivity() {
     private var fullScreenCallback: WebChromeClient.CustomViewCallback? = null
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private val localLibrary by lazy { com.twkim.videiomusic.data.LocalLibraryManager(applicationContext) }
+    private val videoIndex by lazy { com.twkim.videiomusic.web.VideoIndexInterceptor(com.twkim.videiomusic.web.VideoIndexCache(java.io.File(cacheDir, "video-index-v1"))) }
     private var folderReply: ((Result<JSONObject>) -> Unit)? = null
     private var folderPickerOpen = false
     private val folderPicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -79,6 +99,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ContextCompat.registerReceiver(this, pipControlReceiver, IntentFilter(pipControlAction), ContextCompat.RECEIVER_NOT_EXPORTED)
         enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT), navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT))
         if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
         root = FrameLayout(this).apply { setBackgroundColor(Color.rgb(31, 31, 31)) }
@@ -203,6 +224,14 @@ class MainActivity : ComponentActivity() {
                     }.getOrElse { emptyResponse(404, "Not Found") }
                 }
                 if (request.isForMainFrame || showSetup) return emptyResponse(403, "Forbidden")
+                if (request.method == "GET") {
+                    val headers = request.requestHeaders.toMutableMap()
+                    CookieManager.getInstance().getCookie(url)?.let { headers["Cookie"] = it }
+                    videoIndex.intercept(url, pageOrigin, headers)?.let { cached ->
+                        return WebResourceResponse(cached.mime, null, cached.status,
+                            if (cached.status == 206) "Partial Content" else "OK", cached.headers, cached.stream)
+                    }
+                }
                 return null
             }
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -286,6 +315,11 @@ class MainActivity : ComponentActivity() {
                         videoAspect = if (width > 0 && height > 0 && width.toDouble() / height in (1.0 / 2.39)..2.39) Rational(width, height) else Rational(16, 9)
                         updatePipParams()
                         JSONObject()
+                    }
+                    "shell.notificationIntent" -> {
+                        val openQueue = intent?.getBooleanExtra("muzio.open_queue", false) == true
+                        if (payload.optBoolean("acknowledged", false)) intent?.removeExtra("muzio.open_queue")
+                        JSONObject().put("openQueue", openQueue)
                     }
                     "shell.profile" -> JSONObject().put("baseUrl", profile.baseUrl).put("displayName", profile.displayName).put("setup", setup)
                     "shell.connect" -> {
@@ -372,6 +406,14 @@ class MainActivity : ComponentActivity() {
 
     private fun pipParams(): PictureInPictureParams = PictureInPictureParams.Builder().apply {
         setAspectRatio(videoAspect)
+        // Explicit actions override controls from the independent audio session.
+        val command = if (videoPlaying) "pause" else "play"
+        val label = if (videoPlaying) "Pause" else "Play"
+        val icon = if (videoPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
+        val pending = PendingIntent.getBroadcast(this@MainActivity, if (videoPlaying) 1 else 2,
+            Intent(pipControlAction).setPackage(packageName).putExtra("command", command),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        setActions(listOf(RemoteAction(Icon.createWithResource(this@MainActivity, icon), label, label, pending)))
         if (Build.VERSION.SDK_INT >= 31) setAutoEnterEnabled(videoPlaying && !setup)
     }.build()
 
@@ -399,6 +441,12 @@ class MainActivity : ComponentActivity() {
 
     private fun moveToBackground() { if (!enterVideoPip()) moveTaskToBack(true) }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        web?.evaluateJavascript("window.dispatchEvent(new Event('muzio-resume'));", null)
+    }
+
     override fun onResume() {
         super.onResume()
         web?.onResume()
@@ -420,6 +468,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        unregisterReceiver(pipControlReceiver)
         reply = null
         playback?.dispose()
         fileCallback?.onReceiveValue(null)

@@ -1,3 +1,4 @@
+import { decodeNativeVideoSource } from './nativeVideoSource';
 import type {
   EngineEvent,
   EngineListener,
@@ -8,6 +9,7 @@ import {
   recordPlaybackDiagnostic,
 } from '../../core/playback/diagnostics/playbackDiagnostics';
 import type { PlaybackSource } from '../../core/playback/source/source';
+import { videoIndexSource } from '../../core/platform/videoIndexSource';
 
 export interface VidstackPlayerLike extends EventTarget {
   readonly el: HTMLElement | null;
@@ -31,6 +33,11 @@ type CommitSource = (source: PlaybackSource | null) => Promise<void>;
 interface SourceGeneration {
   readonly source: PlaybackSource;
   readonly commit: Promise<void>;
+  readonly originalSource: PlaybackSource;
+  usedIndexProxy: boolean;
+  becameReady: boolean;
+  replacement?: SourceGeneration;
+  playTask?: Promise<void>;
   readonly ready: Promise<boolean>;
   sourceObserved: boolean;
   resumeTargetActive: boolean;
@@ -39,14 +46,14 @@ interface SourceGeneration {
 }
 
 function vidstackSourceURL(value: unknown): string {
-  if (typeof value === 'string') return value;
+  if (typeof value === 'string') return decodeNativeVideoSource(value);
   if (
     typeof value === 'object' &&
     value !== null &&
     'src' in value &&
     typeof value.src === 'string'
   ) {
-    return value.src;
+    return decodeNativeVideoSource(value.src);
   }
   return '';
 }
@@ -139,6 +146,7 @@ export function createVidstackEngine(
   let seekGeneration = 0;
   let pendingInternalSeekTargetSec: number | null = null;
   let released = false;
+  let wantsPlay = false;
 
   const nativeMedia = () =>
     (
@@ -305,6 +313,71 @@ export function createVidstackEngine(
     });
   };
 
+  const beginGeneration = (
+    transportSource: PlaybackSource,
+    originalSource: PlaybackSource,
+    usedIndexProxy: boolean,
+  ) => {
+    activeGeneration?.settleReady(false);
+    sourceGeneration += 1;
+    seekGeneration = 0;
+    pendingInternalSeekTargetSec = null;
+    lastDurationSec = 0;
+    lastTimePositionSec = null;
+    let finishReady = (_ready: boolean) => {};
+    let settled = false;
+    const ready = new Promise<boolean>((resolve) => { finishReady = resolve; });
+    const generation: SourceGeneration = {
+      source: transportSource, originalSource, usedIndexProxy, becameReady: false,
+      commit: commitSource(transportSource), ready, sourceObserved: false,
+      resumeTargetActive: true, resumeTargetReached: false,
+      settleReady(value) {
+        if (settled) return;
+        settled = true;
+        finishReady(value);
+      },
+    };
+    activeGeneration = generation;
+    void generation.commit.then(() => {
+      if (!released && activeGeneration === generation) {
+        record('source_commit');
+        player.startLoading();
+        record('start_loading');
+      }
+    });
+    return generation;
+  };
+
+  const playGeneration = (generation: SourceGeneration): Promise<void> => {
+    if (generation.playTask) return generation.playTask;
+    const task = (async () => {
+      await generation.commit;
+      if (generation.replacement && !released) return playGeneration(generation.replacement);
+      if (released || activeGeneration !== generation) return;
+      const ready = await generation.ready;
+      if (generation.replacement && !released) return playGeneration(generation.replacement);
+      if (!ready || released || activeGeneration !== generation || !wantsPlay) return;
+      applyGenerationStart(generation, 'before_play');
+      try {
+        await player.play();
+        if (!released && activeGeneration === generation && wantsPlay) {
+          applyGenerationStart(generation, 'after_play');
+        }
+      } catch (err) {
+        if (released || activeGeneration !== generation) return;
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (err instanceof DOMException && err.name === 'NotAllowedError') {
+          emit({ kind: 'error', message: 'browser blocked playback; press play to retry' });
+          return;
+        }
+        throw err;
+      }
+    })();
+    generation.playTask = task;
+    void task.then(() => { generation.playTask = undefined; }, () => { generation.playTask = undefined; });
+    return task;
+  };
+
   const handlers: Record<string, EventListener> = {
     'load-start': () => {
       record('load-start');
@@ -349,16 +422,20 @@ export function createVidstackEngine(
         }
         if (currentURL === '' && !generation.sourceObserved) return;
         record('can-play');
+        generation.becameReady = true;
         generation.settleReady(true);
+
       }
       emit({ kind: 'canplay', paused: player.paused });
     },
     playing: () => {
       if (!activeGenerationAcceptsSourceEvent('playing')) return;
+      wantsPlay = true;
       emit({ kind: 'playing' });
     },
     pause: () => {
       if (!activeGenerationAcceptsSourceEvent('pause')) return;
+      wantsPlay = false;
       emit({ kind: 'paused' });
     },
     waiting: () => {
@@ -436,6 +513,25 @@ export function createVidstackEngine(
         ) {
           return;
         }
+        if (generation.usedIndexProxy) {
+          // Older WebKit versions may reject HTTPS -> loopback video. Restore
+          // the direct URL once, retaining both the session and resume target.
+          const original = generation.originalSource;
+          const position = generation.becameReady
+            ? finiteSeconds(player.currentTime)
+            : mediaFragmentStartSec(original);
+          const url = new URL(original.url, window.location.href);
+          url.hash = position > 0 ? `t=${position}` : '';
+          const fallback = beginGeneration({ ...original, url: url.href }, original, false);
+          generation.replacement = fallback;
+          record('index_proxy_fallback');
+          if (wantsPlay) void playGeneration(fallback).catch(() => {
+            if (activeGeneration === fallback && !released) {
+              emit({ kind: 'error', message: describeVidstackError(player) });
+            }
+          });
+          return;
+        }
         generation.settleReady(false);
       }
       emit({ kind: 'error', message: describeVidstackError(player) });
@@ -455,41 +551,12 @@ export function createVidstackEngine(
       if (released) {
         throw new Error('vidstack engine: cannot load on a released engine');
       }
-      activeGeneration?.settleReady(false);
       current = source;
-      sourceGeneration += 1;
-      seekGeneration = 0;
-      pendingInternalSeekTargetSec = null;
-      lastDurationSec = 0;
-      lastTimePositionSec = null;
+      wantsPlay = false;
+      const transportSource = videoIndexSource(source);
+      beginGeneration(transportSource, source, transportSource !== source);
       record('load_request', {
         targetPositionSec: mediaFragmentStartSec(source) || null,
-      });
-      let finishReady = (_ready: boolean) => {};
-      let settled = false;
-      const ready = new Promise<boolean>((resolve) => {
-        finishReady = resolve;
-      });
-      const generation: SourceGeneration = {
-        source,
-        commit: commitSource(source),
-        ready,
-        sourceObserved: false,
-        resumeTargetActive: true,
-        resumeTargetReached: false,
-        settleReady(readyValue) {
-          if (settled) return;
-          settled = true;
-          finishReady(readyValue);
-        },
-      };
-      activeGeneration = generation;
-      void generation.commit.then(() => {
-        if (!released && activeGeneration === generation) {
-          record('source_commit');
-          player.startLoading();
-          record('start_loading');
-        }
       });
     },
 
@@ -498,37 +565,14 @@ export function createVidstackEngine(
         throw new Error('vidstack engine: cannot play on a released engine');
       }
       record('play_request');
+      wantsPlay = true;
       const generation = activeGeneration;
-      if (generation === null) return;
-      await generation.commit;
-      if (released || activeGeneration !== generation) {
-        return;
-      }
-      const ready = await generation.ready;
-      if (!ready || released || activeGeneration !== generation) {
-        return;
-      }
-      applyGenerationStart(generation, 'before_play');
-      try {
-        await player.play();
-        if (!released && activeGeneration === generation) {
-          applyGenerationStart(generation, 'after_play');
-        }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        if (err instanceof DOMException && err.name === 'NotAllowedError') {
-          emit({
-            kind: 'error',
-            message: 'browser blocked playback; press play to retry',
-          });
-          return;
-        }
-        throw err;
-      }
+      if (generation !== null) await playGeneration(generation);
     },
 
     pause() {
       if (released) return;
+      wantsPlay = false;
       void player.pause();
     },
 

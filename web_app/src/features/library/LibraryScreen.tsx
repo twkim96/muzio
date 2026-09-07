@@ -21,6 +21,10 @@ import { VirtualizedLibraryList } from './VirtualizedLibraryList';
 import type { LibraryStatus } from './libraryStore';
 import { describeLibraryError } from './libraryMessage';
 import {
+  createLocalStorageLibraryViewPreferencesRepository,
+  type LibraryViewPreferences,
+} from './libraryViewPreferencesRepository';
+import {
   EMPTY_LIBRARY_FILTERS, libraryFacets, libraryQueryWithArtists, parseLibraryQuery,
   type LibraryFilters,
   filterAndSortLibraryItems,
@@ -46,6 +50,8 @@ const labels: Record<LibraryMediaType, { title: string; emptyHint: string }> = {
   },
 };
 
+type LibrarySortSelection = { key: LibrarySortKey; direction: LibrarySortDirection };
+
 export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   const stores = useLibraryStores();
   const useStore =
@@ -57,11 +63,54 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   const playlists = usePlaylists();
   const filterHost = useFilterHost();
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filters, setFilters] = useState<LibraryFilters>(EMPTY_LIBRARY_FILTERS);
-  const [query, setQuery] = useState('');
+  const preferencesRepository = useMemo(() => createLocalStorageLibraryViewPreferencesRepository(), []);
+  const [viewPreferences, setViewPreferences] = useState<Record<LibraryMediaType, LibraryViewPreferences>>(
+    () => ({
+      audio: preferencesRepository.read('audio'),
+      video: preferencesRepository.read('video'),
+      image: preferencesRepository.read('image'),
+    }),
+  );
+  const currentPreferences = viewPreferences[type];
+  const { filters, query, sortKey, sortDirection } = currentPreferences;
+  const updateCurrentPreferences = useCallback(
+    (update: (current: LibraryViewPreferences) => LibraryViewPreferences) => {
+      setViewPreferences((current) => ({
+        ...current,
+        [type]: update(current[type]),
+      }));
+    },
+    [type],
+  );
+  const setFilters = useCallback(
+    (next: LibraryFilters | ((current: LibraryFilters) => LibraryFilters)) => {
+      updateCurrentPreferences((current) => ({
+        ...current,
+        filters: typeof next === 'function' ? next(current.filters) : next,
+      }));
+    },
+    [updateCurrentPreferences],
+  );
+  const setQuery = useCallback(
+    (next: string) => updateCurrentPreferences((current) => ({ ...current, query: next })),
+    [updateCurrentPreferences],
+  );
+  const setSort = useCallback(
+    (next: LibrarySortSelection | ((current: LibrarySortSelection) => LibrarySortSelection)) => {
+      updateCurrentPreferences((current) => {
+        if (typeof next === 'function') {
+          const updated = next({ key: current.sortKey, direction: current.sortDirection });
+          return { ...current, sortKey: updated.key, sortDirection: updated.direction };
+        }
+        return { ...current, sortKey: next.key, sortDirection: next.direction };
+      });
+    },
+    [updateCurrentPreferences],
+  );
+  useEffect(() => {
+    preferencesRepository.write(type, currentPreferences);
+  }, [currentPreferences, preferencesRepository, type]);
   const deferredQuery = useDeferredValue(query);
-  const [sort, setSort] = useState<{ key: LibrarySortKey; direction: LibrarySortDirection }>({ key: 'latest', direction: 'desc' });
-  const { key: sortKey, direction: sortDirection } = sort;
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [addModalItems, setAddModalItems] = useState<LibraryItem[] | null>(null);
@@ -85,8 +134,9 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   const rawItems = result?.kind === 'ok' ? result.items : [];
   const facets = useMemo(() => libraryFacets(rawItems), [rawItems]);
   const parsedQuery = useMemo(() => parseLibraryQuery(query, facets.artists), [query, facets.artists]);
-  const selectedFilters = { ...filters, artists: parsedQuery.artists };
-  const filterCount = filters.storageIds.length + filters.locations.length + parsedQuery.artists.length;
+  const selectedArtistIds = [...new Set([...filters.artists, ...parsedQuery.artists])];
+  const selectedFilters = { ...filters, artists: selectedArtistIds };
+  const filterCount = filters.storageIds.length + filters.locations.length + selectedArtistIds.length;
   const clearFilters = () => { setFilters(EMPTY_LIBRARY_FILTERS); setQuery(''); };
   const renderSearchPreview = (onClose?: () => void) => <LibrarySearchPreview query={query} facets={facets} filters={filters}
     onApply={(nextQuery, nextFilters) => { setQuery(nextQuery); setFilters(nextFilters); }} onClose={onClose} />;
@@ -227,10 +277,15 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
           onClick={() => setFilters((current) => ({ ...current, storageIds: current.storageIds.filter((value) => value !== id) }))}>{facets.storage.find((entry) => entry.id === id)?.label ?? id} ×</button>)}
         {filters.locations.map((location) => <button key={location} type="button" className="muzio-glass-action muzio-glass-action-secondary" aria-label={`Remove ${location === 'local' ? 'Offline' : 'Online'} source`}
           onClick={() => setFilters((current) => ({ ...current, locations: current.locations.filter((value) => value !== location) }))}>{location === 'local' ? 'Offline' : 'Online'} ×</button>)}
-        {parsedQuery.artists.map((id) => {
+        {selectedArtistIds.map((id) => {
           const label = facets.artists.find((artist) => artist.id === id)?.label ?? id;
           return <button key={id} type="button" className="muzio-glass-action muzio-glass-action-secondary" aria-label={`Remove artist ${label}`}
-            onClick={() => setQuery(libraryQueryWithArtists(parsedQuery.text, parsedQuery.artists.filter((artist) => artist !== id), facets.artists))}>#{label} ×</button>;
+            onClick={() => {
+              if (parsedQuery.artists.includes(id)) {
+                setQuery(libraryQueryWithArtists(parsedQuery.text, parsedQuery.artists.filter((artist) => artist !== id), facets.artists));
+              }
+              setFilters((current) => ({ ...current, artists: current.artists.filter((artist) => artist !== id) }));
+            }}>#{label} ×</button>;
         })}
         <button type="button" className="text-xs text-muted" onClick={clearFilters}>Clear filters</button>
       </div>}

@@ -23,7 +23,7 @@ const sampleItem: PlayableLibraryItem = {
 
 describe('buildStreamingUrl', () => {
   test('produces a same-origin /api/media URL', () => {
-    expect(buildStreamingUrl('abc')).toBe('/api/media/abc');
+    expect(buildStreamingUrl('abc')).toBe('/api/media/abc?v=2');
   });
 
   test('rejects an empty mediaId', () => {
@@ -35,28 +35,35 @@ describe('buildStreamingUrl', () => {
   });
 
   test('trims leading and trailing whitespace before encoding', () => {
-    expect(buildStreamingUrl('  abc  ')).toBe('/api/media/abc');
+    expect(buildStreamingUrl('  abc  ')).toBe('/api/media/abc?v=2');
   });
 
   test('URL-encodes path-unsafe characters', () => {
     // Today the backend hands out hex IDs, but the contract treats the ID as
     // opaque, so a future ID scheme could contain '/', ' ', '?', '#', etc.
     expect(buildStreamingUrl('a b/c?d#e')).toBe(
-      `/api/media/${encodeURIComponent('a b/c?d#e')}`,
+      `/api/media/${encodeURIComponent('a b/c?d#e')}?v=2`,
     );
   });
 
   test('appends a media fragment when startSec is positive', () => {
     expect(buildStreamingUrl('abc', { startSec: 120.45 })).toBe(
-      '/api/media/abc#t=120.5',
+      '/api/media/abc?v=2#t=120.5',
     );
   });
 
   test('omits the fragment for zero, negative, or non-finite startSec', () => {
-    expect(buildStreamingUrl('abc', { startSec: 0 })).toBe('/api/media/abc');
-    expect(buildStreamingUrl('abc', { startSec: -1 })).toBe('/api/media/abc');
+    expect(buildStreamingUrl('abc', { startSec: 0 })).toBe('/api/media/abc?v=2');
+    expect(buildStreamingUrl('abc', { startSec: -1 })).toBe('/api/media/abc?v=2');
     expect(buildStreamingUrl('abc', { startSec: Number.NaN })).toBe(
-      '/api/media/abc',
+      '/api/media/abc?v=2',
+    );
+  });
+
+  test('keeps local media URLs unversioned and preserves resume fragments', () => {
+    expect(buildStreamingUrl('local:a/b')).toBe('/__muzio_local/media/local%3Aa%2Fb');
+    expect(buildStreamingUrl('local:a/b', { startSec: 120.45 })).toBe(
+      '/__muzio_local/media/local%3Aa%2Fb#t=120.5',
     );
   });
 });
@@ -68,7 +75,7 @@ describe('remoteSourceFromLibraryItem', () => {
       kind: 'remote',
       mediaId: 'abcd1234',
       mediaType: 'video',
-      url: '/api/media/abcd1234',
+      url: '/api/media/abcd1234?v=2',
       mimeType: 'video/x-matroska',
       name: 'Inception.mkv',
       title: 'Inception',

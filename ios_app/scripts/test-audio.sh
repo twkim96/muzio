@@ -63,7 +63,7 @@ done
 [[ -s "$test_dir/port" ]] || { echo 'Fixture server startup timed out' >&2; exit 1; }
 architecture="$(uname -m)"
 swiftc -swift-version 5 -target "$architecture-apple-macosx13.0" \
-  "$ios_dir/Muzio/NativeAudioPlayer.swift" "$ios_dir/Tests/NativeAudioTests.swift" -o "$test_dir/native-audio-tests"
+  "$ios_dir/Muzio/AppleNotificationLikeStore.swift" "$ios_dir/Muzio/NativeAudioPlayer.swift" "$ios_dir/Tests/NativeAudioTests.swift" -o "$test_dir/native-audio-tests"
 python3 - "$test_dir/native-audio-tests" "http://127.0.0.1:$(cat "$test_dir/port")" <<'PYRUN'
 import subprocess, sys
 try:

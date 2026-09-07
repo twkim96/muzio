@@ -6,7 +6,6 @@ package streaming
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -224,9 +223,21 @@ func Handler(roots PathResolver, lookup Lookup, logger *slog.Logger) http.Handle
 			http.Error(w, "unsupported media type", http.StatusUnsupportedMediaType)
 			return
 		}
+		revision := mediaRevision(media.ID, info)
+		w.Header().Set("X-Muzio-Revision", revision)
+		if expected := r.URL.Query().Get("index_revision"); expected != "" && expected != revision {
+			w.Header().Set("Cache-Control", "no-store")
+			http.Error(w, "media revision changed", http.StatusConflict)
+			return
+		}
+		if serveVideoIndex(w, r, media, file, info, mime, revision) {
+			return
+		}
 		w.Header().Set("Content-Type", mime)
 		w.Header().Set("Cache-Control", "private, no-transform")
-		w.Header().Set("ETag", mediaWeakETag(media.ID, info.Size(), info.ModTime()))
+		// Let ServeContent advertise Last-Modified for conditional range requests.
+		// Chromium can reuse a weak ETag as If-Range after caching a partial MP4;
+		// that cannot satisfy strong comparison and restarts the entire download.
 
 		ServeContentWithDiagnostics(w, r, media.Name, info.ModTime(), file, logger, media.ID, string(media.Type), "direct")
 	}
@@ -325,16 +336,6 @@ func mediaRequestKind(r *http.Request) string {
 		return "partial_get"
 	}
 	return "full_get"
-}
-
-func mediaWeakETag(mediaID string, size int64, modTime time.Time) string {
-	return fmt.Sprintf(`W/"%s-%x-%x"`, sanitizeETagPart(mediaID), size, modTime.UnixNano())
-}
-
-func sanitizeETagPart(value string) string {
-	value = strings.ReplaceAll(value, `\`, `_`)
-	value = strings.ReplaceAll(value, `"`, `_`)
-	return value
 }
 
 func reportMissingMediaIfRootAvailable(roots PathResolver, lookup Lookup, media library.Media) {

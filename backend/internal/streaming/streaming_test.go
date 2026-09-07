@@ -101,8 +101,11 @@ func TestHandlerReturnsFullBodyWithoutRange(t *testing.T) {
 	if got := rec.Header().Get("Cache-Control"); got != "private, no-transform" {
 		t.Fatalf("Cache-Control = %q", got)
 	}
-	if got := rec.Header().Get("ETag"); got == "" || !strings.HasPrefix(got, `W/"fixture-id-`) {
-		t.Fatalf("ETag = %q, want weak media validator", got)
+	if got := rec.Header().Get("ETag"); got != "" {
+		t.Fatalf("ETag = %q, want Last-Modified validation only", got)
+	}
+	if got := rec.Header().Get("Last-Modified"); got != media.ModifiedAt.UTC().Format(http.TimeFormat) {
+		t.Fatalf("Last-Modified = %q", got)
 	}
 	if rec.Body.String() != body {
 		t.Fatalf("body = %q, want %q", rec.Body.String(), body)
@@ -131,8 +134,11 @@ func TestHandlerReturnsPartialContentForRangeRequest(t *testing.T) {
 	if got := rec.Header().Get("Content-Length"); got != "6" {
 		t.Fatalf("Content-Length = %q, want 6", got)
 	}
-	if got := rec.Header().Get("ETag"); got == "" || !strings.HasPrefix(got, `W/"fixture-id-`) {
-		t.Fatalf("ETag = %q, want weak media validator", got)
+	if got := rec.Header().Get("ETag"); got != "" {
+		t.Fatalf("ETag = %q, want Last-Modified validation only", got)
+	}
+	if got := rec.Header().Get("Last-Modified"); got != media.ModifiedAt.UTC().Format(http.TimeFormat) {
+		t.Fatalf("Last-Modified = %q", got)
 	}
 }
 
@@ -158,8 +164,11 @@ func TestHandlerReturnsRandomSeekRangeWithCacheHeaders(t *testing.T) {
 	if got := rec.Header().Get("Cache-Control"); got != "private, no-transform" {
 		t.Fatalf("Cache-Control = %q", got)
 	}
-	if got := rec.Header().Get("ETag"); got == "" || !strings.HasPrefix(got, `W/"fixture-id-`) {
-		t.Fatalf("ETag = %q, want weak media validator", got)
+	if got := rec.Header().Get("ETag"); got != "" {
+		t.Fatalf("ETag = %q, want Last-Modified validation only", got)
+	}
+	if got := rec.Header().Get("Last-Modified"); got != media.ModifiedAt.UTC().Format(http.TimeFormat) {
+		t.Fatalf("Last-Modified = %q", got)
 	}
 }
 
@@ -391,18 +400,78 @@ func TestHandlerHEADReturnsHeadersWithoutBody(t *testing.T) {
 	if got := rec.Header().Get("Cache-Control"); got != "private, no-transform" {
 		t.Fatalf("Cache-Control = %q", got)
 	}
-	if got := rec.Header().Get("ETag"); got == "" || !strings.HasPrefix(got, `W/"fixture-id-`) {
-		t.Fatalf("ETag = %q, want weak media validator", got)
+	if got := rec.Header().Get("ETag"); got != "" {
+		t.Fatalf("ETag = %q, want Last-Modified validation only", got)
+	}
+	if got := rec.Header().Get("Last-Modified"); got != media.ModifiedAt.UTC().Format(http.TimeFormat) {
+		t.Fatalf("Last-Modified = %q", got)
 	}
 }
 
-func TestMediaWeakETagSanitizesQuotedParts(t *testing.T) {
-	etag := mediaWeakETag(`bad"id\part`, 16, time.Unix(10, 20))
-	if strings.Contains(etag, `bad"id\part`) {
-		t.Fatalf("ETag did not sanitize media id: %q", etag)
+func TestHandlerConditionalSeekUsesAdvertisedValidator(t *testing.T) {
+	roots, media := newFixture(t, "0123456789abcdef", "video.mp4")
+	h := Handler(roots, fakeLookup{media: media}, discardLogger())
+	url := "/api/media/" + media.ID + "?v=2"
+	initial := httptest.NewRecorder()
+	h.ServeHTTP(initial, httptest.NewRequest(http.MethodGet, url, nil))
+	modified := initial.Header().Get("Last-Modified")
+	if _, err := http.ParseTime(modified); err != nil {
+		t.Fatalf("Last-Modified = %q: %v", modified, err)
 	}
-	if !strings.HasPrefix(etag, `W/"bad_id_part-`) {
-		t.Fatalf("ETag = %q", etag)
+	// Reproduce the browser's cached seek: prefer ETag if advertised, otherwise
+	// use Last-Modified. A weak ETag here made ServeContent return the full file.
+	validator := initial.Header().Get("ETag")
+	if validator == "" {
+		validator = modified
+	}
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	req.Header.Set("Range", "bytes=4-9")
+	req.Header.Set("If-Range", validator)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusPartialContent || rec.Body.String() != "456789" || rec.Header().Get("Content-Range") != "bytes 4-9/16" {
+		t.Fatalf("conditional seek: status=%d body=%q Content-Range=%q", rec.Code, rec.Body.String(), rec.Header().Get("Content-Range"))
+	}
+
+	path := filepath.Join(roots.All()[0].Path, media.RelativePath)
+	if err := os.WriteFile(path, []byte("abcdefghijklmnop"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	changedTime := media.ModifiedAt.Add(2 * time.Second)
+	if err := os.Chtimes(path, changedTime, changedTime); err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "abcdefghijklmnop" || rec.Header().Get("Content-Range") != "" {
+		t.Fatalf("changed file must invalidate cached range: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandlerPreservesConditionalRequestSemantics(t *testing.T) {
+	roots, media := newFixture(t, "0123456789abcdef", "video.mp4")
+	h := Handler(roots, fakeLookup{media: media}, discardLogger())
+	url := "/api/media/" + media.ID + "?v=2"
+	modified := media.ModifiedAt.UTC().Format(http.TimeFormat)
+	for _, tc := range []struct {
+		name, header, value, body string
+		status                    int
+	}{
+		{"unchanged", "If-Modified-Since", modified, "", http.StatusNotModified},
+		{"stale date", "If-Range", media.ModifiedAt.Add(-time.Hour).UTC().Format(http.TimeFormat), "0123456789abcdef", http.StatusOK},
+		{"legacy weak validator", "If-Range", `W/"old-cache"`, "0123456789abcdef", http.StatusOK},
+		{"foreign validator", "If-Range", `"other-file"`, "0123456789abcdef", http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, url, nil)
+			req.Header.Set("Range", "bytes=4-9")
+			req.Header.Set(tc.header, tc.value)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != tc.status || rec.Body.String() != tc.body || rec.Header().Get("Content-Range") != "" {
+				t.Fatalf("status=%d body=%q Content-Range=%q", rec.Code, rec.Body.String(), rec.Header().Get("Content-Range"))
+			}
+		})
 	}
 }
 

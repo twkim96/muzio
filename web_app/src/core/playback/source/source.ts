@@ -12,7 +12,7 @@ export type PlaybackSource = RemotePlaybackSource;
 
 export interface RemotePlaybackSource {
   kind: 'remote';
-  /** Local items use an opaque Android library handle, never an arbitrary URI. */
+  /** Local items use an opaque native library handle, never an arbitrary URI. */
   location?: 'local' | 'network';
   /** Stable media id from the backend; useful as a cache key. */
   mediaId: string;
@@ -70,7 +70,12 @@ export function buildStreamingUrl(
   if (trimmed === '') {
     throw new Error('buildStreamingUrl: mediaId must not be empty');
   }
-  const base = `${trimmed.startsWith('local:') ? '/__muzio_local/media/' : STREAM_BASE_PATH}${encodeURIComponent(trimmed)}`;
+  // Separate network streams from browser cache entries carrying the old weak
+  // ETag: their If-Range requests would still receive full responses after the
+  // server switches to Last-Modified validation. Local media needs no migration.
+  const base = trimmed.startsWith('local:')
+    ? `/__muzio_local/media/${encodeURIComponent(trimmed)}`
+    : `${STREAM_BASE_PATH}${encodeURIComponent(trimmed)}?v=2`;
   const start = options.startSec;
   if (
     start === undefined ||

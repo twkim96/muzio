@@ -468,3 +468,7 @@ go test ./internal/library -run '^$' \
   permission surface.
 - Add focused tests first, then run full release gates for cross-boundary work.
 - Update `README.MD` when runtime contracts or the code map change.
+
+## 컴파일 검증과 릴리스 패키징
+
+네이티브 변경 시 영향받는 Android·iOS·macOS 타깃의 컴파일과 관련 테스트를 수행한다. 설치·배포 패키징은 버전 마무리 때 타깃별 1회로 모으며, 실기기 검증은 별도로 기록한다. SDK가 없는 타깃은 미검증으로 남긴다. 상세 기준: [프로젝트 검증 정책](AGENTS.md).

@@ -303,6 +303,7 @@ export interface PlayerStoreOptions {
   activityRepository?: PlaybackActivityRepository | null;
   preferencesRepository?: PlaybackPreferencesRepository | null;
   activityProgressThrottleMs?: number;
+  nativePlaybackHistory?: boolean;
   random?: () => number;
   networkGate?: PlaybackNetworkGate;
 }
@@ -433,6 +434,7 @@ function activitySourceFromPlaybackSource(
 }
 
 export function createPlayerStore(options: PlayerStoreOptions = {}) {
+  const nativePlaybackHistory = options.nativePlaybackHistory === true;
   const sessionFactory = options.createSession ?? createSession;
   const engineFactory = options.createEngine ?? createEngine;
   const progressService = options.progressService ?? null;
@@ -746,7 +748,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           syncActivityProgress(targetKind, slot.session.getState(), true);
         }
         const activityRecords =
-          activityRepository !== null
+          activityRepository !== null && !(targetKind === 'audio' && get().nativeAudio && nativePlaybackHistory)
             ? activityRepository.recordPlay(
                 activitySourceFromPlaybackSource(playbackSource),
                 now(),

@@ -3,12 +3,18 @@ import { useEffect, useRef } from 'react';
 export interface NativeCapabilities {
   localLibrary?: boolean;
   nativeAudio?: boolean;
+  nativeVideo?: boolean;
+  notificationLikes?: boolean;
+  playbackHistory?: boolean;
 }
 export interface NativeShellMetadata {
   platform?: 'android' | 'ios' | 'macos';
   capabilities?: NativeCapabilities;
+  /** Ephemeral, token-protected Apple video proxy; absent in older hosts. */
+  videoIndexBaseUrl?: string;
 }
 export interface AndroidShellBridge extends NativeShellMetadata {
+  subscribe?(listener: (event: { type: string; state?: unknown }) => void): () => void;
   request<T>(command: string, payload?: object): Promise<T>;
 }
 let shellBridge: AndroidShellBridge | null = null;
@@ -19,7 +25,8 @@ export function androidShellBridge() { return shellBridge; }
 /** Older Android hosts advertise no metadata and retain their existing features. */
 export function supportsNativeCapability(capability: keyof NativeCapabilities, bridge = shellBridge): boolean {
   if (!bridge) return false;
-  return bridge.capabilities?.[capability] ?? (capability === 'nativeAudio' || (bridge.platform === undefined || bridge.platform === 'android'));
+  return bridge.capabilities?.[capability] ?? (capability === 'nativeAudio' ||
+    (capability === 'localLibrary' && (bridge.platform === undefined || bridge.platform === 'android')));
 }
 
 const migrationKeys = ['music.likes.v1', 'music.playlists.v1', 'music.activity.v1'] as const;

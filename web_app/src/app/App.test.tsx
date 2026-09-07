@@ -1,3 +1,4 @@
+import { configureAndroidShell } from '../core/platform/androidShell';
 import {
   act,
   cleanup,
@@ -844,7 +845,7 @@ describe('App routes', () => {
     expect(screen.getByTestId('image-viewer')).toBeInTheDocument();
     expect(screen.getByTestId('image-viewer-image')).toHaveAttribute(
       'src',
-      '/api/media/i1',
+      '/api/media/i1?v=2',
     );
     expect(screen.getByTestId('library-list')).toBeInTheDocument();
     expect(
@@ -866,4 +867,23 @@ describe('App routes', () => {
       expect(screen.getByTestId('mini-player')).toBeInTheDocument();
     });
   });
+});
+
+
+test('notification queue opens after resume and acknowledges only after showing the drawer', async () => {
+  let pending = false;
+  const request = vi.fn(async (_command: string, payload?: object) => {
+    if ((payload as { acknowledged?: boolean } | undefined)?.acknowledged) pending = false;
+    return { openQueue: pending };
+  });
+  configureAndroidShell({ platform: 'android', request: request as never });
+  try {
+    renderApp('/library/music');
+    await waitFor(() => expect(request).toHaveBeenCalledWith('shell.notificationIntent'));
+    pending = true;
+    act(() => window.dispatchEvent(new Event('muzio-resume')));
+    expect(await screen.findByTestId('queue-drawer')).toBeInTheDocument();
+    expect(request).toHaveBeenCalledWith('shell.notificationIntent', { acknowledged: true });
+    expect(pending).toBe(false);
+  } finally { configureAndroidShell(null); }
 });

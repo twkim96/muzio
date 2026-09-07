@@ -1,4 +1,6 @@
-const CACHE_NAME = 'muzio-shell-v1.4.6-r3';
+importScripts('/video-index-cache.js');
+const videoIndexCache = self.MuzioVideoIndexCache.create();
+const CACHE_NAME = 'muzio-shell-v1.4.6-r16';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -63,6 +65,10 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  if (/^\/api\/media\/[^/]+$/.test(url.pathname) && !url.searchParams.has('index')) {
+    event.respondWith(videoIndexCache.handle(request));
+    return;
+  }
   if (url.pathname.startsWith('/api/') || url.pathname === '/healthz') return;
   if (IS_DEV_SERVER) return;
 

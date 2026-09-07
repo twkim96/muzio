@@ -25,6 +25,7 @@ class NativePlaybackBridge(
     serverBaseUrl: String,
     private val emit: (JSONObject) -> Unit,
 ) {
+    private val notificationLikes = NotificationLikeStore(context.applicationContext)
     private val localLibrary = com.twkim.videiomusic.data.LocalLibraryManager(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var origin = serverOrigin(serverBaseUrl)
@@ -77,6 +78,14 @@ class NativePlaybackBridge(
                 val localArtwork = if (localIds.isEmpty()) emptyMap() else localLibrary.artworkUris(
                     localIds, payload.optJSONObject("source")?.optString("mediaId"))
                 when (command) {
+                    "playback.notificationLikes" -> return@runCatching notificationLikes.snapshot(origin)
+                    "playback.syncNotificationLikes" -> {
+                        fun strings(key: String): Set<String> {
+                            val values = payload.optJSONArray(key) ?: return emptySet()
+                            return (0 until values.length()).map { values.getString(it) }.toSet()
+                        }
+                        return@runCatching notificationLikes.sync(origin, strings("keys"), strings("acknowledged"))
+                    }
                     "playback.snapshot" -> Unit
                     "playback.load" -> load(player, payload, localUris, localArtwork)
                     "playback.queue" -> updateQueue(player, payload, localUris, localArtwork)
@@ -190,6 +199,7 @@ class NativePlaybackBridge(
             LibraryMetadata(source.optString("title"), artist, source.optString("album")), thumbnail = null).contentKey()
         val extras = PlaybackService.sourceExtras(MediaType.Audio, name, root, path, identity, artist).apply {
             putString(PlaybackService.EXTRA_SERVER_ORIGIN, if (local) "" else origin)
+            putString("muzio.notification_origin", origin)
             putString(PlaybackService.EXTRA_WEB_SOURCE, source.toString())
         }
         val metadata = MediaMetadata.Builder().setTitle(title).setArtist(artist).setAlbumTitle(source.optString("album"))
@@ -233,6 +243,7 @@ class NativePlaybackBridge(
             .put("stopAfterCurrent", runtime.stopAfterCurrent)
             .put("sleepTimerEndsAtMs", runtime.sleepTimerEndsAtMs ?: JSONObject.NULL)
             .put("sleepTimerExpired", runtime.sleepTimerExpired)
+            .put("notificationLikes", notificationLikes.snapshot(origin))
             .apply { if (includeQueue) put("queue", JSONArray().apply { for (i in 0 until player.mediaItemCount) put(source(player.getMediaItemAt(i)) ?: JSONObject.NULL) }) }
     }
 

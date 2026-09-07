@@ -68,3 +68,52 @@ test('PiP covers visual viewport when Android page scale makes CSS viewport smal
   expect(document.documentElement.hasAttribute('data-muzio-pip')).toBe(false);
   vi.unstubAllGlobals();
 });
+
+test('PiP pause and play control the same video repeatedly and report actual state', async () => {
+  const { video, request, dispose } = fixture();
+  const pause = vi.spyOn(video, 'pause').mockImplementation(() => {
+    Object.defineProperty(video, 'paused', { value: true, configurable: true });
+    video.dispatchEvent(new Event('pause'));
+  });
+  const play = vi.spyOn(video, 'play').mockImplementation(async () => {
+    Object.defineProperty(video, 'paused', { value: false, configurable: true });
+    video.dispatchEvent(new Event('playing'));
+  });
+  const control = (command: string) => window.dispatchEvent(new CustomEvent('muzio-video-control', { detail: command }));
+  control('play');
+  expect(play).not.toHaveBeenCalled();
+  window.dispatchEvent(new CustomEvent('muzio-pip', { detail: true }));
+  for (let cycle = 0; cycle < 3; cycle++) {
+    control('play'); await Promise.resolve();
+    expect(video.paused).toBe(false);
+    expect(request).toHaveBeenLastCalledWith('shell.videoState', { playing: true, width: 1920, height: 1080 });
+    control('play'); await Promise.resolve();
+    expect(video.paused).toBe(false);
+    expect(pause).toHaveBeenCalledTimes(cycle);
+    control('pause');
+    expect(video.paused).toBe(true);
+    expect(request).toHaveBeenLastCalledWith('shell.videoState', { playing: false, width: 1920, height: 1080 });
+  }
+  const calls = play.mock.calls.length;
+  control('toggle');
+  expect(play).toHaveBeenCalledTimes(calls);
+  dispose();
+  control('play');
+  expect(play).toHaveBeenCalledTimes(calls);
+});
+
+test('a rejected PiP play reports paused state and allows another attempt', async () => {
+  const { video, request, dispose } = fixture();
+  const play = vi.spyOn(video, 'play').mockRejectedValueOnce(new Error('interrupted'))
+    .mockImplementationOnce(async () => {
+      Object.defineProperty(video, 'paused', { value: false, configurable: true });
+    });
+  window.dispatchEvent(new CustomEvent('muzio-pip', { detail: true }));
+  const control = () => window.dispatchEvent(new CustomEvent('muzio-video-control', { detail: 'play' }));
+  control(); await Promise.resolve();
+  expect(request).toHaveBeenLastCalledWith('shell.videoState', { playing: false, width: 1920, height: 1080 });
+  control(); await Promise.resolve();
+  expect(play).toHaveBeenCalledTimes(2);
+  expect(request).toHaveBeenLastCalledWith('shell.videoState', { playing: true, width: 1920, height: 1080 });
+  dispose();
+});

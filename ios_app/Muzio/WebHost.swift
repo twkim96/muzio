@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 import SwiftUI
 import WebKit
 #if os(iOS)
@@ -9,19 +10,88 @@ import AppKit
 
 @MainActor
 final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+    @Published private(set) var appearanceDark: Bool?
+    @Published private(set) var appearanceHex = "#1f1f1f"
+    var appearanceColor: Color {
+        if appearanceDark == nil {
+            #if os(iOS)
+            return Color(uiColor: .systemBackground)
+            #else
+            return Color(nsColor: .windowBackgroundColor)
+            #endif
+        }
+        let rgb = UInt32(appearanceHex.dropFirst(), radix: 16) ?? 0x1f1f1f
+        return Color(red: Double((rgb >> 16) & 255) / 255, green: Double((rgb >> 8) & 255) / 255, blue: Double(rgb & 255) / 255)
+    }
+    var appearanceScheme: ColorScheme? { appearanceDark.map { $0 ? .dark : .light } }
+    private func applyAppearance(_ payload: [String: Any]) throws {
+        guard let hex = payload["backgroundColor"] as? String,
+              hex.range(of: "^#[0-9a-fA-F]{6}$", options: .regularExpression) != nil,
+              let dark = payload["dark"] as? Bool else { throw HostError.message("올바르지 않은 화면 테마입니다.") }
+        appearanceHex = hex.lowercased(); appearanceDark = dark
+        UserDefaults.standard.set(["backgroundColor": appearanceHex, "dark": dark], forKey: "muzio.appearance")
+        applyWebBackground()
+    }
+    private func applyWebBackground() {
+        guard let webView else { return }
+        #if os(iOS)
+        let color = UIColor(appearanceColor)
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
+        webView.overrideUserInterfaceStyle = appearanceDark.map { $0 ? .dark : .light } ?? .unspecified
+        #else
+        let color = NSColor(appearanceColor)
+        webView.appearance = appearanceDark.map { NSAppearance(named: $0 ? .darkAqua : .aqua) } ?? nil
+        #endif
+        #if os(iOS)
+        webView.underPageBackgroundColor = .clear
+        #else
+        webView.underPageBackgroundColor = color
+        #endif
+    }
+    @Published var videoFullscreen = false
     @Published var webView: WKWebView?
     @Published var showSetup = false
+    @Published var showFolderPicker = false
+    private var folderReply: CheckedContinuation<URL?, Error>?
+    private let localLibrary = Result { try LocalMusicLibrary() }
+
+    func folderPicked(_ result: Result<[URL], Error>) {
+        showFolderPicker = false
+        let reply = folderReply; folderReply = nil
+        switch result {
+        case .success(let urls): reply?.resume(returning: urls.first)
+        case .failure(let error):
+            if (error as NSError).code == NSUserCancelledError { reply?.resume(returning: nil) }
+            else { reply?.resume(throwing: error) }
+        }
+    }
+
+    private func pickFolder() async throws -> URL? {
+        guard folderReply == nil else { throw HostError.message("이미 폴더를 선택하고 있습니다.") }
+        return try await withCheckedThrowingContinuation { reply in
+            folderReply = reply; showFolderPicker = true
+        }
+    }
     @Published var connecting = false
     @Published var loading = false
     @Published var connectionError = ""
     @Published var loadError = ""
     private(set) var origin: URL?
+    #if os(iOS)
+    private(set) var video: NativeVideoPlayer?
+    #endif
     private var audio: NativeAudioPlayer?
+    private var playbackHistory: ApplePlaybackHistory?
+    private var videoIndexProxy: VideoIndexProxy?
+    private var openGeneration = UUID()
     private var documentGeneration = UUID()
     var savedOrigin: String { UserDefaults.standard.string(forKey: "muzio.serverOrigin") ?? "" }
 
     override init() {
         super.init()
+        if let saved = UserDefaults.standard.dictionary(forKey: "muzio.appearance") { try? applyAppearance(saved) }
         if let url = try? ServerPolicy.origin(savedOrigin) { open(url) }
     }
 
@@ -51,36 +121,63 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
     }
 
     private func open(_ origin: URL) {
+        let generation = UUID()
+        openGeneration = generation
         documentGeneration = UUID()
         audio?.shutdown()
+        #if os(iOS)
+        video?.shutdown(); video = nil; videoFullscreen = false
+        #endif
+        videoIndexProxy?.stop()
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "muzio")
         webView?.stopLoading()
         self.origin = origin
         loadError = ""; loading = true
+        do {
+            let proxy = try VideoIndexProxy(origin: origin)
+            videoIndexProxy = proxy
+            proxy.start { [weak self] baseURL in
+                Task { @MainActor in
+                    guard let self, self.openGeneration == generation else { return }
+                    self.loadDocument(origin, videoIndexBaseURL: baseURL)
+                }
+            }
+        } catch {
+            videoIndexProxy = nil
+            loadDocument(origin, videoIndexBaseURL: nil)
+        }
+    }
+
+    private func loadDocument(_ origin: URL, videoIndexBaseURL: URL?) {
         let configuration = WKWebViewConfiguration()
         let controller = WKUserContentController()
         controller.add(WeakMessageHandler(self), name: "muzio")
         #if os(iOS)
         let platform = "ios"
+        let nativeVideoCapability = ", nativeVideo: true"
         configuration.allowsInlineMediaPlayback = true
         configuration.allowsPictureInPictureMediaPlayback = true
         #else
         let platform = "macos"
+        let nativeVideoCapability = ""
         #endif
         configuration.mediaTypesRequiringUserActionForPlayback = []
         configuration.preferences.isElementFullscreenEnabled = true
         configuration.websiteDataStore = .default()
         let serializedOrigin = Self.jsonString(origin.absoluteString)
+        let videoIndexMetadata = videoIndexBaseURL.map { "videoIndexBaseUrl: \(Self.jsonString($0.absoluteString))," } ?? ""
         controller.addUserScript(WKUserScript(source: """
         (() => {
           if (window !== window.top || location.origin !== \(serializedOrigin)) return;
-          const port = { platform: '\(platform)', capabilities: { localLibrary: false, nativeAudio: true },
+          const port = { platform: '\(platform)', capabilities: { localLibrary: true, nativeAudio: true, notificationLikes: true, playbackHistory: true\(nativeVideoCapability) },
+            \(videoIndexMetadata)
             onmessage: null,
             postMessage(message) { window.webkit.messageHandlers.muzio.postMessage(message); }
           };
           Object.defineProperty(window, 'MuzioNative', { value: port, writable: false, configurable: false });
         })();
         """, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        configuration.setURLSchemeHandler(LocalArtworkHandler(library: localLibrary, origin: origin), forURLScheme: "muzio-local")
         configuration.userContentController = controller
         let web = WKWebView(frame: .zero, configuration: configuration)
         web.navigationDelegate = self; web.uiDelegate = self
@@ -88,8 +185,23 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
         #if os(iOS)
         web.scrollView.contentInsetAdjustmentBehavior = .never
         #endif
+        #if os(iOS)
+        video = NativeVideoPlayer(origin: origin, proxyBase: videoIndexBaseURL) { [weak self] event in self?.send(event) }
+        #endif
         webView = web
-        audio = NativeAudioPlayer(origin: origin) { [weak self] event in self?.send(event) }
+        applyWebBackground()
+        let library = localLibrary
+        let history = ApplePlaybackHistory(origin: origin)
+        playbackHistory = history
+        audio = NativeAudioPlayer(origin: origin, resolveLocal: { id in
+            let access = try library.get().resolve(mediaId: id)
+            return NativeAudioLocalAccess(url: access.url, release: { access.release() })
+        }, feedbackStore: try? AppleNotificationLikeStore(origin: origin), artworkProvider: { id in
+            try library.get().artwork(mediaId: id)
+        }) { [weak self] event in
+            if let state = event["state"] as? [String: Any] { history.record(snapshot: state) }
+            self?.send(event)
+        }
         web.load(URLRequest(url: origin.appendingPathComponent("library/music")))
     }
 
@@ -101,19 +213,72 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
               let id = request["id"] as? String, let command = request["command"] as? String else { return }
         let payload = request["payload"] as? [String: Any] ?? [:]
         let generation = documentGeneration
+        if command.hasPrefix("localLibrary.") {
+            Task { @MainActor in
+                do {
+                    let library = try localLibrary.get()
+                    let result: [String: Any]
+                    switch command {
+                    case "localLibrary.list": result = await library.snapshot()
+                    case "localLibrary.add":
+                        let url = try await pickFolder()
+                        guard generation == documentGeneration else { return }
+                        if let url { result = try await library.add(url) }
+                        else { result = await library.snapshot() }
+                    case "localLibrary.refresh": result = try await library.refresh()
+                    case "localLibrary.remove":
+                        guard let rootID = payload["id"] as? String else { throw HostError.message("폴더를 선택해 주세요.") }
+                        result = try await library.remove(id: rootID)
+                    default: throw HostError.message("지원하지 않는 로컬 음악 명령입니다.")
+                    }
+                    if generation == documentGeneration { send(["type": "response", "id": id, "ok": true, "result": result]) }
+                } catch {
+                    if generation == documentGeneration { send(["type": "response", "id": id, "ok": false, "error": error.localizedDescription]) }
+                }
+            }
+            return
+        }
         do {
             let result: [String: Any]
-            if command.hasPrefix("playback.") {
+            #if os(iOS)
+            if command == "video.fullscreen" {
+                videoFullscreen = payload["active"] as? Bool == true
+                send(["type": "response", "id": id, "ok": true, "result": [:]])
+                return
+            }
+            if command.hasPrefix("video.") {
+                guard let video else { throw HostError.message("영상 플레이어가 준비되지 않았습니다.") }
+                if command == "video.play", video.accepts(payload) { audio?.relinquishForVideo() }
+                let state = try video.handle(command, payload)
+                send(["type": "response", "id": id, "ok": true, "result": state])
+                return
+            }
+            if ["playback.play", "playback.load"].contains(command) { video?.pause() }
+            #endif
+            if command == "playback.history" {
+                result = playbackHistory?.snapshot() ?? ["pending": []]
+            } else if command == "playback.ackHistory" {
+                result = playbackHistory?.acknowledge(ids: payload["ids"] as? [String] ?? []) ?? ["pending": []]
+            } else if command.hasPrefix("playback.") {
                 guard let audio else { throw HostError.message("음악 플레이어가 준비되지 않았습니다.") }
                 result = try audio.handle(command: command, payload: payload)
             } else {
                 switch command {
                 case "shell.profile": result = ["baseUrl": origin.absoluteString, "setup": false, "displayName": "Muzio"]
                 case "shell.legacyPreferences": result = ["values": [String: String]()]
-                case "shell.finishMigration", "shell.appearance", "shell.background", "shell.cancelSetup": result = [:]
+                case "shell.finishMigration", "shell.background", "shell.cancelSetup": result = [:]
+                case "shell.appearance": try applyAppearance(payload); result = [:]
                 case "shell.editServer": editServer(); result = [:]
                 case "shell.videoState":
-                    if payload["playing"] as? Bool == true { _ = try audio?.handle(command: "playback.pause", payload: [:]) }
+                    if payload["playing"] as? Bool == true {
+                        audio?.relinquishForVideo()
+                        #if os(iOS)
+                        // WK video needs the same background playback category as native music.
+                        let session = AVAudioSession.sharedInstance()
+                        try session.setCategory(.playback, mode: .moviePlayback)
+                        try session.setActive(true)
+                        #endif
+                    }
                     result = [:]
                 default: throw HostError.message("이 앱에서 지원하지 않는 기능입니다: \(command)")
                 }
@@ -150,6 +315,9 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        #if os(iOS)
+        video?.clear(); videoFullscreen = false
+        #endif
         documentGeneration = UUID(); loading = true; loadError = ""
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loading = false; resume() }

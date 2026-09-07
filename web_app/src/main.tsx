@@ -1,3 +1,5 @@
+import { connectNativePlaybackHistory } from './core/platform/nativePlaybackHistory';
+import { connectNotificationLikes } from './core/platform/notificationLikes';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -79,7 +81,7 @@ async function startApp() {
   const progressService = createProgressService(progressRepository);
   const audioResumeCache = createAudioResumeCacheService();
   void audioResumeCache.initialize();
-  const playerStore = createPlayerStore({ progressService, audioResumeCache, videoOptimization: videoOptimizationService });
+  const playerStore = createPlayerStore({ progressService, audioResumeCache, videoOptimization: videoOptimizationService, nativePlaybackHistory: bridge?.capabilities?.playbackHistory === true });
 
   void syncThemeSettingsFromServer().catch(() => {
     // Keep the local fallback if the backend is unavailable during startup.
@@ -119,6 +121,8 @@ async function startApp() {
   }
 
   await connectNativeAudio(playerStore, supportsNativeCapability('nativeAudio', bridge) ? bridge : null);
+  connectNotificationLikes(playerStore, bridge);
+  await connectNativePlaybackHistory(playerStore, bridge, progressRepository).ready;
   seedMostRecentProgress();
   void progressRepository.syncFromRemote().then(() => {
     seedMostRecentProgress();

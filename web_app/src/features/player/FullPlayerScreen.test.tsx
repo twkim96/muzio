@@ -1713,7 +1713,7 @@ describe('FullPlayerScreen', () => {
     fireEvent.click(screen.getByLabelText('Play next.mp4'));
 
     expect(store.getState().video.source?.mediaId).toBe('v2');
-    expect(store.getState().video.source?.url).toBe('/api/media/v2#t=45');
+    expect(store.getState().video.source?.url).toBe('/api/media/v2?v=2#t=45');
   });
 
   test('video watch list does not reload stale videos while already loading', async () => {
@@ -1874,7 +1874,7 @@ describe('FullPlayerScreen', () => {
     fireEvent.click(screen.getByLabelText('Play clip.mp4'));
 
     expect(store.getState().video.source?.mediaId).toBe('v1');
-    expect(store.getState().video.source?.url).toBe('/api/media/v1#t=900');
+    expect(store.getState().video.source?.url).toBe('/api/media/v1?v=2#t=900');
   });
 
   test('renders <VideoMount> on a queued video request before any element is attached', async () => {

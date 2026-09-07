@@ -1,3 +1,4 @@
+import { contentIdentityForPlaybackSource } from '../../core/media/contentIdentity';
 import { createNativeBridge, type NativeBridge } from '../../core/platform/nativeBridge';
 import type { PlaybackSession, PlaybackState, SessionListener } from '../../core/playback/session/session';
 import type { PlaybackSource } from '../../core/playback/source/source';
@@ -42,7 +43,16 @@ export async function connectNativeAudio(store: PlayerStoreApi, bridge: NativeBr
   const send = (command: string, payload?: object): Promise<unknown> => {
     pendingCommands += 1;
     commandRevision += 1;
-    const operation = commands.then(async () => { await yieldToUi(); return bridge.request(command, payload); });
+    const operation = commands.then(async () => {
+      await yieldToUi();
+      if (bridge.capabilities?.notificationLikes && (command === 'playback.load' || command === 'playback.queue')) {
+        const data = payload as { source?: PlaybackSource; queue?: PlaybackSource[] };
+        const withIdentity = (source: PlaybackSource) => ({ ...source, notificationLikeKey: contentIdentityForPlaybackSource(source).key });
+        payload = { ...data, ...(data.source ? { source: withIdentity(data.source) } : {}),
+          ...(data.queue ? { queue: data.queue.map(withIdentity) } : {}) };
+      }
+      return bridge.request(command, payload);
+    });
     const settled = operation.finally(() => {
       pendingCommands -= 1;
       if (pendingCommands === 0 && !disposed) void reconcile().catch(report);

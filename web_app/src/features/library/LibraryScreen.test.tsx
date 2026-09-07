@@ -86,7 +86,7 @@ function renderScreen(
 ) {
   const stores = buildStores(audio, video, image);
   const playerStore = createPlayerStore();
-  render(
+  const view = render(
     <LibraryProvider stores={stores}>
       <PlaylistProvider>
         <PlayerProvider store={playerStore}>
@@ -104,7 +104,29 @@ function renderScreen(
       </PlaylistProvider>
     </LibraryProvider>,
   );
-  return { stores, playerStore };
+  return {
+    stores,
+    playerStore,
+    rerenderType: (nextType: 'audio' | 'video' | 'image') => view.rerender(
+      <LibraryProvider stores={stores}>
+        <PlaylistProvider>
+          <PlayerProvider store={playerStore}>
+            <ProgressProvider repository={emptyRepo}>
+              <MemoryRouter
+                initialEntries={[
+                  `/library/${nextType === 'audio' ? 'music' : nextType === 'video' ? 'video' : 'image'}`,
+                ]}
+                future={routerFuture}
+              >
+                <LibraryScreen type={nextType} />
+              </MemoryRouter>
+            </ProgressProvider>
+          </PlayerProvider>
+        </PlaylistProvider>
+      </LibraryProvider>,
+    ),
+    unmount: view.unmount,
+  };
 }
 
 function firePointer(
@@ -477,7 +499,7 @@ describe('LibraryScreen', () => {
 
     await waitFor(() => {
       expect(playerStore.getState().video.source?.url).toBe(
-        '/api/media/v#t=7200',
+        '/api/media/v?v=2#t=7200',
       );
     });
   });
@@ -1480,6 +1502,77 @@ describe('library filter panel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show 32 items' }));
     expect(search).toHaveValue('');
     expect(screen.queryByRole('button', { name: /Remove artist/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sort by Modified' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('restores query, artist tag, and sort after reopening the library', async () => {
+    const audio: LibraryFetchResult = {
+      kind: 'ok',
+      items: [
+        {
+          id: 'restore-a', type: 'audio', rootName: 'music', relativePath: 'alpha.mp3', name: 'alpha.mp3',
+          sizeBytes: 2, modifiedAt: '2026-01-01T00:00:00Z', metadata: { title: 'Alpha', artist: 'Muse' },
+        },
+        {
+          id: 'restore-b', type: 'audio', rootName: 'music', relativePath: 'beta.mp3', name: 'beta.mp3',
+          sizeBytes: 1, modifiedAt: '2026-01-02T00:00:00Z', metadata: { title: 'Beta', artist: 'Other' },
+        },
+      ],
+    };
+    const first = renderScreen('audio', audio);
+    await screen.findByTestId('library-list');
+    const search = screen.getByRole('textbox', { name: 'Filter Music' });
+    fireEvent.change(search, { target: { value: '#Muse' } });
+    await waitFor(() => expect(screen.getAllByTestId('library-item')).toHaveLength(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter library' }));
+    const panel = screen.getByTestId('library-filter-panel');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Panel sort by Size' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Show 1 items' }));
+    first.unmount();
+
+    renderScreen('audio', audio);
+    await screen.findByTestId('library-list');
+    expect(screen.getByRole('textbox', { name: 'Filter Music' })).toHaveValue('#"Muse"');
+    expect(screen.getByRole('button', { name: 'Remove artist Muse' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sort by Size' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getAllByTestId('library-item')).toHaveLength(1);
+    expect(screen.getByTestId('library-item')).toHaveAttribute('data-media-id', 'restore-a');
+  });
+
+  test('keeps query and sort isolated when switching media types', async () => {
+    const { rerenderType } = renderScreen('audio', {
+      kind: 'ok',
+      items: [{
+        id: 'audio-isolated', type: 'audio', rootName: 'music', relativePath: 'audio.mp3', name: 'audio.mp3',
+        sizeBytes: 1, modifiedAt: '2026-01-01T00:00:00Z', metadata: { title: 'Audio', artist: 'Audio Artist' },
+      }],
+    }, {
+      kind: 'ok',
+      items: [{
+        id: 'video-isolated', type: 'video', rootName: 'video', relativePath: 'video.mp4', name: 'video.mp4',
+        sizeBytes: 1, modifiedAt: '2026-01-01T00:00:00Z',
+      }],
+    });
+    await screen.findByTestId('library-list');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Filter Music' }), { target: { value: 'Audio' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter library' }));
+    let panel = screen.getByTestId('library-filter-panel');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Panel sort by Size' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Show 1 items' }));
+
+    rerenderType('video');
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Filter Video' })).toHaveValue(''));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Filter Video' }), { target: { value: 'Video' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter library' }));
+    panel = screen.getByTestId('library-filter-panel');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Panel sort by Modified' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Show 1 items' }));
+
+    rerenderType('audio');
+    expect(screen.getByRole('textbox', { name: 'Filter Music' })).toHaveValue('Audio');
+    expect(screen.getByRole('button', { name: 'Sort by Size' })).toHaveAttribute('aria-pressed', 'true');
+    rerenderType('video');
+    expect(screen.getByRole('textbox', { name: 'Filter Video' })).toHaveValue('Video');
     expect(screen.getByRole('button', { name: 'Sort by Modified' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

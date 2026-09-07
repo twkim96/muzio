@@ -305,7 +305,7 @@ describe('MiniPlayer', () => {
       expect.objectContaining({
         mediaId: 'v1',
         mediaType: 'video',
-        url: '/api/media/v1#t=7200',
+        url: '/api/media/v1?v=2#t=7200',
       }),
     );
     expect(session.calls.play).toHaveBeenCalled();

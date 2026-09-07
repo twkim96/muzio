@@ -1,3 +1,4 @@
+import { nativeVideoFullscreenActive, setNativeVideoFullscreen } from './nativeVideoFullscreen';
 import { MediaCollapseButton } from '../../core/ui/MediaCollapseButton';
 import {
   useCallback,
@@ -1049,6 +1050,7 @@ function useVideoWatchGesture({
 }
 
 function requestViewportFullscreen(host: HTMLDivElement) {
+  if (setNativeVideoFullscreen(host.querySelector<HTMLElement>('[data-media-player]'), true)) return;
   const video = host.querySelector('video') as
     | (HTMLVideoElement & { webkitEnterFullscreen?: () => void })
     | null;
@@ -1062,6 +1064,8 @@ function requestViewportFullscreen(host: HTMLDivElement) {
 }
 
 function exitActiveFullscreen(host: HTMLDivElement | null): boolean {
+  const nativePlayer = document.querySelector<HTMLElement>('[data-native-video-expanded] [data-media-player]') ?? host?.querySelector<HTMLElement>('[data-media-player]') ?? null;
+  if (nativeVideoFullscreenActive(nativePlayer)) return setNativeVideoFullscreen(nativePlayer, false);
   if (document.fullscreenElement != null) {
     void document.exitFullscreen?.();
     return true;

@@ -1,3 +1,4 @@
+import { encodeNativeVideoSource } from './nativeVideoSource';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
@@ -90,11 +91,160 @@ function memoryProgressRepository(): ProgressRepository {
 }
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   setPlaybackDiagnosticsEnabled(false);
   clearPlaybackDiagnostics();
 });
 
 describe('createVidstackEngine', () => {
+  test('falls back from an unavailable native index proxy once without losing resume or identity', async () => {
+    vi.stubGlobal('MuzioNative', {
+      platform: 'macos',
+      videoIndexBaseUrl: 'http://127.0.0.1:12345/0123456789abcdef0123456789abcdef/',
+      postMessage: vi.fn(),
+    });
+    const original = { ...source, url: `${source.url}?v=2#t=60` };
+    const player = new FakeVidstackPlayer();
+    const commit = vi.fn(async (_next: PlaybackSource | null) => {});
+    const engine = createVidstackEngine(player, commit);
+    const events: string[] = [];
+    engine.subscribe((event) => events.push(event.kind));
+    engine.load(original);
+    const play = engine.play();
+    await Promise.resolve();
+    const proxy = commit.mock.calls[0][0]!;
+    expect(proxy.url).toContain('127.0.0.1:12345');
+    expect(engine.currentSource).toBe(original);
+    player.currentSrc = proxy.url;
+    player.dispatchEvent(new Event('error'));
+    await Promise.resolve();
+    const fallback = commit.mock.calls[1][0]!;
+    expect(new URL(fallback.url, window.location.href).hash).toBe('#t=60');
+    expect(fallback.url).not.toContain('12345');
+    expect(events).not.toContain('error');
+    player.currentSrc = fallback.url;
+    dispatchSourceChange(player, fallback);
+    player.dispatchEvent(new Event('can-play'));
+    await play;
+    expect(player.play).toHaveBeenCalledOnce();
+    expect(player.currentTime).toBe(60);
+    player.dispatchEvent(new Event('error'));
+    expect(commit).toHaveBeenCalledTimes(2);
+    expect(events.filter((kind) => kind === 'error')).toHaveLength(1);
+    engine.release();
+  });
+
+  function proxyFixture() {
+    vi.stubGlobal('MuzioNative', {
+      platform: 'macos',
+      videoIndexBaseUrl: 'http://127.0.0.1:12345/0123456789abcdef0123456789abcdef/',
+      postMessage: vi.fn(),
+    });
+    const player = new FakeVidstackPlayer();
+    const commit = vi.fn(async (_next: PlaybackSource | null) => {});
+    const engine = createVidstackEngine(player, commit);
+    const original = { ...source, url: `${source.url}#t=60` };
+    const session = createSession(engine);
+    session.load(original);
+    const proxy = commit.mock.calls[0][0]!;
+    player.currentSrc = proxy.url;
+    dispatchSourceChange(player, proxy);
+    const ready = () => {
+      const transport = commit.mock.calls.at(-1)![0]!;
+      player.currentSrc = transport.url;
+      dispatchSourceChange(player, transport);
+      player.dispatchEvent(new Event('can-play'));
+    };
+    return { player, commit, engine, session, ready };
+  }
+
+  test('waits for fresh fallback readiness and ignores late proxy readiness', async () => {
+    const { player, commit, engine, ready } = proxyFixture();
+    ready();
+    await engine.play();
+    player.currentTime = 75;
+    player.play.mockClear();
+    player.dispatchEvent(new Event('error'));
+    const resume = engine.play();
+    await Promise.resolve();
+    await Promise.resolve();
+    player.dispatchEvent(new Event('can-play')); // Still names the failed proxy.
+    player.dispatchEvent(new Event('error'));
+    expect(commit).toHaveBeenCalledTimes(2);
+    expect(player.play).not.toHaveBeenCalled();
+    ready();
+    await resume;
+    expect(player.play).toHaveBeenCalledOnce();
+    expect(player.currentTime).toBe(75);
+    engine.release();
+  });
+
+  test('keeps a pause from Vidstack controls across proxy fallback', async () => {
+    const { player, engine, ready } = proxyFixture();
+    ready();
+    await engine.play();
+    player.paused = true;
+    player.dispatchEvent(new Event('pause'));
+    player.play.mockClear();
+    player.dispatchEvent(new Event('error'));
+    ready();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(player.play).not.toHaveBeenCalled();
+    expect(player.paused).toBe(true);
+    engine.release();
+  });
+
+  test('carries playback started by Vidstack controls into the fallback', async () => {
+    const { player, engine, ready } = proxyFixture();
+    ready();
+    player.paused = false;
+    player.dispatchEvent(new Event('playing'));
+    player.dispatchEvent(new Event('error'));
+    ready();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(player.play).toHaveBeenCalledOnce();
+    engine.release();
+  });
+
+  test.each([0, 90])('preserves an immediate seek to %s instead of the old resume fragment', async (position) => {
+    const { player, commit, engine, ready } = proxyFixture();
+    ready();
+    player.currentTime = 60;
+    player.dispatchEvent(new Event('time-update'));
+    engine.seek(position);
+    player.dispatchEvent(new Event('error'));
+    const fallback = commit.mock.calls[1][0]!;
+    expect(new URL(fallback.url).hash).toBe(position ? `#t=${position}` : '');
+    engine.release();
+  });
+
+  test('restores the same duration after the fallback loading event resets the session', () => {
+    const { player, engine, session, ready } = proxyFixture();
+    ready();
+    player.dispatchEvent(new Event('loaded-metadata'));
+    expect(session.getState().durationSec).toBe(120);
+    player.dispatchEvent(new Event('error'));
+    ready();
+    player.dispatchEvent(new Event('load-start'));
+    expect(session.getState().durationSec).toBe(0);
+    player.dispatchEvent(new Event('loaded-metadata'));
+    expect(session.getState().durationSec).toBe(120);
+    engine.release();
+  });
+
+  test('honors pause while the initial play waits through proxy fallback', async () => {
+    const { player, engine, ready } = proxyFixture();
+    const pending = engine.play();
+    player.dispatchEvent(new Event('error'));
+    engine.pause();
+    ready();
+    await pending;
+    expect(player.play).not.toHaveBeenCalled();
+    engine.release();
+  });
+
   test('waits for the React source commit before loading and playing', async () => {
     let finishCommit = () => {};
     const commitSource = vi.fn(
@@ -150,6 +300,20 @@ describe('createVidstackEngine', () => {
       'ended',
       'error',
     ]);
+  });
+
+  test('keeps the original source identity when the Apple provider uses an opaque transport URL', async () => {
+    const player = new FakeVidstackPlayer();
+    const engine = createVidstackEngine(player, async () => {});
+    const session = createSession(engine);
+    session.load(source);
+    const virtual = encodeNativeVideoSource(source.url);
+    player.currentSrc = { src: virtual, type: 'video/muzio-native' };
+    player.dispatchEvent(new CustomEvent('source-change', { detail: player.currentSrc }));
+    player.dispatchEvent(new Event('can-play'));
+    player.currentTime = 90;
+    player.dispatchEvent(new Event('seeking'));
+    expect(session.getState()).toMatchObject({ source, positionSec: 90, userSeekTargetSec: 90 });
   });
 
   test('projects a native Vidstack timeline seek into the session boundary state', () => {

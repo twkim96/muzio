@@ -7,7 +7,7 @@ import type { PlaybackSource } from '../../core/playback/source/source';
 const track = (id: string): PlaybackSource => ({ kind: 'remote', mediaId: id, queueEntryId: `q-${id}`, mediaType: 'audio', name: id, url: `/api/media/${id}/stream` });
 const a = track('a'); const b = track('b');
 const snapshot: NativePlaybackSnapshot = { source: a, status: { kind: 'playing' }, positionSec: 42, durationSec: 100, queue: [a, b], index: 0, repeatMode: 'all', volume: 0.4, muted: false, stopAfterCurrent: false, sleepTimerEndsAtMs: null, sleepTimerExpired: false };
-async function setup(initial = snapshot) {
+async function setup(initial = snapshot, capabilities?: NativeBridge['capabilities']) {
   let native = { ...initial };
   let listener: Parameters<NativeBridge['subscribe']>[0] = () => {};
   const request = vi.fn(async (command: string, payload?: object) => {
@@ -19,7 +19,7 @@ async function setup(initial = snapshot) {
     if (command === 'playback.pause') native = { ...native, status: { kind: 'paused' } };
     return command === 'playback.snapshot' ? native : undefined;
   });
-  const bridge = { request, subscribe: (fn: typeof listener) => { listener = fn; return () => {}; }, dispose: vi.fn() } as NativeBridge;
+  const bridge = { capabilities, request, subscribe: (fn: typeof listener) => { listener = fn; return () => {}; }, dispose: vi.fn() } as NativeBridge;
   const store = createPlayerStore({ activityRepository: null, preferencesRepository: null, likedRepository: null });
   const dispose = await connectNativeAudio(store, bridge);
   request.mockClear();
@@ -180,5 +180,15 @@ it('selects loading immediately before bridge work and only plays the latest rap
   expect(store.getState().audio.source?.mediaId).toBe('a');
   expect(request.mock.calls.filter(([command]) => command === 'playback.play')).toHaveLength(1);
   expect(request.mock.calls.filter(([command]) => command === 'playback.queue')).toHaveLength(0);
+  dispose();
+});
+
+it('passes matching like identities for the selected track and queue to Apple', async () => {
+  const { store, request, dispose } = await setup(snapshot, { notificationLikes: true });
+  await store.getState().playMusicQueue([a, b], 'b');
+  const load = request.mock.calls.filter(([command]) => command === 'playback.load').at(-1)?.[1] as { source: { notificationLikeKey: string }; queue: { notificationLikeKey: string }[] };
+  expect(load.source.notificationLikeKey).toBeTruthy();
+  expect(load.source.notificationLikeKey).toBe(load.queue[1].notificationLikeKey);
+  expect(load.queue[0].notificationLikeKey).not.toBe(load.source.notificationLikeKey);
   dispose();
 });

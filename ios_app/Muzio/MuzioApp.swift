@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import WebKit
 #if os(macOS)
 import AppKit
@@ -32,8 +33,12 @@ struct RootScreen: View {
     @Environment(\.scenePhase) private var phase
     var body: some View {
         ZStack {
+            host.appearanceColor.ignoresSafeArea()
             if let web = host.webView {
-                BrowserSurface(web: web).id(ObjectIdentifier(web))
+                BrowserSurface(web: web, host: host).id(ObjectIdentifier(web))
+                    #if os(iOS)
+                    .ignoresSafeArea(edges: host.videoFullscreen ? .all : [])
+                    #endif
                 if host.loading { ProgressView().padding(12).background(.regularMaterial, in: Capsule()).frame(maxHeight: .infinity, alignment: .top).padding(.top, 8) }
                 if !host.loadError.isEmpty {
                     VStack(spacing: 16) {
@@ -47,7 +52,14 @@ struct RootScreen: View {
                 }
             } else { ServerScreen(host: host) }
         }
-        .sheet(isPresented: $host.showSetup) { ServerScreen(host: host).padding().frame(minWidth: 300) }
+        .preferredColorScheme(host.appearanceScheme)
+        .fileImporter(isPresented: $host.showFolderPicker, allowedContentTypes: [.folder], allowsMultipleSelection: false) { result in
+            host.folderPicked(result)
+        }
+        .sheet(isPresented: $host.showSetup) { ServerScreen(host: host).padding().frame(minWidth: 300).preferredColorScheme(host.appearanceScheme) }
+        #if os(iOS)
+        .statusBarHidden(host.videoFullscreen)
+        #endif
         .onChange(of: phase) { phase in if phase == .active { host.resume() } }
     }
 }
@@ -82,13 +94,29 @@ struct ServerScreen: View {
 #if os(iOS)
 struct BrowserSurface: UIViewRepresentable {
     let web: WKWebView
-    func makeUIView(context: Context) -> WKWebView { web }
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    let host: WebHost
+    func makeUIView(context: Context) -> VideoBrowserContainer { VideoBrowserContainer(web: web, video: host.video) }
+    func updateUIView(_ uiView: VideoBrowserContainer, context: Context) {}
 }
+final class VideoBrowserContainer: UIView {
+    weak var video: NativeVideoPlayer?
+    init(web: WKWebView, video: NativeVideoPlayer?) {
+        self.video = video
+        super.init(frame: .zero)
+        if let video { addSubview(video.surface) }
+        web.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(web)
+        NSLayoutConstraint.activate([web.leadingAnchor.constraint(equalTo: leadingAnchor), web.trailingAnchor.constraint(equalTo: trailingAnchor), web.topAnchor.constraint(equalTo: topAnchor), web.bottomAnchor.constraint(equalTo: bottomAnchor)])
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func layoutSubviews() { super.layoutSubviews(); video?.layout(in: bounds) }
+}
+
 #else
 // An explicit container keeps WebKit fullscreen resizing independent of SwiftUI layout.
 struct BrowserSurface: NSViewRepresentable {
     let web: WKWebView
+    let host: WebHost
     func makeNSView(context: Context) -> NSView {
         let container = NSView()
         web.translatesAutoresizingMaskIntoConstraints = false

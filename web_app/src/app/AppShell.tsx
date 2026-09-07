@@ -1,4 +1,4 @@
-import { useAndroidBack } from '../core/platform/androidShell';
+import { androidShellBridge, useAndroidBack } from '../core/platform/androidShell';
 import {
   useEffect,
   useMemo,
@@ -114,6 +114,22 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
+  useEffect(() => {
+    const bridge = androidShellBridge();
+    if (!bridge || (bridge.platform && bridge.platform !== 'android')) return;
+    let disposed = false;
+    const consume = () => {
+      void bridge.request<{ openQueue?: boolean }>('shell.notificationIntent').then(result => {
+        if (!disposed && result.openQueue) {
+          setQueueOpen(true);
+          void bridge.request('shell.notificationIntent', { acknowledged: true }).catch(() => {});
+        }
+      }).catch(() => {});
+    };
+    window.addEventListener('muzio-resume', consume);
+    consume();
+    return () => { disposed = true; window.removeEventListener('muzio-resume', consume); };
+  }, []);
   const [playlistDrawer, setPlaylistDrawer] = useState<{
     kind: 'automatic' | 'custom';
     playlistId?: string;

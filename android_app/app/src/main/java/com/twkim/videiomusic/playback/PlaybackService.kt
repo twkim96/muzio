@@ -2,14 +2,29 @@ package com.twkim.videiomusic.playback
 
 import android.content.Intent
 import android.app.PendingIntent
+import android.app.ActivityOptions
+import android.content.Context
+import android.content.SharedPreferences
+import android.os.Build
 import android.os.Bundle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.ts.AdtsExtractor
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
+import androidx.media3.session.DefaultMediaNotificationProvider
+import androidx.media3.session.CommandButton
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
+import androidx.media3.session.SessionResult
+import com.google.common.collect.ImmutableList
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import androidx.media3.session.MediaSessionService
 import com.twkim.videiomusic.data.MediaType
 import com.twkim.videiomusic.data.LibraryPreferencesStore
@@ -30,10 +45,17 @@ import kotlinx.coroutines.launch
  * playback, the queue and Android's media notification survive Activity and
  * screen lifecycle changes.
  */
+@UnstableApi
 class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val api = MuzioApi()
     private lateinit var libraryPreferencesStore: LibraryPreferencesStore
+    private lateinit var notificationLikes: NotificationLikeStore
+    private lateinit var likePreferences: SharedPreferences
+    private lateinit var openQueue: PendingIntent
+    private val likePreferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        scope.launch { refreshNotificationButtons() }
+    }
     private lateinit var player: ExoPlayer
     private var mediaSession: MediaSession? = null
     private var lastSample: ProgressSample? = null
@@ -43,7 +65,16 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
     override fun onCreate() {
         super.onCreate()
         libraryPreferencesStore = LibraryPreferencesStore(applicationContext)
-        player = ExoPlayer.Builder(this).build().apply {
+        notificationLikes = NotificationLikeStore(applicationContext)
+        likePreferences = getSharedPreferences(NotificationLikeStore.PREFERENCES_NAME, Context.MODE_PRIVATE)
+        likePreferences.registerOnSharedPreferenceChangeListener(likePreferenceListener)
+        // Raw ADTS has no container duration/index. Enable its length-based seek map
+        // so both the MediaSession and web bridge receive a usable timeline.
+        val extractors = DefaultExtractorsFactory()
+            .setAdtsExtractorFlags(AdtsExtractor.FLAG_ENABLE_CONSTANT_BITRATE_SEEKING)
+        player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(this, extractors))
+            .build().apply {
             setAudioAttributes(
                 AudioAttributes.Builder()
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -59,7 +90,36 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
         publishVolumeState()
         val openApp = PendingIntent.getActivity(this, 0,
             Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        mediaSession = MediaSession.Builder(this, player).setSessionActivity(openApp).build()
+        if (Build.VERSION.SDK_INT < 33) {
+            setMediaNotificationProvider(object : DefaultMediaNotificationProvider(this) {
+                override fun getMediaButtons(
+                    session: MediaSession,
+                    playerCommands: Player.Commands,
+                    mediaButtonPreferences: ImmutableList<CommandButton>,
+                    showPauseButton: Boolean,
+                ): ImmutableList<CommandButton> {
+                    val buttons = super.getMediaButtons(session, playerCommands, mediaButtonPreferences, showPauseButton)
+                    // Keep the provider's availability and slots. Its default compact view uses
+                    // BACK/CENTRAL/FORWARD slots, so only previous/play/next appear when collapsed.
+                    return ImmutableList.copyOf(buttons.sortedBy { button ->
+                        when {
+                            button.sessionCommand?.customAction == ACTION_QUEUE -> 0
+                            button.playerCommand == Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> 1
+                            button.playerCommand == Player.COMMAND_PLAY_PAUSE -> 2
+                            button.playerCommand == Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> 3
+                            button.sessionCommand?.customAction == ACTION_LIKE -> 4
+                            else -> 5
+                        }
+                    })
+                }
+            })
+        }
+        openQueue = createQueueIntent()
+        mediaSession = MediaSession.Builder(this, player)
+            .setSessionActivity(openApp)
+            .setCallback(sessionCallback)
+            .setMediaButtonPreferences(notificationButtons())
+            .build()
 
         progressLoop = scope.launch {
             while (isActive) {
@@ -85,6 +145,7 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
     override fun onDestroy() {
         sync(sampleCurrent())
         progressLoop?.cancel()
+        likePreferences.unregisterOnSharedPreferenceChangeListener(likePreferenceListener)
         player.removeListener(playerListener)
         mediaSession?.run {
             player.release()
@@ -118,7 +179,93 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
             }
             mediaItem?.let(::recordPlay)
             lastSample = sampleCurrent()
+            refreshNotificationButtons()
         }
+    }
+
+    private val sessionCallback = object : MediaSession.Callback {
+        override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(
+                    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                        .add(queueCommand).add(likeCommand).build(),
+                ).build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            val result = when (customCommand.customAction) {
+                ACTION_QUEUE -> runCatching {
+                    val options = ActivityOptions.makeBasic().apply {
+                        if (Build.VERSION.SDK_INT >= 36) {
+                            setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOW_ALWAYS)
+                        } else if (Build.VERSION.SDK_INT >= 34) {
+                            setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+                        }
+                    }
+                    // This send is performed only in response to the user's media action.
+                    openQueue.send(this@PlaybackService, 0, null, null, null, null, options.toBundle())
+                    SessionResult.RESULT_SUCCESS
+                }.getOrDefault(SessionError.ERROR_UNKNOWN)
+                ACTION_LIKE -> {
+                    val target = currentLikeTarget()
+                    if (target == null) SessionError.ERROR_INVALID_STATE else runCatching {
+                        notificationLikes.toggle(target.first, target.second)
+                        refreshNotificationButtons()
+                        SessionResult.RESULT_SUCCESS
+                    }.getOrDefault(SessionError.ERROR_UNKNOWN)
+                }
+                else -> SessionError.ERROR_NOT_SUPPORTED
+            }
+            return Futures.immediateFuture(SessionResult(result))
+        }
+    }
+
+    private fun createQueueIntent(): PendingIntent {
+        val intent = Intent(this, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra("muzio.open_queue", true)
+        val options = ActivityOptions.makeBasic().apply {
+            if (Build.VERSION.SDK_INT >= 36) {
+                setPendingIntentCreatorBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOW_ALWAYS)
+            } else if (Build.VERSION.SDK_INT >= 35) {
+                setPendingIntentCreatorBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+            }
+        }
+        return PendingIntent.getActivity(this, 1, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE, options.toBundle())
+    }
+
+    private fun currentLikeTarget(): Pair<String, String>? {
+        val item = player.currentMediaItem ?: return null
+        val extras = item.mediaMetadata.extras
+        val origin = extras?.getString("muzio.notification_origin")?.takeIf(String::isNotBlank)
+            ?: extras?.getString(EXTRA_SERVER_ORIGIN).orEmpty()
+        val key = extras?.getString(EXTRA_CONTENT_KEY)?.takeIf(String::isNotBlank) ?: item.mediaId
+        return if (origin.isBlank() || key.isBlank()) null else origin to key
+    }
+
+    private fun notificationButtons(): List<CommandButton> {
+        val target = currentLikeTarget()
+        val liked = target?.let { notificationLikes.isLiked(it.first, it.second) } == true
+        // Standard previous/play/next remain player commands. Android 13+ controls their placement.
+        return listOf(
+            CommandButton.Builder(CommandButton.ICON_QUEUE_NEXT)
+                .setDisplayName("Queue").setSessionCommand(queueCommand)
+                .setSlots(CommandButton.SLOT_BACK_SECONDARY, CommandButton.SLOT_OVERFLOW).build(),
+            CommandButton.Builder(if (liked) CommandButton.ICON_HEART_FILLED else CommandButton.ICON_HEART_UNFILLED)
+                .setDisplayName(if (liked) "Unlike" else "Like").setSessionCommand(likeCommand)
+                .setEnabled(target != null)
+                .setSlots(CommandButton.SLOT_FORWARD_SECONDARY, CommandButton.SLOT_OVERFLOW).build(),
+        )
+    }
+
+    private fun refreshNotificationButtons() {
+        mediaSession?.setMediaButtonPreferences(notificationButtons())
     }
 
     @UnstableApi
@@ -258,6 +405,10 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
     )
 
     companion object {
+        private const val ACTION_QUEUE = "muzio.notification.queue"
+        private const val ACTION_LIKE = "muzio.notification.like"
+        private val queueCommand = SessionCommand(ACTION_QUEUE, Bundle.EMPTY)
+        private val likeCommand = SessionCommand(ACTION_LIKE, Bundle.EMPTY)
         const val EXTRA_SERVER_ORIGIN = "muzio.server_origin"
         const val EXTRA_WEB_SOURCE = "muzio.web_source"
         const val EXTRA_MEDIA_TYPE = "muzio.media_type"

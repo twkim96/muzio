@@ -16,6 +16,8 @@ export interface PlaybackActivityEvent {
 
 export interface PlaybackActivityRecord extends PlaybackActivitySource {
   playCount: number;
+  /** Durable native import watermark, committed with the activity record. */
+  nativeHistoryStartedAtMs?: number;
   lastPlayedAt: string | null;
   lastPositionSec: number;
   durationSec: number;
@@ -185,6 +187,8 @@ function normalizeRecord(raw: unknown): PlaybackActivityRecord | null {
     name: raw.name,
     artist,
     playCount: sanitizeCount(raw.playCount),
+    ...(typeof raw.nativeHistoryStartedAtMs === 'number' && Number.isFinite(raw.nativeHistoryStartedAtMs)
+      ? { nativeHistoryStartedAtMs: raw.nativeHistoryStartedAtMs } : {}),
     lastPlayedAt:
       typeof raw.lastPlayedAt === 'string' ? raw.lastPlayedAt : null,
     lastPositionSec: sanitizeSeconds(raw.lastPositionSec),

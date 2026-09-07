@@ -1394,7 +1394,7 @@ describe('video optimization', () => {
       durationSec: 120,
     });
     expect(session.calls.load).toHaveBeenLastCalledWith(expect.objectContaining({
-      url: '/api/media/v1#t=45',
+      url: '/api/media/v1?v=2#t=45',
       mimeType: 'video/quicktime',
     }));
     expect(session.calls.play).not.toHaveBeenCalled();
@@ -1858,11 +1858,12 @@ describe('seedSource', () => {
 
     store.getState().prepareSeededSource('video');
 
-    expect(session.calls.load).toHaveBeenCalledWith(resumedVideo);
+    const migratedVideo = { ...resumedVideo, url: '/api/media/v1?v=2#t=45' };
+    expect(session.calls.load).toHaveBeenCalledWith(migratedVideo);
     expect(session.calls.seek).toHaveBeenCalledWith(45);
     expect(session.calls.play).not.toHaveBeenCalled();
     expect(store.getState().video).toMatchObject({
-      source: resumedVideo,
+      source: migratedVideo,
       positionSec: 45,
       durationSec: 120,
     });
@@ -1899,7 +1900,7 @@ describe('seedSource', () => {
     };
     const expectedVideo: PlaybackSource = {
       ...resumedVideo,
-      url: '/api/media/v1#t=45',
+      url: '/api/media/v1?v=2#t=45',
     };
     store.getState().seedSource(resumedVideo, {
       positionSec: 45,
@@ -1938,7 +1939,7 @@ describe('seedSource', () => {
     };
     const expectedVideo: PlaybackSource = {
       ...resumedVideo,
-      url: '/api/media/v1#t=14400',
+      url: '/api/media/v1?v=2#t=14400',
     };
     store.getState().seedSource(resumedVideo, {
       positionSec: 14_400,
@@ -2043,7 +2044,7 @@ describe('seedSource', () => {
       expect.objectContaining({
         mediaId: 'v1',
         mediaType: 'video',
-        url: '/api/media/v1#t=7200',
+        url: '/api/media/v1?v=2#t=7200',
       }),
     );
     expect(session.calls.play).toHaveBeenCalled();

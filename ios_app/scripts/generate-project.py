@@ -26,6 +26,12 @@ for label,sdk,plist,extra in [('Muzio-iOS','iphoneos','Info.plist',{'IPHONEOS_DE
     objects[products]['children'].append(product)
     settings={'PRODUCT_NAME':'Muzio','PRODUCT_BUNDLE_IDENTIFIER':'com.twkim.muzio.apple','INFOPLIST_FILE':plist,'GENERATE_INFOPLIST_FILE':'NO','SDKROOT':sdk,'SWIFT_VERSION':'5.0','CODE_SIGN_STYLE':'Automatic','MARKETING_VERSION':'1.4.6','CURRENT_PROJECT_VERSION':'1','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @executable_path/../Frameworks',**extra}
     phases=[phase]
+    if sdk=='iphoneos':
+        settings['ASSETCATALOG_COMPILER_APPICON_NAME']='AppIcon'
+        assets=add('assets','PBXFileReference',lastKnownFileType='folder.assetcatalog',path='Assets.xcassets',sourceTree='<group>')
+        objects[main]['children'].append(assets)
+        assetsbuild=add('assetsbuild','PBXBuildFile',fileRef=assets)
+        phases.append(add('iosresources','PBXResourcesBuildPhase',buildActionMask=2147483647,files=[assetsbuild],runOnlyForDeploymentPostprocessing=0))
     if sdk=='macosx':
         icon=add('icon','PBXFileReference',lastKnownFileType='image.icns',path='Muzio.icns',sourceTree='<group>')
         objects[main]['children'].append(icon)

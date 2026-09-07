@@ -55,12 +55,27 @@ export function connectAndroidVideoPip(root: HTMLElement) {
   };
   const onPip = (event: Event) => setPip((event as CustomEvent<boolean>).detail === true);
   const onStop = () => video()?.pause();
+  const onControl = (event: Event) => {
+    if (!pip) return;
+    const current = video();
+    if (!current) return;
+    const command = (event as CustomEvent<string>).detail;
+    // Explicit commands are idempotent: a stale Play action must not toggle
+    // an already playing video off. Media events also update the player store.
+    if (command === 'pause') {
+      current.pause();
+      report();
+    } else if (command === 'play') {
+      void current.play().then(report, report);
+    }
+  };
   const events = ['playing', 'play', 'pause', 'ended', 'loadedmetadata', 'emptied', 'canplay'];
   events.forEach((event) => root.addEventListener(event, report, true));
   window.addEventListener('resize', sizeSurface);
   window.visualViewport?.addEventListener('resize', sizeSurface);
   window.addEventListener('muzio-pip', onPip);
   window.addEventListener('muzio-video-stop', onStop);
+  window.addEventListener('muzio-video-control', onControl);
   report();
   return () => {
     setPip(false);
@@ -69,6 +84,7 @@ export function connectAndroidVideoPip(root: HTMLElement) {
     window.visualViewport?.removeEventListener('resize', sizeSurface);
     window.removeEventListener('muzio-pip', onPip);
     window.removeEventListener('muzio-video-stop', onStop);
+    window.removeEventListener('muzio-video-control', onControl);
     void bridge.request('shell.videoState', { playing: false }).catch(() => {});
   };
 }

@@ -1,4 +1,9 @@
+import './videoFeedback.css';
+import { connectVideoTapFeedback } from './videoTapFeedback';
 import { connectAndroidVideoPip } from '../../core/platform/androidVideoPip';
+import { nativeMessagePort } from '../../core/platform/nativeBridge';
+import { androidShellBridge } from '../../core/platform/androidShell';
+import { connectNativeVideoSurface } from './nativeVideoSurface';
 import {
   MediaPlayer,
   MediaProvider,
@@ -30,6 +35,9 @@ import { TheaterGlyph } from '../../core/ui/AppIcons';
 import { usePlayerStore } from './PlayerContext';
 import { configureEmbeddedHLSProvider } from './hlsPlaybackSupport';
 import { createVidstackEngine } from './vidstackEngine';
+import { nativeVideoLoaders, supportsNativeVideo } from './nativeVideoProvider';
+import { useOptionalPlayerOverlay } from './PlayerOverlayContext';
+import { encodeNativeVideoSource } from './nativeVideoSource';
 
 interface CommittedSource {
   source: PlaybackSource | null;
@@ -47,7 +55,10 @@ export function PersistentVidstackPlayer({
   portalRoot: HTMLDivElement;
   theaterMode: boolean;
 }) {
+  const [tapFeedback, setTapFeedback] = useState<'play' | 'pause' | null>(null);
   const store = usePlayerStore();
+  const overlay = useOptionalPlayerOverlay();
+  const nativeVideo = supportsNativeVideo();
   const parkingHostRef = useRef<HTMLDivElement | null>(null);
   const [player, setPlayer] = useState<MediaPlayerInstance | null>(null);
   const [committedSource, setCommittedSource] = useState<CommittedSource>({
@@ -142,16 +153,29 @@ export function PersistentVidstackPlayer({
   }, [host, player, store]);
 
   useLayoutEffect(() => connectAndroidVideoPip(portalRoot), [portalRoot]);
+  useLayoutEffect(() => connectNativeVideoSurface(portalRoot), [portalRoot]);
+  useLayoutEffect(() => {
+    if (!nativeVideo) return;
+    return androidShellBridge()?.subscribe?.((event) => {
+      if (event.type === 'videoRestore') overlay?.open();
+    });
+  }, [nativeVideo, overlay]);
+
+  useLayoutEffect(() => {
+    if (!player?.el) return;
+    return connectVideoTapFeedback(player.el, setTapFeedback);
+  }, [player]);
 
   const source = committedSource.source;
   const playerSource: PlayerSrc | undefined =
     source === null
       ? undefined
       : {
-          src: source.url,
-          type: videoMimeTypeForSource(source),
-        };
+          src: nativeVideo ? encodeNativeVideoSource(source.url) : source.url,
+          type: nativeVideo ? 'video/muzio-native' : videoMimeTypeForSource(source),
+        } as PlayerSrc;
   const layoutSlots = {
+    bufferingIndicator: <div className="muzio-video-loading" role="status" aria-label="Buffering"><span /></div>,
     beforeFullscreenButton: (
       <TheaterModeButton
         active={theaterMode}
@@ -167,11 +191,12 @@ export function PersistentVidstackPlayer({
         <MediaPlayer
           ref={setPlayer}
           data-testid="video-mount"
-          className={`h-full w-full aspect-auto overflow-hidden bg-black [&_video]:h-full [&_video]:aspect-auto [&_video]:object-contain [&_.vds-controls-group:last-child]:mb-0 ${theaterMode
+          className={`muzio-video h-full w-full aspect-auto overflow-hidden bg-black [&_video]:h-full [&_video]:aspect-auto [&_video]:object-contain [&_.vds-controls-group:last-child]:mb-0 ${theaterMode
             ? 'rounded-none'
             : 'rounded-2xl'}`}
           style={{ display: 'flex', ...(theaterMode ? { border: 0 } : {}) }}
           src={playerSource}
+          crossOrigin={nativeMessagePort() ? undefined : 'anonymous'}
           title={source?.name ?? 'Video'}
           viewType="video"
           logLevel="silent"
@@ -181,7 +206,12 @@ export function PersistentVidstackPlayer({
           streamType="on-demand"
           onProviderChange={configureEmbeddedHLSProvider}
         >
-          <MediaProvider />
+          <MediaProvider loaders={nativeVideo ? nativeVideoLoaders : undefined} />
+          {tapFeedback && <div key={tapFeedback} className="muzio-video-feedback" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor">{tapFeedback === 'play'
+              ? <path d="M8 5v14l11-7z" />
+              : <path d="M6 5h4v14H6zm8 0h4v14h-4z" />}</svg>
+          </div>}
           <DefaultVideoLayout
             icons={defaultLayoutIcons}
             colorScheme="dark"

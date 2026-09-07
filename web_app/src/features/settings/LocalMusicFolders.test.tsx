@@ -39,3 +39,14 @@ test('iOS hides local folders and never requests the unsupported library', () =>
   expect(screen.queryByRole('button', { name: '로컬 폴더 추가' })).not.toBeInTheDocument();
   expect(request).not.toHaveBeenCalled();
 });
+
+
+test.each(['ios', 'macos'] as const)('%s exposes local folder controls when supported', async (platform) => {
+  const request = vi.fn().mockResolvedValue({ roots: [], items: [], enrichment: { total: 0, pending: 0, scanning: true } });
+  configureAndroidShell({ platform, capabilities: { localLibrary: true, nativeAudio: true }, request });
+  render(<LocalMusicFolders query="" />);
+  fireEvent.click(screen.getByRole('button', { name: '로컬 폴더 추가' }));
+  await waitFor(() => expect(request).toHaveBeenCalledWith('localLibrary.add', undefined));
+  expect(screen.getByText(/앱 화면을 처음 열 때는 서버 연결/)).toBeInTheDocument();
+  expect(screen.getByText(/iCloud/)).toBeInTheDocument();
+});
