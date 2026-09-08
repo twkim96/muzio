@@ -209,3 +209,31 @@ SHA-256: `03834f3f93339756abb1c004bc0f8283e716ae155e1694583710e5d3118433ec`
   on next app startup rather than promising execution while force-stopped.
 - Artifact: `dist/android-shared-web-ui/Muzio-1.4.5-web-dev-vc13.apk`
 - SHA-256: `975cd09f0bcb28f64d6ec9dde08083bed99822cf25461c0aa28fbee958c9b1d8`
+
+
+## Landscape fullscreen restoration — 1.4.6 / 2026-09-08
+
+- WebView custom fullscreen now requests sensor landscape, hides system bars,
+  removes root insets, and restores the previous window state on exit. Rotation
+  keeps the same WebView and video; PiP/focus return reapplies fullscreen state.
+- Native JVM25 tests pass (fullscreen lifecycle3), debug APK assembly passes.
+  Build log: `/tmp/muzio-android-fullscreen-final-build.log`.
+- API36 emulator, portrait rotation locked: actual APK WebView with an isolated
+  synthetic inline video enters a landscape839×320 CSS viewport /2200×840 window.
+  System bars are hidden. Both DOM exit and Android Back restore portrait;
+  two cycles retain one video load and continuous playback.
+- The initial UI-automation hierarchy dump changed the emulator rotation lock.
+  Retesting without that side effect passed with the existing Back handling;
+  the proposed extra Back callback was excluded from the final change.
+- Runtime log: `/tmp/muzio-android-fullscreen-runtime-final.log`.
+  APK: `app/build/outputs/apk/debug/app-debug.apk`.
+- Only the emulator was connected. Physical Android installation and the user's
+  real media/player gesture/PiP acceptance remain pending. The synthetic check
+  verifies the native fullscreen lifecycle, not network playback performance.
+
+
+## 1.4.6 closeout — 2026-09-08
+
+- Physical installation and acceptance move to `../update_1.4.7.md` at the user’s request. The completed JVM/emulator evidence above remains valid.
+- The final APK includes shared web UI r20; the earlier fullscreen-only APK did not include the subsequent selection/playlist UI. No physical device was installed or tested during closeout.
+- Final artifact: `dist/releases/1.4.6-20260908/Muzio-1.4.6-web-r20-vc14.apk`; SHA-256 `47baf18addf8d343cb56943103a10dde406046d4be83ac8cbf0dc390886b9fd1`. Assembly exit0, r20 service worker verified inside the APK. Log: `/tmp/muzio-146-close-android-build.log`.

@@ -126,34 +126,36 @@ Shared web changes target web, Android and Apple together. Mobile features targe
 both native hosts unless an OS/API limitation is documented; missing implementation
 is tracked separately. All user-visible platform versions are 1.4.6.
 
-## iOS custom video surface (1.4.6)
+## Shared web video playback (1.4.6 follow-up)
 
-The `nativeVideo` capability selects a Vidstack provider adapter. AVPlayerLayer
-renders only video pixels beneath a transparent WKWebView; DefaultVideoLayout,
-seek controls, gestures, theater/fullscreen buttons and menus remain web UI.
-AVPictureInPictureController owns automatic inline PiP. Source generations reject
-late commands, and native state drives play/pause/seek and PiP control state.
-Embedded subtitle/audio selections use the existing Vidstack menus. Audio list
-mutation is verified on disposable lists and cached; production symbol descriptions
-are not assumed. Both development and production list contracts have regression coverage.
+iPhone, iPad and Mac use the shared Vidstack HTML video player in WKWebView.
+The Apple host no longer advertises `nativeVideo`, constructs NativeVideoPlayer,
+or inserts a separate AVPlayerLayer beneath the web view. Controls, gestures,
+track menus and fullscreen follow the web implementation and WebKit support.
+Native music playback and local music access are retained.
 
-The initial native URLs are restricted to the selected server media endpoints or
-its current token-protected index proxy. This is not a general redirect/HLS
-subresource-origin firewall. Mac, Android, and ordinary browsers retain their
-existing video providers. iOS native HLS uses automatic quality; manual HLS
-quality, gain above100%, and web caption styling are not bridged. Embedded
-subtitles use native rendering, including PiP. These are implementation gaps,
-not claims of OS impossibility.
+Automatic inline PiP through the custom native video engine was withdrawn at
+the user's request after unresolved audio loss and buffering regressions.
+This is a product rollback, not a claim that Apple cannot support automatic PiP.
+WebKit's available manual video PiP remains enabled; automatic PiP is not an
+acceptance requirement for this playback path.
+
+The shared player still receives `videoIndexBaseUrl` and reads eligible original
+MP4/MOV streams through the private loopback cache. It stores the validated front
+index plus up to 16MiB of startup data, capped at 128MiB per entry and 640MiB/5 entries
+overall. Existing index entries upgrade without redownloading the index. Revision,
+range, length and checksum validation, cancellation, and direct-source fallback
+remain in place. This is a bounded prefix cache, not a full-video download or a
+promise of instant playback at every seek position. HLS keeps its existing path.
 
 Library filters, artist-tag queries, search and sort persist per Music/Video/Image
 in origin-scoped localStorage across web and app reopening. Clearing browser/app
 website data clears those preferences; this is not cross-device synchronization.
 
-Fullscreen on the native iOS video provider keeps the same WKWebView and native
-video layer together. It expands the existing DOM surface to the app viewport and
-restores its placeholder on exit; it does not invoke WebKit element/video
-fullscreen. Host safe area and status bar follow this state. Stock fullscreen
-controls and video-screen gestures route through the same surface controller.
-Seek intent is independent from AVPlayer's transient paused state; observation
-revisions protect newer commands and seeks. HTTP seeks allow250ms tolerance.
-Actual latency and PiP/fullscreen transitions require device acceptance.
+Playback, audio continuity, fullscreen transitions and cache timing on the device
+are tracked separately from compilation and automated regression checks.
+
+
+Device acceptance carried forward from the closed 1.4.6 release is tracked in
+[update_1.4.7.md](../update_1.4.7.md). This does not reinstate the withdrawn native
+automatic PiP feature or mark playback stability as accepted.

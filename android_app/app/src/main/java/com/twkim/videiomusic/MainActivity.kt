@@ -40,6 +40,8 @@ import com.twkim.videiomusic.data.ProfileStore
 import com.twkim.videiomusic.data.ServerProfile
 import com.twkim.videiomusic.playback.NativePlaybackBridge
 import com.twkim.videiomusic.web.BundledWebPolicy
+import com.twkim.videiomusic.web.WebFullscreenWindow
+import com.twkim.videiomusic.web.WebWindowState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -74,6 +76,29 @@ class MainActivity : ComponentActivity() {
     private var setup = true
     private var fullScreenView: View? = null
     private var fullScreenCallback: WebChromeClient.CustomViewCallback? = null
+    private val fullscreenWindow by lazy {
+        WebFullscreenWindow(capture = {
+            val insets = ViewCompat.getRootWindowInsets(root)
+            WebWindowState(
+                requestedOrientation,
+                WindowInsetsControllerCompat(window, root).systemBarsBehavior,
+                insets?.isVisible(WindowInsetsCompat.Type.statusBars()) ?: true,
+                insets?.isVisible(WindowInsetsCompat.Type.navigationBars()) ?: true,
+                if (Build.VERSION.SDK_INT >= 28) window.attributes.layoutInDisplayCutoutMode else 0,
+            )
+        }, apply = { state ->
+            if (requestedOrientation != state.orientation) requestedOrientation = state.orientation
+            if (Build.VERSION.SDK_INT >= 28) {
+                window.attributes = window.attributes.apply { layoutInDisplayCutoutMode = state.cutoutMode }
+            }
+            WindowInsetsControllerCompat(window, root).apply {
+                systemBarsBehavior = state.barsBehavior
+                if (state.statusBarVisible) show(WindowInsetsCompat.Type.statusBars()) else hide(WindowInsetsCompat.Type.statusBars())
+                if (state.navigationBarVisible) show(WindowInsetsCompat.Type.navigationBars()) else hide(WindowInsetsCompat.Type.navigationBars())
+            }
+            ViewCompat.requestApplyInsets(root)
+        })
+    }
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private val localLibrary by lazy { com.twkim.videiomusic.data.LocalLibraryManager(applicationContext) }
     private val videoIndex by lazy { com.twkim.videiomusic.web.VideoIndexInterceptor(com.twkim.videiomusic.web.VideoIndexCache(java.io.File(cacheDir, "video-index-v1"))) }
@@ -107,7 +132,7 @@ class MainActivity : ComponentActivity() {
         // fixed/floating positioning without duplicating CSS safe-area padding.
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.ime())
-            if (isInPictureInPictureMode) view.setPadding(0, 0, 0, 0)
+            if (isInPictureInPictureMode || fullScreenView != null) view.setPadding(0, 0, 0, 0)
             else view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
@@ -273,6 +298,9 @@ class MainActivity : ComponentActivity() {
                 fullScreenView = view; fullScreenCallback = callback
                 web?.visibility = View.GONE
                 root.addView(view, FrameLayout.LayoutParams(-1, -1))
+                root.setPadding(0, 0, 0, 0)
+                fullscreenWindow.enter(isInPictureInPictureMode)
+                ViewCompat.requestApplyInsets(root)
             }
             override fun onHideCustomView() = hideFullScreen()
         }
@@ -395,11 +423,14 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun hideFullScreen() {
+        if (fullScreenView == null) return
         fullScreenView?.let { root.removeView(it) }
         fullScreenView = null
-        fullScreenCallback?.onCustomViewHidden()
+        val callback = fullScreenCallback
         fullScreenCallback = null
         web?.visibility = View.VISIBLE
+        fullscreenWindow.exit()
+        callback?.onCustomViewHidden()
     }
 
     private fun supportsPip() = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
@@ -435,8 +466,14 @@ class MainActivity : ComponentActivity() {
     override fun onPictureInPictureModeChanged(inPip: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(inPip, newConfig)
         web?.evaluateJavascript("window.dispatchEvent(new CustomEvent('muzio-pip',{detail:$inPip}));", null)
+        fullscreenWindow.refresh(inPip)
         ViewCompat.requestApplyInsets(root)
         if (inPip) web?.onResume()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && fullScreenView != null) fullscreenWindow.refresh(isInPictureInPictureMode)
     }
 
     private fun moveToBackground() { if (!enterVideoPip()) moveTaskToBack(true) }
@@ -470,6 +507,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         unregisterReceiver(pipControlReceiver)
         reply = null
+        hideFullScreen()
         playback?.dispose()
         fileCallback?.onReceiveValue(null)
         web?.let { root.removeView(it); it.destroy() }

@@ -2,6 +2,29 @@ import Foundation
 import Network
 import CryptoKit
 
+enum VideoIndexTrace {
+    private static let lock = NSLock()
+    static func write(_ message: String) {
+        #if DEBUG
+        lock.lock(); defer { lock.unlock() }
+        guard let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return }
+        let directory = root.appendingPathComponent("Muzio")
+        let file = directory.appendingPathComponent("video-index-trace.log")
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let line = Data(String(format: "%.3f %@\n", Date().timeIntervalSince1970, String(message.prefix(1024))).utf8)
+            var data = (try? Data(contentsOf: file)) ?? Data()
+            if data.count + line.count > 64 * 1024 {
+                data = Data(data.suffix(32 * 1024))
+                if let newline = data.firstIndex(of: 10) { data.removeSubrange(...newline) }
+            }
+            data.append(line)
+            try data.write(to: file, options: .atomic)
+        } catch { /* Diagnostics must never interrupt playback. */ }
+        #endif
+    }
+}
+
 struct VideoIndexManifest: Codable {
     let eligible: Bool
     let revision: String
@@ -9,6 +32,11 @@ struct VideoIndexManifest: Codable {
     let indexBytes: Int64
     let mimeType: String
     let modifiedAt: String
+    var startupManifest: VideoIndexManifest {
+        VideoIndexManifest(eligible: eligible, revision: revision, fileSize: fileSize,
+                           indexBytes: min(fileSize, min(128 * 1024 * 1024, indexBytes + 16 * 1024 * 1024)),
+                           mimeType: mimeType, modifiedAt: modifiedAt)
+    }
     var valid: Bool {
         revision.count == 64 && revision.allSatisfy { $0.isHexDigit } && fileSize > 0 &&
         indexBytes > 0 && indexBytes <= 128 * 1024 * 1024 && indexBytes <= fileSize &&
@@ -86,8 +114,8 @@ final class VideoIndexDiskCache {
         let directory = root.appendingPathComponent(key)
         let file = directory.appendingPathComponent("prefix")
         guard let record = readRecord(directory), record.manifest.valid,
-              record.manifest.revision == manifest.revision, record.manifest.indexBytes == manifest.indexBytes,
-              let prefixStamp = fingerprint(file), prefixStamp.size == manifest.indexBytes,
+              record.manifest.revision == manifest.revision, record.manifest.indexBytes == manifest.indexBytes else { return nil }
+        guard let prefixStamp = fingerprint(file), prefixStamp.size == manifest.indexBytes,
               let recordStamp = fingerprint(directory.appendingPathComponent("record.json")),
               verified[key] == Verification(prefix: prefixStamp, record: recordStamp) || (try? digestFile(file)) == record.digest,
               let handle = try? FileHandle(forReadingFrom: file) else {
@@ -287,22 +315,47 @@ private final class ProxyClient {
         try transfer(request(parts.url!), response: { if $0.statusCode != 200 { throw ProxyError.invalid } }, consume: { data in guard body.count + data.count <= 16 * 1024 else { throw ProxyError.invalid }; body.append(data) })
         return try JSONDecoder().decode(VideoIndexManifest.self, from: body)
     }
-    private func prefix(_ url: URL, manifest: VideoIndexManifest) throws -> FileHandle {
+    private func prefix(_ url: URL, manifest: VideoIndexManifest, original: VideoIndexManifest) throws -> FileHandle {
         let key = VideoIndexDiskCache.hash(origin.absoluteString + "\n" + url.path)
         try check()
         if let hit = cache.lookup(key: key, manifest: manifest) { cacheHit = true; return hit }
         cache.fillLock.lock(); defer { cache.fillLock.unlock() }
         try check()
         if let hit = cache.lookup(key: key, manifest: manifest) { cacheHit = true; return hit }
+        // Keep the original index open while reserving space for its replacement.
+        let existing = cache.lookup(key: key, manifest: original)
+        defer { try? existing?.close() }
         let temporary = try cache.temporaryFile(reserving: manifest.indexBytes)
         FileManager.default.createFile(atPath: temporary.path, contents: nil)
         defer { try? FileManager.default.removeItem(at: temporary) }
         let output = try FileHandle(forWritingTo: temporary); defer { try? output.close() }
-        var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)!; parts.queryItems = [URLQueryItem(name: "index", value: "data"), URLQueryItem(name: "revision", value: manifest.revision)]
         var count: Int64 = 0
-        try transfer(request(parts.url!), response: { response in
-            guard response.statusCode == 200, response.expectedContentLength == manifest.indexBytes, response.value(forHTTPHeaderField: "X-Muzio-Revision") == manifest.revision else { throw ProxyError.invalid }
-        }, consume: { data in count += Int64(data.count); guard count <= manifest.indexBytes else { throw ProxyError.invalid }; try output.write(contentsOf: data) })
+        func append(_ data: Data) throws {
+            count += Int64(data.count)
+            guard count <= manifest.indexBytes else { throw ProxyError.invalid }
+            try output.write(contentsOf: data)
+        }
+        if let existing {
+            while let data = try existing.read(upToCount: 64 * 1024), !data.isEmpty { try check(); try append(data) }
+        } else {
+            var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+            parts.queryItems = [URLQueryItem(name: "index", value: "data"), URLQueryItem(name: "revision", value: original.revision)]
+            try transfer(request(parts.url!), response: { response in
+                guard response.statusCode == 200, response.expectedContentLength == original.indexBytes,
+                      response.value(forHTTPHeaderField: "X-Muzio-Revision") == original.revision else { throw ProxyError.invalid }
+            }, consume: append)
+        }
+        guard count == original.indexBytes else { throw ProxyError.invalid }
+        if manifest.indexBytes > original.indexBytes {
+            let start = original.indexBytes; let end = manifest.indexBytes - 1
+            var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+            parts.queryItems = (parts.queryItems ?? []).filter { $0.name != "index_revision" } + [URLQueryItem(name: "index_revision", value: original.revision)]
+            try transfer(request(parts.url!, range: "bytes=\(start)-\(end)"), response: { response in
+                guard response.statusCode == 206, response.value(forHTTPHeaderField: "X-Muzio-Revision") == original.revision,
+                      response.value(forHTTPHeaderField: "Content-Range") == "bytes \(start)-\(end)/\(original.fileSize)",
+                      response.expectedContentLength == end - start + 1 else { throw ProxyError.invalid }
+            }, consume: append)
+        }
         guard count == manifest.indexBytes else { throw ProxyError.invalid }
         try output.synchronize(); try cache.install(key: key, manifest: manifest, temporary: temporary)
         guard let handle = cache.lookup(key: key, manifest: manifest) else { throw ProxyError.invalid }; return handle
@@ -342,9 +395,10 @@ private final class ProxyClient {
                let indexBytes = cache.indexBytesAndPromote(key: key), lower >= indexBytes {
                 try passthrough(url, method: method, fields: fields); return
             }
-            let info: VideoIndexManifest
-            do { info = try manifest(url) } catch { try passthrough(url, method: method, fields: fields); return }
-            guard info.eligible && info.valid else { try passthrough(url, method: method, fields: fields); return }
+            let original: VideoIndexManifest
+            do { original = try manifest(url) } catch { try passthrough(url, method: method, fields: fields); return }
+            guard original.eligible && original.valid else { try passthrough(url, method: method, fields: fields); return }
+            let info = original.startupManifest
             if let validator = fields["if-range"], validator != info.modifiedAt { try passthrough(url, method: method, fields: fields); return }
             var start: Int64 = 0; var end = info.fileSize - 1
             if let range = fields["range"] {
@@ -355,7 +409,7 @@ private final class ProxyClient {
             }
             guard start < info.indexBytes, start <= end else { try passthrough(url, method: method, fields: fields); return }
             let handle: FileHandle
-            do { handle = try prefix(url, manifest: info) } catch { try passthrough(url, method: method, fields: fields); return }
+            do { handle = try prefix(url, manifest: info, original: original) } catch { try passthrough(url, method: method, fields: fields); return }
             defer { try? handle.close() }
             var values = ["Content-Type": info.mimeType, "Content-Length": String(end - start + 1), "Accept-Ranges": "bytes", "Cache-Control": "no-store", "X-Muzio-Revision": info.revision, "X-Muzio-Index-Cache": cacheHit ? "hit" : "miss"]
             let status = fields["range"] == nil ? 200 : 206

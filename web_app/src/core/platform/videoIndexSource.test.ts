@@ -12,10 +12,13 @@ function port(videoIndexBaseUrl = base, platform = 'macos') {
 }
 afterEach(() => vi.unstubAllGlobals());
 
-test('uses the native video proxy while retaining media identity and resume fragment', () => {
-  port();
-  expect(videoIndexSource(source)).toEqual({ ...source, url: `${base}api/media/video1?v=2#t=21600` });
-});
+test.each(['ios', 'macos'] as const)(
+  'uses the loopback video proxy on %s while retaining media identity and resume fragment',
+  (platform) => {
+    port(base, platform);
+    expect(videoIndexSource(source)).toEqual({ ...source, url: `${base}api/media/video1?v=2#t=21600` });
+  },
+);
 
 test('older hosts, audio, local, optimized, and foreign sources retain their URL', () => {
   expect(videoIndexSource(source)).toBe(source);
@@ -31,8 +34,15 @@ test('older hosts, audio, local, optimized, and foreign sources retain their URL
 });
 
 test('rejects malformed or non-loopback proxy metadata', () => {
-  for (const value of ['https://example.com/', 'http://127.0.0.1:12345/no-token/', `${base}?other=1`, base.replace('127.0.0.1', 'localhost')]) {
-    port(value);
-    expect(videoIndexSource(source)).toBe(source);
+  for (const platform of ['ios', 'macos'] as const) {
+    for (const value of [
+      'https://example.com/',
+      'http://127.0.0.1:12345/no-token/',
+      `${base}?other=1`,
+      base.replace('127.0.0.1', 'localhost'),
+    ]) {
+      port(value, platform);
+      expect(videoIndexSource(source)).toBe(source);
+    }
   }
 });

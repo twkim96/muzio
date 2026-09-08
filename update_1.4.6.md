@@ -2,11 +2,12 @@
 
 ## 상태 및 기준
 
-- 시작/개발 마감: 2026-09-07. 기준: Android1.4.5 최종 구현 `ba8ac7b`, 문서 정리 `52f3485`.
-- **1.4.6 개발 마감**. 웹·Android·iPhone/iPad·Mac 표시 버전1.4.6, 웹 UI 캐시r16. Android versionCode14, Apple 내부 빌드1.
-- 범위: Apple 공유 웹뷰 앱, 로컬 음악, 네이티브 재생/자동 PiP, 플랫폼 공통 필터·영상 UI, Android AAC 길이/탐색 및 영상 인덱스 캐시 수정.
-- Android 최종 수정 APK 설치·실행 완료. iPad 캐시 개선 패치 설치 완료 및 2026-09-07 앱 실행 성공 확인. iOS 서명 빌드와 macOS 컴파일 통과. App Store 배포·공증·전체 실기기 기능 수용 완료를 뜻하지 않는다.
-- 남은 확인: iPad 앱의 A→B→A 체감 지연, 최종 영상 탭/전체화면/PiP/탐색 조합의 사용자 수용. Android 재진입 metadata 약6.4초→1.05초는 실측했지만 최초 캐시 생성 비용은 남는다. 이 항목은 다음 후속 검증으로 넘기며 해결 완료로 표시하지 않는다.
+- 시작: 2026-09-07. 최종 개발 마감: 2026-09-08. 기준: Android1.4.5 최종 구현 `ba8ac7b`, 문서 정리 `52f3485`.
+- **1.4.6 최종 마감(2026-09-08)**. 웹·Android·iPhone/iPad·Mac 표시 버전1.4.6, 웹 UI 캐시r20. Android versionCode14, Apple 내부 빌드1.
+- 현재 범위: Apple 공유 웹뷰 앱·네이티브 음악·로컬 음악, 공유 웹 영상 플레이어, 플랫폼 공통 필터·영상 UI, Android AAC 길이/탐색·영상 인덱스 캐시·가로 전체화면 복구.
+- 최신 검증: 2026-09-08 iPad 공유 웹 영상 복귀본 설치·실행 성공, iOS 서명 빌드/macOS 컴파일 통과. Android 가로 전체화면 수정본은 JVM25개·APK 빌드·API36 에뮬레이터 검사를 통과했으며 실제 폰 설치는 대기 중이다. 09-07 Android 설치 기록은 이전 산출물의 이력이다. App Store 배포·공증·전체 실기기 기능 수용 완료를 뜻하지 않는다.
+- 현재 Apple 영상은 공유 웹 플레이어로 복귀했고 자동 PiP는 제외했다. 네이티브 음악·로컬 곡과 영상 인덱스/시작 데이터 캐시는 유지한다. 아래 초기 네이티브 영상/PiP 기록은 당시 이력이다.
+- 남은 확인: 웹 플레이어 복귀 후 iPad 연속 영상·오디오, A→B→A 체감 지연, 영상 탭/전체화면/탐색 조합 및 Android 가로 전체화면의 실기기 사용자 수용. Android 재진입 metadata 약6.4초→1.05초는 실측했지만 최초 캐시 생성 비용은 남는다. 사용자 요청으로 실기기 확인은 [1.4.7 이월 검증](update_1.4.7.md)으로 옮겼다. 1.4.6 개발은 마감하며 미확인 동작을 해결 완료로 표시하지 않는다.
 - 아래 구현·검증·산출물 항목은 개발 시점별 이력이다. 초기 SDK 미설치/이전 캐시 버전/초기 산출물 기술보다 문서 상단과 마지막 마감 기록이 현재 상태를 우선한다.
 
 ## 구현
@@ -259,3 +260,102 @@
 - Android 최종 APK SHA256 `95487eb0d6687ecaeb501d84e5f61c9b1471f257fa60f8240762cbec8fb3cc19` (27,141,615bytes). iOS는 설치용 서명.app을 사용했으며 App Store archive/IPA 배포는 하지 않았다.
 - Mac 최종 컴파일 결과를 로컬 ad-hoc 서명·검증하고 `dist/apple/Muzio-1.4.6-macOS-universal.zip`으로 갱신했다(arm64/x86_64, 1,047,904bytes, SHA256 `ad4929e2f8597a49631b8873cc4c74ae094eca93dca65649cfcbd9e58714889b`). 초기 arm64 산출물 기록을 대체하며 공증하지 않았다. 생성 앱/APK/ZIP은 Git 대상에서 제외한다.
 - 전체 검사 로그: `/tmp/muzio-146-release-backend.log`, `/tmp/muzio-146-release-race.log`, `/tmp/muzio-146-release-vet.log`, `/tmp/muzio-146-release-web.log`, `/tmp/muzio-146-release-web-retry.log`. iPad 실행 로그: `/tmp/muzio-release-ipad-launch.log`.
+
+## 마감 후 iPad 재진입 지연 진단 — 2026-09-07
+
+- 사용자 A→B→A 재현 로그에서 Apple proxy 사용과 실제 인덱스 cache hit를 확인했다. A의 load→ready는 첫4.70초/재진입4.65초, B는2.46초였다. 트랙 준비는1~2ms였다.
+- A 재진입에서 약82MB 인덱스의 캐시 응답은 요청별약45~100ms였고, 약1초 뒤 인덱스 다음의 영상 본문 요청에서약3.57초 간격이 발생했다. 이어보기 seek는 ready 이후 추가약1.13초였다. 인덱스 cache miss라고 진단하지 않는다.
+- 재생 시작 데이터 범위의 캐시 보완과 연결 재사용을 구현·검증 중이다. 실제 개선 여부는 후속 설치/재측정 결과로 구분한다. 진단 로그는 DEBUG 빌드의 제한된 로컬 파일에만 기록하며 URL/토큰을 넣지 않는다.
+- 2026-09-08 후속 구현: Apple 캐시 범위를 원래 인덱스 뒤16MiB까지 확장하되 항목128MiB/파일 크기와 전체640MiB/5개 상한을 유지한다. 기존 인덱스를 복사해 활용하고 추가 범위만 revision/Content-Range/길이 검증 후 원자적으로 게시한다. 앱 시작 시 AVPlayer가 반복 요청한 약10MiB 본문을 포함하기 위한 Apple 재생기 경로 보완이다.
+- 요청별 ephemeral URLSession 생성을 제한된 재사용 풀로 바꾸고, 취소는 해당 작업에만 적용한다. 기존 직렬 콜백/메모리 제한/리다이렉트 거부를 유지한다.
+- Apple proxy 통합 검사 통과(44 assertion sites): 재진입 fresh manifest만 요청, 기존 인덱스 재다운로드 없는 확장, 확장 캐시 손상/버전 변경/범위 연결/취소/연결 재사용/LRU 상한. iOS 서명 및 macOS 빌드 통과. iPad 보완본 설치 완료, 사용자 A→B→A 재측정 대기. 최초 추가 데이터 저장 비용과 이어보기 위치 자체의 네트워크 탐색 비용은 남는다.
+- 후속 사용자 확인: 재진입은 확실히 빨라졌으나 영상 끊김·오디오 소실이 보고됐다. 재진입 개선은 유지하기 위해 시작 데이터 캐시는 남기고, 동시에 도입했던 URLSession 연결 풀만 분리해 이전의 요청별 세션으로 되돌린다. 무음의 원인을 음소거/오디오 세션으로 단정하지 않으며, DEBUG 상태에 볼륨·음소거·선택 트랙 유무·출력 유형을 추가해 전송 문제와 구분한다. 영상/오디오 복구 여부는 수정본 후속 재현으로 검증한다.
+- 연결 재사용 제외/시작 캐시 유지 버전의 proxy 회귀 검사, iOS signed/macOS build 통과. 이전 요청별 URLSession의 transfer/cancel/ProxyTransfer를 그대로 사용함을 대조했다. iPad 설치 완료. 오디오 소실/영상 끊김이 해결됐다는 실기기 수용 결과는 아직 없다.
+- 추가 재현: 사용자 A/B 모두 무음·영상 끊김 보고. DEBUG에서 volume1/mutedfalse/오디오1트랙 selectedtrue/Speaker를 확인했고, 대상 파일은 일반 H264/AAC-LC48kHz stereo였다. 연결 풀만 제외한 것으로 해결되지 않았다. 사용자는 재진입 개선은 체감했다고 정정했으므로 이를 부정하지 않는다.
+- 원인 분리를 위해 iOS native 영상의 검증된 private proxy URL을 원래 같은 서버 media URL로 복원하는 직접 AVPlayer 경로를 적용했다. 디자인/자동PiP를 유지하되 영상에 자체 인덱스 중계를 사용하지 않는다. 잘못된 proxy prefix/다른origin은 계속 거부하고 query는 보존한다. 정책 회귀 검사, iOS signed/macOS build 통과, 비교용 iPad 설치 완료. 무음/끊김 해소는 아직 실기기 확인 전이며 성능 수정 완료로 표시하지 않는다.
+
+## iPad 연속 재생 중 무음·멈춤 후속 — 2026-09-08
+
+- 사용자 증상을 정정한다. A→B→A 이전에 A 하나만 재생해도 소리가 사라지며, 오류 문구는 없다. 일시정지 후 재생하면 잠시 소리가 돌아오지만 반복해서 멈춘다. 자체 proxy를 우회한 직접 AVPlayer 경로에서도 발생했으므로 캐시 전송만으로 설명하지 않는다.
+- 실제 AVPlayer를 이용한 로컬 재현에서 timeControlStatus KVO의 change.newValue가 nil이지만 관찰 대상의 상태는 waiting(1)/paused(0)으로 바뀌는 것을 확인했다. 기존 guard가 상태 변경을 버리는 결함을 수정했다. 관찰 콜백 시점에 실제 상태와 intent revision을 함께 캡처하며, 탐색·소스 교체 후 늦게 전달되는 알림 방어는 유지한다. 실제 AVPlayer를 통한 waiting/외부 pause 회귀를 추가했다.
+- play/seek 완료 시 playImmediately를 사용하던 경로를 일반 play로 변경했다. defaultRate에 선택 배속을 보존하고 자동 버퍼 대기·재개를 사용한다. Apple SDK는 playImmediately가 충분한 버퍼 여부와 관계없이 재생한다고 명시한다. 이 변경만으로 실기기 무음 원인이 확정되거나 해결됐다고 표시하지 않는다.
+- DEBUG에서 미디어 시간이 멈춰도 벽시계 타이머로 실제 rate/timeControlStatus/대기 이유/현재 위치/버퍼 잔량/오류 domain·code/음소거·오디오 출력 유형을 제한적으로 기록한다. URL·인증 정보·출력 장치 이름은 기록하지 않는다. 직접 서버 연결은 비교 조건을 유지하기 위해 그대로 둔다. 따라서 자체 시작 캐시 재사용 성능은 이번 확인 대상이 아니다.
+- 검증: 실제 AVPlayer KVO를 포함한 playback intent 회귀 실행 통과, iOS DEBUG 서명 빌드 및 macOS 컴파일 통과. iPad 수정본 설치 성공(databaseSequenceNumber3536). 자동 실행은 기기 잠금으로 실패했다. 사용자가 잠금을 풀고 A 단독 연속 재생을 확인해야 하며, 무음·멈춤 해결은 아직 미확인이다. 로그: /tmp/muzio-ipad-buffered-build.log, /tmp/muzio-mac-buffered-build.log, /tmp/muzio-ipad-buffered-install.log, /tmp/muzio-ipad-buffered-launch.log.
+
+## iPad 영상 재생 순서·버퍼 대기 재검증 — 2026-09-08
+
+- 직전 수정본의 무한 대기를 실기기 로그와 iOS 시뮬레이터에서 재현했다. 원본을 직접 읽는 AVPlayer가 현재 위치에 약1.44초의 데이터를 확보하고도 `waitingToMinimizeStalls`에 머물렀다. 일반 `play()`로 바꾼 것만으로는 이 대기를 해소하지 못했다.
+- 별도 AVPlayer와 실제 앱의 NativeVideoPlayer를 같은 원본·이어보기 위치로 비교했다. 오디오 tap의 비영점 PCM 정체도 관찰했지만, 아래의 시험 앱 PiP 설정 누락을 뒤늦게 확인했다. 이 초기 무음 측정만으로 실제 앱의 무음 원인이나 수정 효과를 확정하지 않는다.
+- 탐색 중 재생 요청은 의도만 저장하고 탐색 완료 후 적용하는 후보를 검사했다. 탐색 중 배속 변경도 실제 재생기에 즉시 적용하지 않으며, 직접 정지·새 탐색·소스 교체는 기존 revision 보호를 유지한다. 탐색 완료 직후 재생 방식 변경과 오디오 세션 활성화 시점 변경은 성공·실패가 반복돼 단독 원인으로 채택하지 않았다.
+- 자동 버퍼 대기를 유지하되, progressive 파일의 현재 위치부터 재생 배속 기준1초 분량이 확보됐는데 예측 대기만 지속되면 재개한다. 동일 위치·동일 버퍼의 반복 재개는 차단한다. 데이터 부족·탐색 중·명시적 정지·오류 상태는 재개하지 않으며 HLS는 기존 정책을 유지한다. UI·자동 PiP 구조와 웹/Android 재생 경로는 변경하지 않는다.
+- 회귀 검사: 실제 AVPlayer KVO와 버퍼 복구/정지/탐색/소스 교체/불연속 버퍼/배속/짧은 마지막 구간 테스트 통과. 현재 앱 코드 직접 연결 시뮬레이터에서 연속 재생·정지/재개·양방향 탐색·영상 교체를 추가 검증 중이다. iPad는 잠금 상태이므로 이번 수정본의 실기기 오디오/PiP 수용 검증은 아직 완료하지 않았다.
+- 진단 비교 기록: `/tmp/muzio-resource-proof/audio-direct-long.log`, `/tmp/muzio-buffer-recovery-proof/run.log`, `/tmp/muzio-buffer-recovery-proof/serial/run.log`. 직접 서버 연결 조건은 유지하며, 인덱스 캐시 성능 검증과 재생 안정성 검증을 혼동하지 않는다.
+
+### 진단 환경 보정
+
+- 최소 AVPlayer 기준 재생기는 같은 서버·파일·이어보기 위치에서 반복해120초 이상 영상/PCM을 공급했다. 같은 오디오 세션 설정도 통과했지만 PiP controller를 추가한 시험에서 PCM 정체가 나타났다.
+- 진단 앱의 Info.plist에 `UIBackgroundModes=audio`가 빠져 있었다. 실제 Muzio에는 이미 있는 설정이며 Apple의 PiP 필수 구성이다. 이를 맞춘 최소 PiP 재생기는120초 연속 검사에 통과했다. 잘못된 fixture의 결과를 실제 앱의 원인 증거로 승격하지 않는다. 보정한 환경에서 제품 코드 전체 경로를 다시 검사한다.
+- 오디오 측정은 최종 스피커 출력을 직접 녹음한 것이 아니라 audioMix의 PCM 관찰이다. 볼륨1 비교 및 Float32 형식 확인을 수행했고, 후속 진단용 tap에는 실시간 lock을 제거하고 요청/반환 프레임·소스 시간·종료/불연속 상태를 추가했다. 이 진단 도구는 앱 배포 코드에 넣지 않는다.
+
+## Apple 영상의 공유 웹 플레이어 복귀 — 2026-09-08
+
+- 사용자 요청으로 자동 PiP를 위한 별도 Apple 영상 재생기 사용을 중단했다. 오디오 소실과 무한 버퍼링의 단일 원인은 확정하지 못했다. 일부 진단의 PCM 관찰 장치가 재생 파이프라인 재구성을 일으킨 것도 확인돼, 그 결과만으로 제품 결함 원인을 단정하지 않는다. 서버에서 읽은 문제 구간8개의 HTTP206 본문은 원본과 바이트 단위로 일치했다.
+- iPhone·iPad도 Mac/일반 웹과 같은 Vidstack HTML video 경로를 사용한다. WebHost의 `nativeVideo` capability·NativeVideoPlayer 생성·별도 AVPlayerLayer·native fullscreen 명령 연결을 제거했다. 웹 컨트롤과 WebKit 전체화면을 사용하며, 자동 PiP는 이번 경로의 지원/검증 대상에서 제외한다. WebKit이 제공하는 수동 PiP 허용은 유지한다. OS에서 불가능하다고 결론낸 것이 아니라 사용자 선택에 따른 제품 롤백이다.
+- 미커밋 상태였던 native 재생 의도·버퍼 강제 재개·직접 서버 URL 우회 실험은 철회했다. 앞선 절의 후보 구현/시험 기록은 당시 이력이며 현재 적용 동작이 아니다. 웹/Android의 영상 기능, Apple 네이티브 음악·로컬 곡 기능은 기존 경로를 유지한다.
+- `videoIndexBaseUrl` 연결은 유지해 웹 영상이 Apple 로컬 인덱스 캐시를 사용한다. 인덱스 뒤16MiB 시작 데이터, 항목128MiB·전체640MiB/5개 상한, 기존 캐시의 추가 구간만 받는 확장, revision/Range/길이/체크섬 검증을 보존했다. 연결 풀 실험은 포함하지 않는다. 전체 영상을 저장하는 캐시는 아니므로 임의 탐색 위치의 버퍼링까지 없어지는 것은 아니다.
+- 검증: 캐시 통합 회귀, iOS 서명 빌드, macOS 컴파일 통과. 로그: `/tmp/muzio-web-video-cache-tests.log`, `/tmp/muzio-web-video-ios-build.log`, `/tmp/muzio-web-video-mac-build.log`.
+- 공유 웹 회귀47개 통과: nativeAudio가 있는 iOS에서도 nativeVideo capability가 없거나 false이면 실제 HTML video provider를 선택하고 캐시 URL·이어보기 위치를 유지한다. 네이티브 영상 명령과 투명 레이어가 생성되지 않는 것도 확인했다. 추가한 테스트의 타입 선언을 정리한 뒤 해당 컴포넌트5개와 TypeScript 검사도 통과했다. 웹 제품 코드는 변경하지 않아 서버 UI/Android 자산을 다시 배포하지 않았다. 로그: `/tmp/muzio-web-video-regression.log`, `/tmp/muzio-web-video-component-final.log`, `/tmp/muzio-web-video-types-final.log`.
+- 연결된 iPad에1.4.6 수정본을 데이터 유지 업데이트 설치하고 앱 실행까지 성공했다. 설치/실행 로그: `/tmp/muzio-web-video-ipad-install.json`, `/tmp/muzio-web-video-ipad-launch.json`. 실기기 연속 오디오·영상·전체화면·A→B→A 체감 확인은 아직 남아 있으며 컴파일/설치 통과로 대신하지 않는다.
+
+
+## Android 가로 전체화면 복구 — 2026-09-08
+
+- Android WebView의 전체화면 custom view는 표시했지만 호스트 창의 가로 방향·시스템 바·루트 여백을 함께 전환하지 않았다. 웹과 같은 영상 전체화면 요청을 받으면 가로 방향으로 전환하고 상태/탐색 바 및 루트 여백을 제거한다. 전체화면 버튼과 DOM 전체화면을 요청하는 스와이프가 같은 호스트 처리를 사용한다.
+- 전체화면 진입 전 방향·시스템 바 상태를 저장하고 종료 시 복원한다. 중복 종료/재진입을 보호하고 PiP에서 돌아오거나 창 포커스를 되찾으면 전체화면 상태를 다시 적용한다. 회전 시 WebView/영상 요소를 재생성하지 않는다. 웹·Apple 플레이어 디자인과 영상 비율 설정은 변경하지 않는다.
+- 검증 결과와 실기기 설치 여부는 `android_app/VALIDATION.md`의 같은 날짜 항목을 따른다. 최신 Android 수정본은 실제 폰에 아직 설치하지 않았으므로 이전 APK 설치 기록을 이번 수정의 수용 결과로 간주하지 않는다.
+
+## 다중선택 조작 및 즉시 강조 — 2026-09-08 / 웹 UI r17
+
+- 현재 누른 행의 hover 색상이 선택 배경을 덮어 다음 행을 누른 뒤에야 선택색이 드러나던 문제를 수정했다. 선택된 행에는 hover 배경을 적용하지 않고 즉시 강조한다. 데스크톱/모바일390px 실제 렌더링에서 두 선택 행이 같은 강조색을 유지함을 확인했다.
+- 다중선택 시 상단의 Add to Playlist/닫기 대신 가장 최근 선택한 행 옆에 글래스 원형 +/× 버튼을 표시한다. 마지막 선택을 취소하면 남아 있는 최근 선택 행으로 이동하고, × 또는 모든 항목 선택 해제 시 모드를 종료한다.
+- +는 플레이리스트 모달을 연다. 기존 플레이리스트 이름을 누르면 선택 항목을 모두 추가하고 모달과 선택 모드를 종료한다. 중복은 기존 contentKey 기준으로 제외하며, 플레이리스트가 없을 때 새로 만드는 흐름도 유지한다. 모달만 닫으면 선택은 유지한다.
+- 웹 회귀48개와 TypeScript/Vite 빌드 통과. 실제 서버가 제공하는 JS/CSS가 빌드 파일과 일치하고 서비스워커r17임을 확인했다. 로그: `/tmp/muzio-selection-final-tests.log`, `/tmp/muzio-selection-final-build.log`.
+- 웹·Apple의 서버 공유 UI에 반영된다. Android는 같은 웹 소스를 APK에 포함하므로 다음 일괄 패키징/설치 시 반영되며, 앞선 전체화면 검사용 APK에는 이 후속 UI가 없다. 이번에는 네이티브 코드/브리지 계약 변경이 없어 앱 재패키징을 하지 않았다.
+
+
+### 다중선택 버튼 배치 후속 — 웹 UI r18
+
+- 개별 곡 동작처럼 보이지 않도록 +/× 버튼을 행 내부에서 제거하고 마지막 선택 행 바로 아래8px에 떠 있는 형태로 옮겼다. 선택 개수 표시를 함께 두고, 원래 행의 텍스트 공간도 복원했다. 행 밖 버튼이 잘리거나 다음 행 뒤에 가려지지 않도록 표시 영역과 겹침 순서를 조정했다.
+- 웹 관련 회귀41개·TypeScript/Vite 빌드 결과는 `/tmp/muzio-selection-floating-tests.log`, `/tmp/muzio-selection-floating-build.log`에 기록한다. Android 설치 산출물은 다음 일괄 패키징 시 반영한다.
+
+
+### 용량·위치 텍스트 선택 제한 — 웹 UI r19
+
+- 목록의 용량·위치(모바일 구분자 포함)에만 user-select:none 및 WebKit touch-callout:none을 적용했다. 제목과 가수명은 텍스트 선택/복사/검색을 유지하고, 용량·위치의 길게 누르기 다중선택 동작도 유지한다. 모바일과 데스크톱 표시에 함께 적용한다.
+- LibraryScreen 기존 회귀와 TypeScript/Vite 빌드 검사. 로그: `/tmp/muzio-file-info-selection-tests.log`, `/tmp/muzio-file-info-selection-build.log`. Android는 다음 일괄 패키징에 포함한다.
+
+
+### 플레이리스트 명시적 생성 — 웹 UI r20
+
+- Add to Playlist의 닫기 왼쪽에 원형 + 버튼을 추가했다. 빈 목록은 안내만 표시하며 +를 눌러야 새 플레이리스트 이름 입력이 열린다. 기존 목록이 있어도 생성할 수 있다.
+- 생성·저장 시 새 플레이리스트에 선택 곡을 함께 넣고 선택 모드를 종료한다. 빈 이름은 저장하지 않으며 생성 취소는 기존 목록으로 돌아가 곡 선택을 유지한다. 기존 플레이리스트를 바로 선택해 저장하는 동작도 유지한다.
+- LibraryScreen 회귀38개 통과(빈 목록의 미생성 상태, 명시적 생성, 빈 이름 차단, 취소, 다중선택 저장 포함). 로그: `/tmp/muzio-playlist-create-tests.log`. 웹/Apple 서버 UI에 반영하며 Android는 다음 일괄 패키징에 포함한다.
+- 추가 검증: App34개도 통과했다. 테스트 검색 옵션의 TypeScript 오류를 수정한 뒤 웹 빌드 통과, 실제 제공 JS/CSS 및 서비스워커r20 일치를 확인했다. 로그: `/tmp/muzio-playlist-create-app-tests.log`, `/tmp/muzio-playlist-create-build.log`.
+
+
+## 최종 마감 및 1.4.7 이월 — 2026-09-08
+
+- 사용자 요청에 따라 현재 수정까지 1.4.6으로 마감한다. 사용자 표시 버전은 모든 플랫폼에서1.4.6을 유지하고, 1.4.7은 후속 검증 문서만 개설한다.
+- 확정 범위: Apple 공유 웹 영상 플레이어 복귀 및 시작 구간 캐시 유지, Android 가로 전체화면 복구, 공용 다중선택 즉시 강조·선택 행 아래 글래스 조작 버튼, 용량/위치 텍스트 선택 제한, 명시적 플레이리스트 생성·선택 곡 저장. 네이티브 Apple 자동 PiP는 사용자 요청으로 철회한 범위이며 다음 버전의 필수 구현으로 재등록하지 않는다.
+- 기존 자동검사 증거를 재사용했다: 공유 웹 영상47개, 선택 관련48개, 최종 LibraryScreen38개·App34개, Apple 캐시 통합 검사·iOS 서명/macOS 컴파일, Android JVM25개 및 가로 전체화면 에뮬레이터 확인. 서로 다른 시점의 검사 수를 합쳐 하나의 전체 suite 통과로 표시하지 않는다.
+- Android에는 마지막 공용 웹 UI r20을 포함하는 마감 APK를 한 번 패키징했다. Apple은 서버 UI를 읽으므로 r17–r20 변경만으로 iOS를 재빌드하지 않고 기존 웹 영상 복귀 서명본을 유지한다. Mac 배포 ZIP은 후속 Swift 캐시/호스트 변경을 포함하도록 갱신한다. 산출물 위치·해시는 아래 마감 산출물 기록을 따른다.
+- 이번 마감에서 기기 설치·실기기 재생은 수행하지 않는다. [update_1.4.7.md](update_1.4.7.md)에 설치, 실제 영상/오디오·캐시·전체화면·PiP·로컬 음악·공통 UI 확인을 미완료 체크리스트로 이월했다. 위 절의 대기·후속 패키징 문구는 해당 시점의 이력이며 이 마감 상태를 우선한다.
+
+### 마감 산출물
+
+- `dist/releases/1.4.6-20260908/Muzio-1.4.6-web-r20-vc14.apk` — SHA-256 `47baf18addf8d343cb56943103a10dde406046d4be83ac8cbf0dc390886b9fd1`.
+- `dist/releases/1.4.6-20260908/Muzio-1.4.6-macOS-universal.zip` — SHA-256 `a5f961a2bfe76f1ab27194800fee6484c0da607f6ff2ecedcc7abbab39f23ff2`.
+- Android `:app:assembleDebug` exit0, 10초. APK 내부 `assets/muzio-web/sw.js`의 `1.4.6-r20` 및 JS 번들 포함 확인. 로그: `/tmp/muzio-146-close-android-build.log`. 네이티브 입력은 기존 JVM25개 통과 이후 바뀌지 않아 단위 검사를 다시 실행하지 않았다.
+- Mac Release arm64/x86_64 universal build exit0, ad-hoc 서명 검증 및 ZIP 생성. 로그: `/tmp/muzio-146-close-mac-build.log`. 공증·스토어 배포는 하지 않았다. 앞선 `dist/apple` 파일은 이전 산출물이며 위 경로를 최종본으로 사용한다.
+- iOS는 `/tmp/muzio-ipad-build/Build/Products/Debug-iphoneos/Muzio.app`의 기존 서명/설치 성공본을 재사용한다. 이후 Swift 제품 변경이 없고 Apple은 서버 공용 UI를 읽으므로 이번에는 다시 패키징/설치하지 않았다. 개발 서명 만료·재연결이 필요한 경우 후속 검증에서 처리한다.
+- 마감 버전 검사: `VMA_VERSION=1.4.6 bash scripts/verify_version.sh` 통과. 변경 파일의 whitespace 검사도 통과했다.

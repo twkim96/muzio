@@ -1,5 +1,6 @@
+import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
 import { createPortal } from 'react-dom';
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { FloatingSearchControl } from '../../app/FloatingSearchControl';
 
 import type {
@@ -9,7 +10,6 @@ import type {
 } from '../../core/api/libraryClient';
 import { contentKeyForLibraryItem } from '../../core/media/contentIdentity';
 import type { PlaylistRecord } from '../../core/storage/playlistRepository';
-import { CloseGlyph } from '../../core/ui/AppIcons';
 import { GlassModal } from '../../core/ui/GlassModal';
 import { FunnelSimple } from '@phosphor-icons/react/dist/csr/FunnelSimple';
 import { LibraryFilterPanel } from './LibraryFilterPanel';
@@ -111,10 +111,10 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
     preferencesRepository.write(type, currentPreferences);
   }, [currentPreferences, preferencesRepository, type]);
   const deferredQuery = useDeferredValue(query);
-  const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const selectionMode = selectedIds.size > 0;
+  const selectionAnchorId = [...selectedIds].at(-1);
   const [addModalItems, setAddModalItems] = useState<LibraryItem[] | null>(null);
-  const [addTargetPlaylistId, setAddTargetPlaylistId] = useState('');
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const searchHost = useSearchHost();
 
@@ -167,7 +167,6 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
     }));
   };
   const clearSelection = () => {
-    setSelectionMode(false);
     setSelectedIds(new Set());
   };
   const toggleSelected = useCallback((item: LibraryItem) => {
@@ -178,16 +177,12 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
       } else {
         next.add(item.id);
       }
-      if (next.size === 0) {
-        setSelectionMode(false);
-      }
       return next;
     });
   }, []);
   const enterSelection = useCallback(
     (item: LibraryItem) => {
       if (type === 'image') return;
-      setSelectionMode(true);
       setSelectedIds(new Set([item.id]));
     },
     [type],
@@ -196,15 +191,15 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
     (items: LibraryItem[]) => {
       if (items.length === 0) return;
       setAddModalItems(items);
-      setAddTargetPlaylistId(playlists.playlists[0]?.id ?? '');
+      setNewPlaylistName('');
     },
-    [playlists],
+    [],
   );
-  const confirmAddToPlaylist = () => {
+  const confirmAddToPlaylist = (playlistId = '') => {
     const items = addModalItems ?? [];
     if (items.length === 0) return;
     const keys = items.map(contentKeyForLibraryItem);
-    let targetId = addTargetPlaylistId;
+    let targetId = playlistId;
     if (targetId === '' && newPlaylistName.trim() !== '') {
       const next = playlists.createPlaylist(newPlaylistName);
       targetId = next.at(-1)?.id ?? '';
@@ -218,37 +213,8 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 pb-7 pt-3 sm:px-8 lg:px-10">
-      {(searchHost === null || (selectionMode && type !== 'image')) && <header className="mb-4 flex min-h-10 items-center justify-end gap-4">
-        {searchHost === null && (
-          <div className="mr-auto min-w-0">
-            <h1 className="truncate text-xl font-semibold tracking-tight">
-              {meta.title}
-            </h1>
-          </div>
-        )}
-        <div className="flex shrink-0 items-center gap-2">
-          {selectionMode && type !== 'image' && (
-            <>
-              <button
-                type="button"
-                data-testid="selection-add-to-playlist"
-                className="muzio-selection-action inline-flex h-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 px-4 text-sm font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
-                onClick={() => openAddModal(selectedItems)}
-              >
-                Add to Playlist
-              </button>
-              <button
-                type="button"
-                aria-label="Clear selection"
-                className="muzio-selection-action inline-flex h-10 w-10 items-center justify-center rounded-full border border-zinc-300/80 bg-white/65 text-lg font-semibold shadow-sm backdrop-blur-xl hover:bg-zinc-200/70 dark:border-white/10 dark:bg-white/[0.07] dark:hover:bg-white/10"
-                onClick={clearSelection}
-              >
-                <CloseGlyph className="h-5 w-5" />
-              </button>
-            </>
-          )}
-
-        </div>
+      {searchHost === null && <header className="mb-4 flex min-h-10 items-center">
+        <h1 className="truncate text-xl font-semibold tracking-tight">{meta.title}</h1>
       </header>}
       {searchHost === null ? (
         <>
@@ -310,6 +276,9 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
         onToggleSelected={toggleSelected}
         selectedIds={selectedIds}
         selectionMode={selectionMode}
+        selectionAnchorId={selectionAnchorId}
+        onAddSelection={() => openAddModal(selectedItems)}
+        onClearSelection={clearSelection}
       />
       {addModalItems !== null && (
         <AddToPlaylistModal
@@ -318,9 +287,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
           onClose={() => setAddModalItems(null)}
           onConfirm={confirmAddToPlaylist}
           onNewPlaylistName={setNewPlaylistName}
-          onTargetPlaylist={setAddTargetPlaylistId}
           playlists={playlists.playlists}
-          targetPlaylistId={addTargetPlaylistId}
         />
       )}
     </div>
@@ -367,6 +334,9 @@ function LibraryBody({
   onToggleSelected,
   selectedIds,
   selectionMode,
+  selectionAnchorId,
+  onAddSelection,
+  onClearSelection,
 }: {
   sortKey: LibrarySortKey;
   sortDirection: LibrarySortDirection;
@@ -381,6 +351,9 @@ function LibraryBody({
   onToggleSelected: (item: LibraryItem) => void;
   selectedIds: Set<string>;
   selectionMode: boolean;
+  selectionAnchorId?: string;
+  onAddSelection: () => void;
+  onClearSelection: () => void;
 }) {
   const rawItems =
     result?.kind === 'ok'
@@ -460,6 +433,9 @@ function LibraryBody({
             onToggleSelected={onToggleSelected}
             selectedIds={selectedIds}
             selectionMode={selectionMode}
+            selectionAnchorId={selectionAnchorId}
+            onAddSelection={onAddSelection}
+            onClearSelection={onClearSelection}
           />
         </div>
       </>
@@ -475,59 +451,70 @@ function AddToPlaylistModal({
   onClose,
   onConfirm,
   onNewPlaylistName,
-  onTargetPlaylist,
   playlists,
-  targetPlaylistId,
 }: {
   itemCount: number;
   newPlaylistName: string;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (playlistId?: string) => void;
   onNewPlaylistName: (name: string) => void;
-  onTargetPlaylist: (playlistId: string) => void;
   playlists: PlaylistRecord[];
-  targetPlaylistId: string;
 }) {
+  const [creating, setCreating] = useState(false);
+  const nameInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (creating) nameInput.current?.focus();
+  }, [creating]);
   return (
     <GlassModal
       testId="add-to-playlist-modal"
       title="Add to Playlist"
       closeLabel="Close add to playlist"
       onClose={onClose}
-      footer={
+      headerActions={<button type="button" aria-label="Create playlist" className="muzio-modal-close"
+        disabled={creating} onClick={() => setCreating(true)}><Plus aria-hidden className="h-5 w-5" /></button>}
+      footer={creating ? (
+        <>
+        <button type="button" className="muzio-glass-action muzio-glass-action-secondary"
+          onClick={() => { setCreating(false); onNewPlaylistName(''); }}>Cancel</button>
         <button
           type="button"
           data-testid="add-playlist-confirm"
           className="muzio-glass-action"
-          onClick={onConfirm}
+          disabled={newPlaylistName.trim() === ''}
+          onClick={() => onConfirm()}
         >
-          Confirm
+          Create and save
         </button>
-      }
+        </>
+      ) : undefined}
     >
       <p className="mb-3 text-sm text-white/60">{itemCount} selected</p>
-      {playlists.length > 0 ? (
-        <select
-          data-testid="add-playlist-select"
-          aria-label="Playlist"
-          value={targetPlaylistId}
-          onChange={(event) => onTargetPlaylist(event.target.value)}
-          className="muzio-glass-input w-full px-4 py-2 text-sm"
-        >
+      {creating ? (
+        <div>
+          <label className="mb-2 block text-sm text-muted" htmlFor="add-playlist-create-name">New playlist name</label>
+          <input ref={nameInput} id="add-playlist-create-name"
+            data-testid="add-playlist-create-name"
+            value={newPlaylistName}
+            onChange={(event) => onNewPlaylistName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing && newPlaylistName.trim()) {
+                event.preventDefault();
+                onConfirm();
+              }
+            }}
+            className="muzio-glass-input w-full px-4 py-2 text-sm outline-none"
+          />
+        </div>
+      ) : playlists.length > 0 ? (
+        <div className="flex flex-col gap-2" aria-label="Playlists">
           {playlists.map((playlist) => (
-            <option key={playlist.id} value={playlist.id}>
-              {playlist.name}
-            </option>
+            <button key={playlist.id} type="button" className="muzio-glass-action w-full text-left"
+              onClick={() => onConfirm(playlist.id)}>{playlist.name}</button>
           ))}
-        </select>
+        </div>
       ) : (
-        <input
-          data-testid="add-playlist-create-name"
-          aria-label="New playlist name"
-          value={newPlaylistName}
-          onChange={(event) => onNewPlaylistName(event.target.value)}
-          className="muzio-glass-input w-full px-4 py-2 text-sm outline-none"
-        />
+        <p className="py-4 text-center text-sm text-muted">No playlists yet. Use + to create one.</p>
       )}
     </GlassModal>
   );

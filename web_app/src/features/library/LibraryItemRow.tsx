@@ -1,3 +1,5 @@
+import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
+import { X } from '@phosphor-icons/react/dist/csr/X';
 import {
   useEffect,
   memo,
@@ -65,6 +67,10 @@ function LibraryItemRowComponent({
   queueItems = [item],
   selected = false,
   selectionMode = false,
+  showSelectionActions = false,
+  selectionCount = 0,
+  onAddSelection,
+  onClearSelection,
   style,
 }: {
   item: LibraryItem;
@@ -74,6 +80,10 @@ function LibraryItemRowComponent({
   queueItems?: readonly LibraryItem[];
   selected?: boolean;
   selectionMode?: boolean;
+  showSelectionActions?: boolean;
+  selectionCount?: number;
+  onAddSelection?: () => void;
+  onClearSelection?: () => void;
   style?: CSSProperties;
 }) {
   const { directory, filename } = splitPath(item.relativePath);
@@ -244,12 +254,13 @@ function LibraryItemRowComponent({
   return (
     <li
       data-testid="library-item"
+      data-selected={selected}
       data-media-id={item.id}
       data-media-type={item.type}
       style={style}
-      className={`group relative overflow-hidden border-b border-zinc-200/70 last:border-b-0 hover:bg-zinc-950/[0.035] dark:border-white/10 dark:hover:bg-white/[0.055] xl:h-[54px] ${
-        selected ? 'bg-accent/10 dark:bg-accent/18' : ''
-      }`}
+      className={`muzio-library-row group relative border-b border-zinc-200/70 last:border-b-0 dark:border-white/10 xl:h-[54px] ${
+        selected ? 'muzio-library-row-selected' : 'hover:bg-zinc-950/[0.035] dark:hover:bg-white/[0.055]'
+      } ${showSelectionActions ? 'z-20 overflow-visible' : 'overflow-hidden'}`}
       onFocusCapture={prefetchVideoSidecar}
       onPointerEnter={prefetchVideoSidecar}
       onPointerCancel={clearLongPress}
@@ -263,6 +274,16 @@ function LibraryItemRowComponent({
       onTouchEnd={clearLongPress}
       onTouchCancel={clearLongPress}
     >
+      {showSelectionActions && <div data-row-action data-testid="selection-actions"
+        role="group" aria-label={`${selectionCount} selected items`}
+        className="absolute left-1/2 top-[calc(100%+8px)] z-10 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap"
+        onClick={(event) => event.stopPropagation()}>
+        <span className="muzio-selection-count">{selectionCount} selected</span>
+        <button type="button" data-testid="selection-add-to-playlist" aria-label="Add selected items to playlist"
+          className="muzio-selection-round" onClick={onAddSelection}><Plus aria-hidden className="h-5 w-5" /></button>
+        <button type="button" aria-label="Clear selection" className="muzio-selection-round"
+          onClick={onClearSelection}><X aria-hidden className="h-5 w-5" /></button>
+      </div>}
       <div className="grid min-h-[54px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-[5px] sm:px-5 xl:h-full xl:min-h-0 xl:py-0">
         {item.type !== 'audio' && (
           <div
@@ -308,11 +329,11 @@ function LibraryItemRowComponent({
                   )}
                   {item.type === 'image' && (
                     <>
-                      <span>{item.rootName}</span>
+                      <span className="muzio-library-file-info">{item.rootName}</span>
                       <span aria-hidden className="text-[10px] text-muted/40"> | </span>
                     </>
                   )}
-                  <span>{formatSize(item.sizeBytes)}</span>
+                  <span className="muzio-library-file-info">{formatSize(item.sizeBytes)}</span>
                   <span aria-hidden className="text-[10px] text-muted/40"> | </span>
                   <span>{formatModified(item.modifiedAt)}</span>
                 </p>
@@ -357,28 +378,26 @@ function LibraryItemRowComponent({
                 data-testid="audio-mobile-metadata"
                 className="overflow-hidden whitespace-nowrap text-sm text-muted xl:hidden"
               >
-                {metadata?.artist && (
-                  <>
-                    <span title={metadata.artist}>{metadata.artist}</span>
-                    <span aria-hidden className="text-[10px] text-muted/40"> | </span>
-                  </>
-                )}
-                <span>{formatSize(item.sizeBytes)}</span>
-                <span aria-hidden className="text-[10px] text-muted/40"> | </span>
-                <span title={item.rootName}>{item.rootName}</span>
+                {metadata?.artist && <span title={metadata.artist}>{metadata.artist}</span>}
+                <span className="muzio-library-file-info">
+                  {metadata?.artist && <span aria-hidden className="text-[10px] text-muted/40"> | </span>}
+                  <span>{formatSize(item.sizeBytes)}</span>
+                  <span aria-hidden className="text-[10px] text-muted/40"> | </span>
+                  <span title={item.rootName}>{item.rootName}</span>
+                </span>
               </p>
             </div>
             <p className="library-column hidden min-w-0 text-left text-sm text-muted xl:block">
               <span className="block truncate">{metadata?.artist}</span>
             </p>
-            <p className="library-column hidden min-w-0 text-left text-sm tabular-nums text-muted xl:block">
+            <p className="muzio-library-file-info library-column hidden min-w-0 text-left text-sm tabular-nums text-muted xl:block">
               {formatSize(item.sizeBytes)}
             </p>
             <p className="library-column hidden min-w-0 text-left text-sm tabular-nums text-muted xl:block">
               {formatModified(item.modifiedAt)}
             </p>
             <p className="library-column hidden min-w-0 text-left text-sm text-muted xl:block">
-              <span className="block truncate">{item.rootName}</span>
+              <span className="muzio-library-file-info block truncate">{item.rootName}</span>
             </p>
           </button>
         )}
@@ -434,6 +453,10 @@ export function rowPropsEqual(
     previous.item === next.item &&
     previous.selected === next.selected &&
     previous.selectionMode === next.selectionMode &&
+    previous.showSelectionActions === next.showSelectionActions &&
+    previous.selectionCount === next.selectionCount &&
+    previous.onAddSelection === next.onAddSelection &&
+    previous.onClearSelection === next.onClearSelection &&
     previous.queueItems === next.queueItems &&
     previous.onLongPress === next.onLongPress &&
     previous.onOpenAddToPlaylist === next.onOpenAddToPlaylist &&

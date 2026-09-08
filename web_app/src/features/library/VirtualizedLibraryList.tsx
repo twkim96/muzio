@@ -27,6 +27,9 @@ export function VirtualizedLibraryList({
   onToggleSelected,
   selectedIds = new Set<string>(),
   selectionMode = false,
+  selectionAnchorId,
+  onAddSelection,
+  onClearSelection,
 }: {
   items: readonly LibraryItem[];
   onLongPressItem?: (item: LibraryItem) => void;
@@ -34,6 +37,9 @@ export function VirtualizedLibraryList({
   onToggleSelected?: (item: LibraryItem) => void;
   selectedIds?: Set<string>;
   selectionMode?: boolean;
+  selectionAnchorId?: string;
+  onAddSelection?: () => void;
+  onClearSelection?: () => void;
 }) {
   const listRef = useRef<HTMLUListElement | null>(null);
   const frameRef = useRef<number | null>(null);
@@ -135,6 +141,10 @@ export function VirtualizedLibraryList({
             queueItems={items}
             selected={selectedIds.has(item.id)}
             selectionMode={selectionMode}
+            showSelectionActions={selectionMode && item.id === selectionAnchorId}
+            selectionCount={item.id === selectionAnchorId ? selectedIds.size : 0}
+            onAddSelection={onAddSelection}
+            onClearSelection={onClearSelection}
             style={{
               height: rowHeight,
               left: 0,

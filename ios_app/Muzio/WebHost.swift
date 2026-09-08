@@ -50,7 +50,6 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
         webView.underPageBackgroundColor = color
         #endif
     }
-    @Published var videoFullscreen = false
     @Published var webView: WKWebView?
     @Published var showSetup = false
     @Published var showFolderPicker = false
@@ -79,9 +78,6 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
     @Published var connectionError = ""
     @Published var loadError = ""
     private(set) var origin: URL?
-    #if os(iOS)
-    private(set) var video: NativeVideoPlayer?
-    #endif
     private var audio: NativeAudioPlayer?
     private var playbackHistory: ApplePlaybackHistory?
     private var videoIndexProxy: VideoIndexProxy?
@@ -125,9 +121,6 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
         openGeneration = generation
         documentGeneration = UUID()
         audio?.shutdown()
-        #if os(iOS)
-        video?.shutdown(); video = nil; videoFullscreen = false
-        #endif
         videoIndexProxy?.stop()
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "muzio")
         webView?.stopLoading()
@@ -154,12 +147,10 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
         controller.add(WeakMessageHandler(self), name: "muzio")
         #if os(iOS)
         let platform = "ios"
-        let nativeVideoCapability = ", nativeVideo: true"
         configuration.allowsInlineMediaPlayback = true
         configuration.allowsPictureInPictureMediaPlayback = true
         #else
         let platform = "macos"
-        let nativeVideoCapability = ""
         #endif
         configuration.mediaTypesRequiringUserActionForPlayback = []
         configuration.preferences.isElementFullscreenEnabled = true
@@ -169,7 +160,7 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
         controller.addUserScript(WKUserScript(source: """
         (() => {
           if (window !== window.top || location.origin !== \(serializedOrigin)) return;
-          const port = { platform: '\(platform)', capabilities: { localLibrary: true, nativeAudio: true, notificationLikes: true, playbackHistory: true\(nativeVideoCapability) },
+          const port = { platform: '\(platform)', capabilities: { localLibrary: true, nativeAudio: true, notificationLikes: true, playbackHistory: true },
             \(videoIndexMetadata)
             onmessage: null,
             postMessage(message) { window.webkit.messageHandlers.muzio.postMessage(message); }
@@ -185,9 +176,8 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
         #if os(iOS)
         web.scrollView.contentInsetAdjustmentBehavior = .never
         #endif
-        #if os(iOS)
-        video = NativeVideoPlayer(origin: origin, proxyBase: videoIndexBaseURL) { [weak self] event in self?.send(event) }
-        #endif
+        // Video uses the shared HTML player on every Apple host. The index
+        // proxy accelerates its source without adding another playback engine.
         webView = web
         applyWebBackground()
         let library = localLibrary
@@ -240,21 +230,6 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
         }
         do {
             let result: [String: Any]
-            #if os(iOS)
-            if command == "video.fullscreen" {
-                videoFullscreen = payload["active"] as? Bool == true
-                send(["type": "response", "id": id, "ok": true, "result": [:]])
-                return
-            }
-            if command.hasPrefix("video.") {
-                guard let video else { throw HostError.message("영상 플레이어가 준비되지 않았습니다.") }
-                if command == "video.play", video.accepts(payload) { audio?.relinquishForVideo() }
-                let state = try video.handle(command, payload)
-                send(["type": "response", "id": id, "ok": true, "result": state])
-                return
-            }
-            if ["playback.play", "playback.load"].contains(command) { video?.pause() }
-            #endif
             if command == "playback.history" {
                 result = playbackHistory?.snapshot() ?? ["pending": []]
             } else if command == "playback.ackHistory" {
@@ -315,9 +290,6 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-        #if os(iOS)
-        video?.clear(); videoFullscreen = false
-        #endif
         documentGeneration = UUID(); loading = true; loadError = ""
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loading = false; resume() }

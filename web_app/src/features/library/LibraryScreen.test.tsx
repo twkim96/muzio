@@ -842,7 +842,13 @@ describe('LibraryScreen', () => {
     fireEvent.click(screen.getByText('Add to Playlist'));
     expect(screen.getByTestId('add-to-playlist-modal').parentElement).toBe(document.body);
     expect(screen.getByRole('dialog', { name: 'Add to Playlist' })).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByText('No playlists yet. Use + to create one.')).toBeInTheDocument();
+    expect(screen.queryByTestId('add-playlist-create-name')).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('music.playlists.v1')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Create playlist'));
     expect(screen.getByTestId('add-playlist-create-name')).toHaveFocus();
+    expect(screen.getByTestId('add-playlist-confirm')).toBeDisabled();
+    fireEvent.change(screen.getByTestId('add-playlist-create-name'), { target: { value: 'Night' } });
     screen.getByTestId('add-playlist-confirm').focus();
     fireEvent.keyDown(document.activeElement!, { key: 'Tab' });
     expect(screen.getByLabelText('Close add to playlist')).toHaveFocus();
@@ -1183,9 +1189,18 @@ describe('LibraryScreen', () => {
 
       expect(screen.getByTestId('selection-add-to-playlist')).toBeInTheDocument();
 
-      fireEvent.click(screen.getByLabelText('Play track.mp3'));
+      const trackRow = screen.getByLabelText('Play track.mp3').closest('li')!;
+      const songRow = screen.getByLabelText('Play song.mp3').closest('li')!;
+      expect(trackRow).toHaveAttribute('data-selected', 'true');
+      expect(trackRow).toContainElement(screen.getByTestId('selection-actions'));
+      fireEvent.click(screen.getByLabelText('Play track.mp3')); // Suppress long-press release click.
       fireEvent.click(screen.getByLabelText('Play song.mp3'));
+      expect(songRow).toHaveAttribute('data-selected', 'true');
+      expect(songRow.className).not.toContain('hover:bg-');
+      expect(songRow).toContainElement(screen.getByTestId('selection-actions'));
+      expect(trackRow).toHaveAttribute('data-selected', 'true');
       fireEvent.click(screen.getByTestId('selection-add-to-playlist'));
+      fireEvent.click(screen.getByLabelText('Create playlist'));
       fireEvent.change(screen.getByTestId('add-playlist-create-name'), {
         target: { value: 'Batch' },
       });
@@ -1197,6 +1212,40 @@ describe('LibraryScreen', () => {
       expect(stored.playlists[0].name).toBe('Batch');
       expect(stored.playlists[0].items).toHaveLength(2);
       expect(screen.queryByTestId('selection-add-to-playlist')).not.toBeInTheDocument();
+      expect(songRow).toHaveAttribute('data-selected', 'false');
+      expect(trackRow).toHaveAttribute('data-selected', 'false');
+
+      // A second batch targets the existing playlist immediately and excludes duplicates.
+      const hold = () => {
+        firePointer(screen.getByLabelText('Play track.mp3'), 'pointerdown', {
+          pointerType: 'touch', clientX: 120, clientY: 240,
+        });
+        act(() => { vi.advanceTimersByTime(800); });
+        fireEvent.click(screen.getByLabelText('Play track.mp3'));
+      };
+      hold();
+      fireEvent.click(screen.getByLabelText('Play song.mp3'));
+      fireEvent.click(screen.getByTestId('selection-add-to-playlist'));
+      fireEvent.click(screen.getByLabelText('Create playlist'));
+      fireEvent.change(screen.getByTestId('add-playlist-create-name'), { target: { value: 'Cancelled' } });
+      fireEvent.click(within(screen.getByTestId('add-to-playlist-modal')).getByRole('button', { name: /^Cancel$/ }));
+      expect(JSON.parse(window.localStorage.getItem('music.playlists.v1')!).playlists).toHaveLength(1);
+      fireEvent.click(within(screen.getByTestId('add-to-playlist-modal')).getByRole('button', { name: 'Batch' }));
+      expect(screen.queryByTestId('add-to-playlist-modal')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('selection-actions')).not.toBeInTheDocument();
+      expect(JSON.parse(window.localStorage.getItem('music.playlists.v1')!).playlists[0].items).toHaveLength(2);
+
+      hold();
+      fireEvent.click(screen.getByLabelText('Play song.mp3'));
+      fireEvent.click(screen.getByLabelText('Play song.mp3')); // Anchor falls back to remaining selection.
+      expect(trackRow).toContainElement(screen.getByTestId('selection-actions'));
+      fireEvent.click(screen.getByLabelText('Play track.mp3'));
+      expect(screen.queryByTestId('selection-actions')).not.toBeInTheDocument();
+      hold();
+      fireEvent.click(screen.getByLabelText('Clear selection'));
+      expect(screen.queryByTestId('selection-actions')).not.toBeInTheDocument();
+      expect(trackRow).toHaveAttribute('data-selected', 'false');
+
     } finally {
       vi.useRealTimers();
     }

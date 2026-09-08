@@ -8,13 +8,14 @@ let previousOverflow = '';
 const focusableSelector = 'button, input, select, textarea, a[href], [tabindex]';
 
 export function GlassModal({
-  testId, title, onClose, children, footer, closeLabel = `Close ${title}`, alert = false, pillTitle = false,
+  testId, title, onClose, children, footer, headerActions, closeLabel = `Close ${title}`, alert = false, pillTitle = false,
 }: {
   testId: string;
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  headerActions?: ReactNode;
   closeLabel?: string;
   alert?: boolean;
   pillTitle?: boolean;
@@ -102,6 +103,7 @@ export function GlassModal({
               </span>
             </h2>
           ) : <h2 id={titleId} className="min-w-0 flex-1 text-lg font-semibold">{title}</h2>}
+          {headerActions}
           <button type="button" aria-label={closeLabel} className={pillTitle ? "muzio-sheet-header-action muzio-settings-button h-[46.4px] w-[46.4px] shrink-0 flex items-center justify-center" : "muzio-modal-close"} onClick={onClose}>
             <CloseGlyph className="h-5 w-5" />
           </button>
