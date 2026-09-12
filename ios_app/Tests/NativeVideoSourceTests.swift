@@ -11,6 +11,16 @@ import Foundation
             do { _ = try NativeVideoSourcePolicy.validate(raw, origin: origin, proxyBase: proxy); fatalError("accepted: \(raw)") }
             catch { }
         }
+        let localhost = URL(string: "http://localhost:23456/0123456789abcdef0123456789abcdef/")!
+        let normalized = try NativeVideoSourcePolicy.validate(localhost.absoluteString + "api/media/id?v=2#t=35", origin: origin, proxyBase: localhost)
+        precondition(normalized.absoluteString == proxy.absoluteString + "api/media/id?v=2")
+        let remote = "https://example.test:5173/api/media/id?v=2"
+        let direct = try NativeVideoSourcePolicy.validate(remote, origin: origin, proxyBase: localhost)
+        precondition(direct.absoluteString == remote)
+        for raw in [proxy.absoluteString + "api/media/id", "http://localhost:23456/wrong/api/media/id", "http://localhost:23457/0123456789abcdef0123456789abcdef/api/media/id", "http://user@localhost:23456/0123456789abcdef0123456789abcdef/api/media/id"] {
+            do { _ = try NativeVideoSourcePolicy.validate(raw, origin: origin, proxyBase: localhost); fatalError("accepted: \(raw)") }
+            catch { }
+        }
         print("Native video source policy passed")
     }
 }

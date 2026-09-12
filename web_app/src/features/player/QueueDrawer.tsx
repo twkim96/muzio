@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { ArrowLeft } from '@phosphor-icons/react';
 
 import type { PlaybackSource } from '../../core/playback/source/source';
-import { CloseGlyph, PlayGlyph } from '../../core/ui/AppIcons';
+import { CloseGlyph, PlayGlyph, ShuffleGlyph } from '../../core/ui/AppIcons';
 import { currentQueueTrack, queueTrackKey } from './musicQueue';
 import { usePlayerStore } from './PlayerContext';
 
@@ -32,6 +32,8 @@ export function QueueDrawer({
   const currentIndex = store((state) => state.musicQueueIndex);
   const playQueueTrack = store((state) => state.playQueueTrack);
   const clearMusicQueue = store((state) => state.clearMusicQueue);
+  const shuffle = store((state) => state.shuffle);
+  const toggleShuffle = store((state) => state.toggleShuffle);
   const current = currentQueueTrack(queue, currentIndex);
   const drawerRef = useRef<HTMLElement | null>(null);
   const listRef = useRef<HTMLOListElement | null>(null);
@@ -148,14 +150,25 @@ export function QueueDrawer({
                 <span className="scale-[calc(1/var(--title-scale))]">Queue</span>
               </span>
             </h2>
-            <button
-              type="button"
-              aria-label={onBack ? 'Back to sidebar' : 'Close queue'}
-              className="muzio-sheet-header-action muzio-settings-button h-[46.4px] w-[46.4px] shrink-0 flex items-center justify-center"
-              onClick={onBack ?? onClose}
-            >
-              {onBack ? <ArrowLeft aria-hidden className="h-[21.1px] w-[21.1px]" /> : <CloseGlyph aria-hidden className="h-[21.1px] w-[21.1px]" />}
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                aria-label="Shuffle"
+                aria-pressed={shuffle}
+                className="muzio-sheet-header-action muzio-settings-button h-[46.4px] w-[46.4px] shrink-0 flex items-center justify-center"
+                onClick={toggleShuffle}
+              >
+                <ShuffleGlyph aria-hidden className={`h-[21.1px] w-[21.1px] ${shuffle ? 'text-rose-500' : 'text-white'}`} />
+              </button>
+              <button
+                type="button"
+                aria-label={onBack ? 'Back to sidebar' : 'Close queue'}
+                className="muzio-sheet-header-action muzio-settings-button h-[46.4px] w-[46.4px] shrink-0 flex items-center justify-center"
+                onClick={onBack ?? onClose}
+              >
+                {onBack ? <ArrowLeft aria-hidden className="h-[21.1px] w-[21.1px]" /> : <CloseGlyph aria-hidden className="h-[21.1px] w-[21.1px]" />}
+              </button>
+            </div>
           </div>
           <div className="flex h-12 w-full min-w-0 items-center justify-between gap-2">
             <p className="min-w-0 truncate text-sm text-muted">

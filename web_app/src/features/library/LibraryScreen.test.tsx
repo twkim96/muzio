@@ -83,6 +83,7 @@ function renderScreen(
   audio: LibraryFetchResult,
   video: LibraryFetchResult = { kind: 'ok', items: [] },
   image: LibraryFetchResult = { kind: 'ok', items: [] },
+  artistSearch?: string,
 ) {
   const stores = buildStores(audio, video, image);
   const playerStore = createPlayerStore();
@@ -93,7 +94,7 @@ function renderScreen(
           <ProgressProvider repository={emptyRepo}>
             <MemoryRouter
               initialEntries={[
-                `/library/${type === 'audio' ? 'music' : type === 'video' ? 'video' : 'image'}`,
+                { pathname: `/library/${type === 'audio' ? 'music' : type === 'video' ? 'video' : 'image'}`, state: { artistSearch } },
               ]}
               future={routerFuture}
             >
@@ -419,21 +420,11 @@ describe('LibraryScreen', () => {
     await waitFor(() => {
       expect(screen.getAllByText('clip.mp4').length).toBeGreaterThan(0);
     });
-    expect(screen.getByTestId('library-list')).toHaveAttribute('data-row-height', '78');
-    expect(screen.getByTestId('library-list')).toHaveStyle({ height: '78px' });
-    expect(screen.getByTestId('library-item')).toHaveClass('relative', 'overflow-hidden');
-    expect(screen.getByTestId('library-item')).toHaveStyle({ height: '78px' });
-    expect(screen.getByTestId('video-responsive-title')).toHaveClass(
-      'max-h-12',
-      'overflow-clip',
-      'sm:truncate',
-    );
-    expect(screen.getByTestId('library-item-progress')).toHaveClass(
-      'absolute',
-      'bottom-0',
-      'left-3',
-      'right-3',
-    );
+    expect(screen.getByTestId('library-list')).toHaveAttribute('data-layout', 'video-cards');
+    expect(screen.getByTestId('video-responsive-title')).toHaveClass('line-clamp-2');
+    expect(screen.getByLabelText('Play clip.mp4')).toBeInTheDocument();
+    expect(screen.getByTestId('library-item-more')).toHaveClass('inline-flex');
+    expect(screen.getByTestId('library-item-progress')).toBeInTheDocument();
   });
 
   test('plays a progress-marked video row from its saved position', async () => {
@@ -526,18 +517,10 @@ describe('LibraryScreen', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId('library-list')).toHaveAttribute(
-        'data-row-height',
-        '54',
-      );
+      expect(screen.getByTestId('library-list')).toHaveAttribute('data-layout', 'video-cards');
     });
-    expect(screen.getByTestId('library-item')).toHaveStyle({ height: '54px' });
-    expect(screen.getByTestId('video-row-layout')).toHaveClass(
-      'grid-cols-[minmax(0,1fr)_auto]',
-    );
-    expect(screen.getByTestId('video-responsive-title')).toHaveTextContent(
-      'Series/clip.mp4',
-    );
+    expect(screen.getByTestId('video-responsive-title')).toHaveTextContent('clip.mp4');
+    expect(screen.getByTestId('video-row-metadata')).toHaveTextContent('Series');
     expect(screen.getByLabelText('Play clip.mp4')).toBeInTheDocument();
   });
 
@@ -838,8 +821,11 @@ describe('LibraryScreen', () => {
     fireEvent.scroll(document);
     expect(screen.queryByTestId('library-row-menu')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByTestId('library-item-more'));
-    fireEvent.click(screen.getByText('Add to Playlist'));
+    vi.useFakeTimers();
+    firePointer(screen.getByLabelText('Play song.mp3'), 'pointerdown', { pointerType: 'touch', clientX: 100, clientY: 100 });
+    act(() => vi.advanceTimersByTime(800));
+    vi.useRealTimers();
+    fireEvent.click(screen.getByTestId('selection-add-to-playlist'));
     expect(screen.getByTestId('add-to-playlist-modal').parentElement).toBe(document.body);
     expect(screen.getByRole('dialog', { name: 'Add to Playlist' })).toHaveAttribute('aria-modal', 'true');
     expect(screen.getByText('No playlists yet. Use + to create one.')).toBeInTheDocument();
@@ -867,6 +853,67 @@ describe('LibraryScreen', () => {
     );
     expect(stored.playlists[0].name).toBe('Night');
     expect(stored.playlists[0].items).toHaveLength(1);
+  });
+
+  test.each(['audio', 'video'] as const)('only one %s copy menu opens and copies the displayed title', async type => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const previous = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    try {
+      const result = { kind: 'ok' as const, items: ['one', 'two'].map(id => ({
+        id, type, rootName: 'library', relativePath: `${id}.mp4`, name: `${id}.mp4`,
+        sizeBytes: 10, modifiedAt: '2026-01-01T00:00:00Z', metadata: { title: `Title ${id}` },
+      })) };
+      renderScreen(type, type === 'audio' ? result : { kind: 'ok', items: [] }, type === 'video' ? result : { kind: 'ok', items: [] });
+      await screen.findByLabelText('More options for one.mp4');
+      fireEvent.click(screen.getByLabelText('More options for one.mp4'));
+      fireEvent.click(screen.getByLabelText('More options for two.mp4'));
+      expect(screen.getAllByTestId('library-row-menu')).toHaveLength(1);
+      expect(within(screen.getByTestId('library-row-menu')).getAllByRole('button')).toHaveLength(1);
+      fireEvent.click(screen.getByRole('button', { name: '누르면 복사됨' }));
+      await screen.findByText('복사됨');
+      expect(writeText).toHaveBeenCalledWith('Title two');
+      expect(screen.queryByTestId('add-to-playlist-modal')).not.toBeInTheDocument();
+    } finally {
+      if (previous) Object.defineProperty(navigator, 'clipboard', previous);
+      else Reflect.deleteProperty(navigator, 'clipboard');
+    }
+  });
+
+  test('clears selection on media switches, text search, and applied filters', async () => {
+    const item = (type: 'audio' | 'video' | 'image'): LibraryItem => ({
+      id: type, type, rootName: type, relativePath: `${type}.mp4`, name: `${type}.mp4`,
+      sizeBytes: 1, modifiedAt: '2026-01-01T00:00:00Z',
+    });
+    const { rerenderType } = renderScreen('video', { kind: 'ok', items: [item('audio')] }, { kind: 'ok', items: [item('video')] }, { kind: 'ok', items: [item('image')] });
+    const select = () => {
+      vi.useFakeTimers();
+      try {
+        firePointer(screen.getByTestId('library-item'), 'pointerdown', { pointerType: 'touch', clientX: 100, clientY: 100 });
+        act(() => vi.advanceTimersByTime(800));
+      } finally { vi.useRealTimers(); }
+      expect(screen.getByTestId('selection-actions')).toBeInTheDocument();
+    };
+    await screen.findByLabelText('Play video.mp4');
+    select();
+    rerenderType('audio');
+    await screen.findByLabelText('Play audio.mp4');
+    expect(screen.queryByTestId('selection-actions')).not.toBeInTheDocument();
+    expect(screen.getByTestId('library-item')).toHaveAttribute('data-selected', 'false');
+    select();
+    expect(screen.getByRole('group', { name: '1 selected items' })).toBeInTheDocument();
+    rerenderType('image');
+    await screen.findByLabelText('Open image.mp4');
+    expect(screen.queryByTestId('selection-actions')).not.toBeInTheDocument();
+    rerenderType('video');
+    await screen.findByLabelText('Play video.mp4');
+    select();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Filter Video' }), { target: { value: 'video' } });
+    expect(screen.queryByTestId('selection-actions')).not.toBeInTheDocument();
+    select();
+    fireEvent.click(screen.getByRole('button', { name: 'Sort and filter library' }));
+    fireEvent.click(within(screen.getByTestId('library-filter-panel')).getByRole('button', { name: 'Show 1 items' }));
+    expect(screen.queryByTestId('selection-actions')).not.toBeInTheDocument();
   });
 
   test('stacked glass modals isolate dismissal and restore focus and scroll', () => {
@@ -1147,6 +1194,32 @@ describe('LibraryScreen', () => {
     }
   });
 
+  test.each(['mouse', 'touch'])('long press with %s appends selected tracks using an icon-only queue button', async (pointerType) => {
+    const items = ['song', 'track'].map((name, i) => ({ id: name, type: 'audio' as const, rootName: 'music', relativePath: name + '.mp3', name: name + '.mp3', sizeBytes: 1024, modifiedAt: `2025-01-0${i + 1}T00:00:00Z` }));
+    const { playerStore } = renderScreen('audio', { kind: 'ok', items });
+    await waitFor(() => expect(screen.getAllByTestId('library-item')).toHaveLength(2));
+    fireEvent.click(screen.getByLabelText('Play song.mp3'));
+    const before = playerStore.getState();
+    vi.useFakeTimers();
+    try {
+      firePointer(screen.getByLabelText('Play track.mp3'), 'pointerdown', { pointerType, clientX: 120, clientY: 240 });
+      act(() => { vi.advanceTimersByTime(800); });
+      fireEvent.click(screen.getByLabelText('Play track.mp3'));
+      fireEvent.click(screen.getByLabelText('Play song.mp3'));
+      const button = screen.getByRole('button', { name: 'Add selected items to queue' });
+      expect(button.textContent).toBe('');
+      fireEvent.click(button);
+      const after = playerStore.getState();
+      expect(after.musicQueue.slice(-2).map(s => s.mediaId)).toEqual(['track', 'song']);
+      expect(after.musicQueue).toHaveLength(before.musicQueue.length + 2);
+      expect(after.musicQueueIndex).toBe(before.musicQueueIndex);
+      expect(after.audio).toBe(before.audio);
+      expect(screen.queryByTestId('selection-actions')).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(localStorage.getItem('music.playlists.v1')).toBeNull();
+    } finally { vi.useRealTimers(); }
+  });
+
   test('long press selection mode batch adds items to a custom playlist', async () => {
     renderScreen('audio', {
       kind: 'ok',
@@ -1306,6 +1379,44 @@ describe('LibraryScreen', () => {
       expect(screen.getByText('song.mp3')).toBeInTheDocument();
     });
     expect(screen.queryByTestId('music-collections-panel')).not.toBeInTheDocument();
+  });
+
+  test('video cards reach the final item after scrolling and remain reachable after resize', async () => {
+    let scrollTop = 0;
+    let width = 1000;
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    const rectSpy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return this.dataset.testid === 'library-list'
+        ? { ...originalRect.call(this), top: -scrollTop, width } as DOMRect
+        : originalRect.call(this);
+    });
+    try {
+      renderScreen('video', { kind: 'ok', items: [] }, {
+        kind: 'ok', items: Array.from({ length: 500 }, (_, index) => ({
+          id: `video-${index}`, type: 'video' as const, rootName: 'videos',
+          relativePath: `clip-${String(index).padStart(3, '0')}.mp4`,
+          name: `clip-${String(index).padStart(3, '0')}.mp4`, sizeBytes: 1024,
+          modifiedAt: '2025-01-01T00:00:00Z',
+        })),
+      });
+      await waitFor(() => expect(screen.getByTestId('library-list')).toHaveAttribute('data-total-count', '500'));
+      const list = screen.getByTestId('library-list');
+      expect(Number(list.dataset.columns)).toBeGreaterThan(1);
+      expect(screen.getAllByTestId('library-item').length).toBeLessThan(100);
+      scrollTop = parseFloat(list.style.height) - window.innerHeight;
+      fireEvent.scroll(window);
+      await act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });
+      await waitFor(() => expect(screen.getByLabelText('Play clip-499.mp4')).toBeInTheDocument());
+      width = 390;
+      fireEvent.resize(window);
+      await waitFor(() => expect(list).toHaveAttribute('data-columns', '1'));
+      scrollTop = parseFloat(list.style.height) - window.innerHeight;
+      fireEvent.scroll(window);
+      await waitFor(() => expect(screen.getByLabelText('Play clip-499.mp4')).toBeInTheDocument());
+      expect(screen.getAllByTestId('library-item').length).toBeLessThan(100);
+    } finally {
+      rectSpy.mockRestore();
+    }
   });
 
   test('virtualizes large lists instead of mounting every row', async () => {
@@ -1624,4 +1735,15 @@ describe('library filter panel', () => {
     expect(screen.getByRole('textbox', { name: 'Filter Video' })).toHaveValue('Video');
     expect(screen.getByRole('button', { name: 'Sort by Modified' })).toHaveAttribute('aria-pressed', 'true');
   });
+});
+
+test('player artist navigation filters by artist rather than a title substring', async () => {
+  const item = (id: string, artist: string): LibraryItem => ({ id, name: `${id}.mp3`, type: 'audio',
+    rootName: 'Music', relativePath: `${id}.mp3`, sizeBytes: 100, modifiedAt: '',
+    metadata: { artist, title: id } });
+  renderScreen('audio', { kind: 'ok', items: [item('match', 'Artist Name'), item('Artist Name in title', 'Other')] },
+    undefined, undefined, 'Artist Name');
+  await waitFor(() => expect(screen.getAllByTestId('library-item')).toHaveLength(1));
+  expect(screen.getByTestId('library-item')).toHaveTextContent('match');
+  expect(screen.getByRole('button', { name: 'Remove artist Artist Name' })).toBeInTheDocument();
 });

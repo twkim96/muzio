@@ -192,3 +192,23 @@ it('passes matching like identities for the selected track and queue to Apple', 
   expect(load.queue[0].notificationLikeKey).not.toBe(load.source.notificationLikeKey);
   dispose();
 });
+
+it('appends through the native queue command without loading, playing or losing the current position', async () => {
+  const { store, request, dispose } = await setup();
+  store.getState().appendMusicQueue([a, b]);
+  await drain();
+  expect(request.mock.calls.map(([command]) => command).filter(command => command !== 'playback.snapshot')).toEqual(['playback.queue']);
+  expect(request.mock.calls[0][1]).toMatchObject({ index: 0, queue: [a, b, { mediaId: 'a' }, { mediaId: 'b' }] });
+  expect(new Set(store.getState().musicQueue.map(s => s.queueEntryId)).size).toBe(4);
+  expect(store.getState().audio).toMatchObject({ source: a, positionSec: 42, status: { kind: 'playing' } });
+  dispose();
+});
+
+it('uses a valid native queue index when only adding to an empty queue', async () => {
+  const { store, request, dispose } = await setup({ ...snapshot, source: null, queue: [], index: -1, status: { kind: 'idle' } });
+  store.getState().appendMusicQueue([a]);
+  await drain();
+  expect(request.mock.calls.map(([command]) => command).filter(command => command !== 'playback.snapshot')).toEqual(['playback.queue']);
+  expect(request.mock.calls[0][1]).toMatchObject({ index: 0, queue: [{ mediaId: 'a' }] });
+  dispose();
+});

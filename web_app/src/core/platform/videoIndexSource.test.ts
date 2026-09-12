@@ -6,7 +6,7 @@ const source: PlaybackSource = {
   kind: 'remote', mediaId: 'video1', mediaType: 'video', name: 'test.mp4',
   url: '/api/media/video1?v=2#t=21600',
 };
-const base = 'http://127.0.0.1:12345/0123456789abcdef0123456789abcdef/';
+const base = 'http://localhost:12345/0123456789abcdef0123456789abcdef/';
 function port(videoIndexBaseUrl = base, platform = 'macos') {
   vi.stubGlobal('MuzioNative', { platform, videoIndexBaseUrl, postMessage: vi.fn() });
 }
@@ -39,10 +39,16 @@ test('rejects malformed or non-loopback proxy metadata', () => {
       'https://example.com/',
       'http://127.0.0.1:12345/no-token/',
       `${base}?other=1`,
-      base.replace('127.0.0.1', 'localhost'),
+      base.replace('localhost', 'localhost.example.com'),
     ]) {
       port(value, platform);
       expect(videoIndexSource(source)).toBe(source);
     }
   }
+});
+
+test('retains compatibility with numeric loopback metadata from older Apple hosts', () => {
+  const legacyBase = base.replace('localhost', '127.0.0.1');
+  port(legacyBase);
+  expect(videoIndexSource(source).url).toBe(`${legacyBase}api/media/video1?v=2#t=21600`);
 });

@@ -35,19 +35,18 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
     private func applyWebBackground() {
         guard let webView else { return }
         #if os(iOS)
-        let color = UIColor(appearanceColor)
         webView.isOpaque = false
         webView.backgroundColor = .clear
         webView.scrollView.backgroundColor = .clear
         webView.overrideUserInterfaceStyle = appearanceDark.map { $0 ? .dark : .light } ?? .unspecified
         #else
-        let color = NSColor(appearanceColor)
         webView.appearance = appearanceDark.map { NSAppearance(named: $0 ? .darkAqua : .aqua) } ?? nil
         #endif
         #if os(iOS)
         webView.underPageBackgroundColor = .clear
         #else
-        webView.underPageBackgroundColor = color
+        webView.underPageBackgroundColor = .clear
+        webView.setValue(false, forKey: "drawsBackground")
         #endif
     }
     @Published var webView: WKWebView?
@@ -79,6 +78,7 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
     @Published var loadError = ""
     private(set) var origin: URL?
     private var audio: NativeAudioPlayer?
+    private(set) var video: VLCVideoPlayer?
     private var playbackHistory: ApplePlaybackHistory?
     private var videoIndexProxy: VideoIndexProxy?
     private var openGeneration = UUID()
@@ -105,7 +105,7 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
     }
 
     func editServer() { connectionError = ""; showSetup = webView != nil }
-    func reload() { loadError = ""; loading = true; webView?.reload() }
+    func reload() { loadError = ""; loading = true; webView?.reloadFromOrigin() }
     func resume() {
         guard trustedDocument else { return }
         webView?.evaluateJavaScript("window.dispatchEvent(new Event('muzio-resume'))", completionHandler: nil)
@@ -121,6 +121,7 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
         openGeneration = generation
         documentGeneration = UUID()
         audio?.shutdown()
+        video?.shutdown()
         videoIndexProxy?.stop()
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "muzio")
         webView?.stopLoading()
@@ -160,7 +161,7 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
         controller.addUserScript(WKUserScript(source: """
         (() => {
           if (window !== window.top || location.origin !== \(serializedOrigin)) return;
-          const port = { platform: '\(platform)', capabilities: { localLibrary: true, nativeAudio: true, notificationLikes: true, playbackHistory: true },
+          const port = { platform: '\(platform)', capabilities: { localLibrary: true, nativeAudio: true, nativeVideo: true, nativeVideoSession: true, notificationLikes: true, playbackHistory: true },
             \(videoIndexMetadata)
             onmessage: null,
             postMessage(message) { window.webkit.messageHandlers.muzio.postMessage(message); }
@@ -176,8 +177,8 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
         #if os(iOS)
         web.scrollView.contentInsetAdjustmentBehavior = .never
         #endif
-        // Video uses the shared HTML player on every Apple host. The index
-        // proxy accelerates its source without adding another playback engine.
+        // Web controls sit above native VLC pixels on both Apple targets.
+        video = VLCVideoPlayer(origin: origin, proxyBase: videoIndexBaseURL) { [weak self] event in self?.send(event) }
         webView = web
         applyWebBackground()
         let library = localLibrary
@@ -192,7 +193,11 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
             if let state = event["state"] as? [String: Any] { history.record(snapshot: state) }
             self?.send(event)
         }
-        web.load(URLRequest(url: origin.appendingPathComponent("library/music")))
+        video?.onAcquirePlayback = { [weak self] in self?.audio?.relinquishForVideo() }
+        audio?.onAcquirePlayback = { [weak self] in self?.video?.relinquishSystemControls() }
+        // The native shell has no service worker update cycle. Revalidate the
+        // entry document so app restarts pick up the server's current hashed UI.
+        web.load(URLRequest(url: origin.appendingPathComponent("library/music"), cachePolicy: .reloadIgnoringLocalCacheData))
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -236,7 +241,12 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
                 result = playbackHistory?.acknowledge(ids: payload["ids"] as? [String] ?? []) ?? ["pending": []]
             } else if command.hasPrefix("playback.") {
                 guard let audio else { throw HostError.message("음악 플레이어가 준비되지 않았습니다.") }
+                if command == "playback.load" || command == "playback.play" { video?.pause() }
                 result = try audio.handle(command: command, payload: payload)
+            } else if command.hasPrefix("video.") {
+                guard let video else { throw HostError.message("영상 플레이어가 준비되지 않았습니다.") }
+                result = try video.handle(command, payload)
+
             } else {
                 switch command {
                 case "shell.profile": result = ["baseUrl": origin.absoluteString, "setup": false, "displayName": "Muzio"]
@@ -290,6 +300,7 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        video?.clear()
         documentGeneration = UUID(); loading = true; loadError = ""
     }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { loading = false; resume() }
@@ -299,7 +310,7 @@ final class WebHost: NSObject, ObservableObject, WKNavigationDelegate, WKUIDeleg
         if (error as NSError).code == NSURLErrorCancelled { return }
         loading = false; loadError = error.localizedDescription
     }
-    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { loading = false; loadError = "화면이 종료되었습니다. 다시 시도하면 재생 상태를 불러옵니다." }
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { video?.clear(); documentGeneration = UUID(); loading = false; loadError = "화면이 종료되었습니다. 다시 시도하면 재생 상태를 불러옵니다." }
 }
 
 private final class WeakMessageHandler: NSObject, WKScriptMessageHandler {

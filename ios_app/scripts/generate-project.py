@@ -10,8 +10,12 @@ def add(key_name, isa, **fields):
 sources=[]
 for file in sorted((root/'Muzio').glob('*.swift')):
     sources.append(add('file:'+file.name,'PBXFileReference',lastKnownFileType='sourcecode.swift',path='Muzio/'+file.name,sourceTree='<group>'))
+ios_vlckit=add('VLCKit-iOS.xcframework','PBXFileReference',lastKnownFileType='wrapper.xcframework',path='ThirdParty/VLCiOS/VLCKit.xcframework',sourceTree='<group>')
+mac_vlckit=add('VLCKit.xcframework','PBXFileReference',lastKnownFileType='wrapper.xcframework',path='ThirdParty/VLCKit.xcframework',sourceTree='<group>')
+ios_notice=add('VLCKit-iOS-COPYING.txt','PBXFileReference',lastKnownFileType='text',path='ThirdParty/licenses/VLCKit-iOS-COPYING.txt',sourceTree='<group>')
+mac_notice=add('VLCKit-COPYING.txt','PBXFileReference',lastKnownFileType='text',path='ThirdParty/licenses/VLCKit-COPYING.txt',sourceTree='<group>')
 products=add('products','PBXGroup',children=[],name='Products',sourceTree='<group>')
-main=add('main','PBXGroup',children=sources+[products],sourceTree='<group>')
+main=add('main','PBXGroup',children=sources+[ios_vlckit,mac_vlckit,ios_notice,mac_notice,products],sourceTree='<group>')
 def config_list(prefix, settings):
     configs=[]
     for name in ('Debug','Release'):
@@ -22,21 +26,30 @@ targets=[]
 for label,sdk,plist,extra in [('Muzio-iOS','iphoneos','Info.plist',{'IPHONEOS_DEPLOYMENT_TARGET':'16.0','TARGETED_DEVICE_FAMILY':'1,2','SUPPORTED_PLATFORMS':'iphoneos iphonesimulator','SUPPORTS_MACCATALYST':'NO'}),('Muzio-macOS','macosx','Mac-Info.plist',{'MACOSX_DEPLOYMENT_TARGET':'13.0','SUPPORTED_PLATFORMS':'macosx','ENABLE_HARDENED_RUNTIME':'YES'})]:
     files=[add(label+ref,'PBXBuildFile',fileRef=ref) for ref in sources]
     phase=add(label+'sources','PBXSourcesBuildPhase',buildActionMask=2147483647,files=files,runOnlyForDeploymentPostprocessing=0)
+    framework_ref=ios_vlckit if sdk=='iphoneos' else mac_vlckit
+    framework_link=add(label+'framework-link','PBXBuildFile',fileRef=framework_ref)
+    framework_embed=add(label+'framework-embed','PBXBuildFile',fileRef=framework_ref,settings={'ATTRIBUTES':['CodeSignOnCopy','RemoveHeadersOnCopy']})
+    framework_phase=add(label+'frameworks','PBXFrameworksBuildPhase',buildActionMask=2147483647,files=[framework_link],runOnlyForDeploymentPostprocessing=0)
+    embed_phase=add(label+'embed-frameworks','PBXCopyFilesBuildPhase',buildActionMask=2147483647,dstPath='',dstSubfolderSpec=10,files=[framework_embed],name='Embed Frameworks',runOnlyForDeploymentPostprocessing=0)
+    notice_ref=ios_notice if sdk=='iphoneos' else mac_notice
+    notice_build=add(label+'license','PBXBuildFile',fileRef=notice_ref)
     product=add(label+'product','PBXFileReference',explicitFileType='wrapper.application',includeInIndex=0,path='Muzio.app',sourceTree='BUILT_PRODUCTS_DIR')
     objects[products]['children'].append(product)
-    settings={'PRODUCT_NAME':'Muzio','PRODUCT_BUNDLE_IDENTIFIER':'com.twkim.muzio.apple','INFOPLIST_FILE':plist,'GENERATE_INFOPLIST_FILE':'NO','SDKROOT':sdk,'SWIFT_VERSION':'5.0','CODE_SIGN_STYLE':'Automatic','MARKETING_VERSION':'1.4.6','CURRENT_PROJECT_VERSION':'1','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @executable_path/../Frameworks',**extra}
-    phases=[phase]
+    framework_search_path='$(inherited) "$(PROJECT_DIR)/ThirdParty/VLCiOS"' if sdk=='iphoneos' else '$(inherited) "$(PROJECT_DIR)/ThirdParty"'
+    settings={'PRODUCT_NAME':'Muzio','PRODUCT_BUNDLE_IDENTIFIER':'com.twkim.muzio.apple','INFOPLIST_FILE':plist,'GENERATE_INFOPLIST_FILE':'NO','SDKROOT':sdk,'SWIFT_VERSION':'5.0','CODE_SIGN_STYLE':'Automatic','MARKETING_VERSION':'1.4.7','CURRENT_PROJECT_VERSION':'2','FRAMEWORK_SEARCH_PATHS':framework_search_path,'LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @executable_path/../Frameworks',**extra}
+    phases=[phase,framework_phase]
     if sdk=='iphoneos':
         settings['ASSETCATALOG_COMPILER_APPICON_NAME']='AppIcon'
         assets=add('assets','PBXFileReference',lastKnownFileType='folder.assetcatalog',path='Assets.xcassets',sourceTree='<group>')
         objects[main]['children'].append(assets)
         assetsbuild=add('assetsbuild','PBXBuildFile',fileRef=assets)
-        phases.append(add('iosresources','PBXResourcesBuildPhase',buildActionMask=2147483647,files=[assetsbuild],runOnlyForDeploymentPostprocessing=0))
+        phases.append(add('iosresources','PBXResourcesBuildPhase',buildActionMask=2147483647,files=[assetsbuild,notice_build],runOnlyForDeploymentPostprocessing=0))
     if sdk=='macosx':
         icon=add('icon','PBXFileReference',lastKnownFileType='image.icns',path='Muzio.icns',sourceTree='<group>')
         objects[main]['children'].append(icon)
         iconbuild=add('iconbuild','PBXBuildFile',fileRef=icon)
-        phases.append(add('resources','PBXResourcesBuildPhase',buildActionMask=2147483647,files=[iconbuild],runOnlyForDeploymentPostprocessing=0))
+        phases.append(add('resources','PBXResourcesBuildPhase',buildActionMask=2147483647,files=[iconbuild,notice_build],runOnlyForDeploymentPostprocessing=0))
+    phases.append(embed_phase)
     target=add(label,'PBXNativeTarget',buildConfigurationList=config_list(label,settings),buildPhases=phases,buildRules=[],dependencies=[],name=label,productName='Muzio',productReference=product,productType='com.apple.product-type.application')
     targets.append(target)
 project=add('project','PBXProject',attributes={'LastUpgradeCheck':'1600'},buildConfigurationList=config_list('project',{'CLANG_ENABLE_MODULES':'YES'}),compatibilityVersion='Xcode 14.0',developmentRegion='en',hasScannedForEncodings=0,knownRegions=['en','Base'],mainGroup=main,productRefGroup=products,projectDirPath='',projectRoot='',targets=targets)

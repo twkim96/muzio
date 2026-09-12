@@ -31,6 +31,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.WebViewCompat
@@ -38,6 +40,7 @@ import androidx.webkit.WebViewFeature
 import com.twkim.videiomusic.data.LibraryPreferencesStore
 import com.twkim.videiomusic.data.ProfileStore
 import com.twkim.videiomusic.data.ServerProfile
+import com.twkim.videiomusic.playback.PlaybackRuntime
 import com.twkim.videiomusic.playback.NativePlaybackBridge
 import com.twkim.videiomusic.web.BundledWebPolicy
 import com.twkim.videiomusic.web.WebFullscreenWindow
@@ -71,6 +74,7 @@ class MainActivity : ComponentActivity() {
             web?.evaluateJavascript("window.dispatchEvent(new CustomEvent('muzio-video-control',{detail:'$command'}));", null)
         }
     }
+    private var videoSessionActive = false
     private var videoPlaying = false
     private var videoAspect = Rational(16, 9)
     private var setup = true
@@ -152,6 +156,13 @@ class MainActivity : ComponentActivity() {
             }
         })
         lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                PlaybackRuntime.notificationQueue.pending.collect { pending ->
+                    if (pending) web?.evaluateJavascript("window.dispatchEvent(new Event('muzio-resume'));", null)
+                }
+            }
+        }
+        lifecycleScope.launch {
             profile = ProfileStore(applicationContext).profile.first()
             val valid = runCatching { BundledWebPolicy.serverOrigin(profile.baseUrl) }.getOrNull()
             // Older profiles allowed malformed URLs. Keep the stored original
@@ -211,8 +222,12 @@ class MainActivity : ComponentActivity() {
                 if (playback == null) playback = NativePlaybackBridge(applicationContext, pageOrigin) { event ->
                     if (web === view) reply?.postMessage(event.toString())
                 }
-                if (command == "playback.play" && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                if ((command == "playback.play" || (command == "playback.videoSession" && payload.optBoolean("playing") && !videoSessionActive)) && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                     permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                if (command == "playback.videoSession") {
+                    videoSessionActive = payload.optBoolean("active")
+                    if (videoSessionActive) view.onResume()
                 }
                 playback!!.handle(command, payload, ::respond)
             } else handleShell(command, payload, ::respond)
@@ -345,8 +360,10 @@ class MainActivity : ComponentActivity() {
                         JSONObject()
                     }
                     "shell.notificationIntent" -> {
-                        val openQueue = intent?.getBooleanExtra("muzio.open_queue", false) == true
-                        if (payload.optBoolean("acknowledged", false)) intent?.removeExtra("muzio.open_queue")
+                        val acknowledged = payload.optBoolean("acknowledged", false)
+                        val pendingQueue = PlaybackRuntime.notificationQueue.read(acknowledged)
+                        val openQueue = pendingQueue || intent?.getBooleanExtra("muzio.open_queue", false) == true
+                        if (acknowledged) intent?.removeExtra("muzio.open_queue")
                         JSONObject().put("openQueue", openQueue)
                     }
                     "shell.profile" -> JSONObject().put("baseUrl", profile.baseUrl).put("displayName", profile.displayName).put("setup", setup)
@@ -492,16 +509,18 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         // A PiP Activity is paused but its visible video must keep rendering.
-        if (!isInPictureInPictureMode && !videoPlaying) web?.onPause()
+        if (!isInPictureInPictureMode && !videoPlaying && !videoSessionActive) web?.onPause()
         super.onPause()
     }
 
     override fun onStop() {
         super.onStop()
-        // Visible PiP does not stop the Activity. Closing PiP does, even if
-        // the mode flag has not yet changed, so stop web video unconditionally.
-        web?.evaluateJavascript("window.dispatchEvent(new Event('muzio-video-stop'));", null)
-        web?.onPause()
+        // Keep the existing video and its JS command channel alive while locked
+        // or in the background. Finishing the Activity still stops web playback.
+        if (isFinishing) {
+            web?.evaluateJavascript("window.dispatchEvent(new Event('muzio-video-stop'));", null)
+            web?.onPause()
+        } else if (!videoPlaying && !videoSessionActive) web?.onPause()
     }
 
     override fun onDestroy() {

@@ -29,6 +29,7 @@ class NativePlaybackBridge(
     private val localLibrary = com.twkim.videiomusic.data.LocalLibraryManager(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var origin = serverOrigin(serverBaseUrl)
+    private val videoOwner = Any()
     private var disposed = false
     private val ready = CompletableDeferred<MediaController>()
     private var controller: MediaController? = null
@@ -69,6 +70,11 @@ class NativePlaybackBridge(
         scope.launch {
             val result = runCatching {
                 val player = withTimeout(15_000) { ready.await() }
+                if (command == "playback.videoSession") {
+                    PlaybackRuntime.updateVideo(videoOwner, payload) { action -> emit(JSONObject().put("type", "videoSessionAction").put("state", action)) }
+                    return@runCatching JSONObject()
+                }
+                if (command == "playback.load" || command == "playback.play") PlaybackRuntime.releaseVideo()
                 val localIds = mutableSetOf<String>()
                 payload.optJSONObject("source")?.takeIf { it.optString("location") == "local" }?.let { localIds.add(it.getString("mediaId")) }
                 payload.optJSONArray("queue")?.let { entries ->
@@ -108,6 +114,7 @@ class NativePlaybackBridge(
     }
 
     fun dispose() {
+        PlaybackRuntime.releaseVideo(videoOwner)
         disposed = true
         controller?.removeListener(listener)
         scope.cancel()

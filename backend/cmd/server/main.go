@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -21,6 +22,7 @@ import (
 	"muzio/backend/internal/fallback"
 	"muzio/backend/internal/httpserver"
 	"muzio/backend/internal/library"
+	"muzio/backend/internal/musicsync"
 	"muzio/backend/internal/progress"
 	"muzio/backend/internal/streaming"
 	"muzio/backend/internal/thumbnail"
@@ -113,8 +115,18 @@ func main() {
 	}
 	logger.Info("progress store loaded", "records", len(progressStore.List()), "path", progressPath)
 
+	musicSyncPath := filepath.Join(filepath.Dir(progressPath), "music-sync.v1.json")
+	musicSyncStore, err := musicsync.Open(musicSyncPath)
+	if err != nil {
+		logger.Error("music sync store failed", "path", musicSyncPath, "error", err)
+		_ = progressStore.Close()
+		_ = libraryService.Close()
+		os.Exit(1)
+	}
+
 	streamHandler := streaming.Handler(libraryService, libraryService, logger)
 	server := httpserver.New(cfg, logger, appService, streamHandler, progressStore)
+	server.Handler = httpserver.NewMusicSyncHandler(musicSyncStore, server.Handler)
 	cancelServerRequests := attachServerContext(server)
 	defer cancelServerRequests()
 

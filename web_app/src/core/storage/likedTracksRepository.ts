@@ -1,3 +1,5 @@
+import { musicSync } from './musicSync';
+
 /**
  * Best-effort local persistence for liked music tracks.
  *
@@ -8,6 +10,7 @@
 export interface LikedTracksRepository {
   list(): string[];
   write(ids: readonly string[]): void;
+  set?(id: string, liked: boolean): void;
 }
 
 const STORAGE_KEY = 'music.likes.v1';
@@ -51,10 +54,17 @@ export function createLocalStorageLikedTracksRepository(
         return [];
       }
     },
+    set(id, liked) {
+      const keys = new Set(this.list());
+      if (liked) keys.add(id); else keys.delete(id);
+      this.write([...keys]);
+    },
     write(ids) {
       if (targetStorage === null) return;
       try {
-        targetStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeIds(ids)));
+        const next = normalizeIds(ids);
+        musicSync()?.recordLikes(this.list(), next);
+        targetStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       } catch {
         // Likes are local convenience state; disabled/quota storage should not
         // block playback.

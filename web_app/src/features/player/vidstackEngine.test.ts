@@ -15,6 +15,7 @@ import type {
   ProgressRepository,
 } from '../../core/storage/progressRepository';
 import { createProgressService } from '../progress/progressService';
+import { createPlayerStore } from './playerStore';
 import {
   createVidstackEngine,
   type VidstackPlayerLike,
@@ -272,6 +273,42 @@ describe('createVidstackEngine', () => {
     expect(player.startLoading).toHaveBeenCalledOnce();
     expect(player.play).toHaveBeenCalledOnce();
   });
+
+  test('retains observed identity for an identical pending reload without currentSrc', async () => {
+    const player = new FakeVidstackPlayer();
+    const engine = createVidstackEngine(player, async () => {});
+    const resumed = { ...source, url: `${source.url}#t=49.9` };
+    engine.load(resumed);
+    dispatchSourceChange(player, resumed);
+    engine.load({ ...resumed });
+    const play = engine.play();
+    player.dispatchEvent(new Event('can-play'));
+    await play;
+    expect(player.play).toHaveBeenCalledOnce();
+    expect(player.currentTime).toBe(49.9);
+  });
+
+  test.each(['different-source', 'changed-fragment', 'retry-after-error'] as const)(
+    'requires fresh observed identity for %s when currentSrc is unavailable', async (scenario) => {
+      const player = new FakeVidstackPlayer();
+      const engine = createVidstackEngine(player, async () => {});
+      engine.load(source);
+      dispatchSourceChange(player, source);
+      if (scenario === 'retry-after-error') player.dispatchEvent(new Event('error'));
+      const next = scenario === 'different-source' ? secondSource : scenario === 'changed-fragment'
+        ? { ...source, url: `${source.url}#t=49.9` } : source;
+      engine.load(next);
+      const play = engine.play();
+      player.dispatchEvent(new Event('can-play'));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(player.play).not.toHaveBeenCalled();
+      dispatchSourceChange(player, next);
+      player.dispatchEvent(new Event('can-play'));
+      await play;
+      expect(player.play).toHaveBeenCalledOnce();
+    },
+  );
 
   test('normalizes Vidstack events into playback engine events', () => {
     const player = new FakeVidstackPlayer();
@@ -647,6 +684,79 @@ describe('createVidstackEngine', () => {
       positionSec: 46,
       durationSec: 120,
     });
+  });
+
+  test.each([false, true])('keeps cold resume pending when the provider initially clamps a seek to zero (prepared: %s)', async (prepared) => {
+    const player = new FakeVidstackPlayer();
+    let position = 0;
+    let seekable = false;
+    Object.defineProperty(player, 'currentTime', {
+      get: () => position,
+      set: (value: number) => {
+        position = seekable ? value : 0;
+        player.dispatchEvent(new CustomEvent('seeking', { detail: position }));
+      },
+    });
+    const engine = createVidstackEngine(player, async () => {});
+    const store = createPlayerStore({ createEngine: () => engine });
+    store.getState().seedSource(source, { positionSec: 45, durationSec: 120 });
+    const element = document.createElement('video');
+    document.body.append(element);
+    store.getState().attachElement('video', element);
+    expect(store.getState().video.positionSec).toBe(45);
+    expect(engine.currentSource).toBeNull();
+    if (prepared) store.getState().prepareSeededSource('video');
+    const task = store.getState().togglePlayPause();
+    await vi.waitFor(() => expect(engine.currentSource).not.toBeNull());
+    const resumed = engine.currentSource!;
+    player.currentSrc = resumed.url;
+    dispatchSourceChange(player, resumed);
+    player.dispatchEvent(new Event('can-play'));
+    await task;
+    seekable = true;
+    player.dispatchEvent(new Event('progress'));
+    player.dispatchEvent(new CustomEvent('time-update', { detail: { currentTime: 0 } }));
+    expect(player.currentTime).toBe(45);
+    player.dispatchEvent(new CustomEvent('time-update', { detail: { currentTime: 45 } }));
+    expect(store.getState().video.positionSec).toBe(45);
+    store.getState().detachElement('video');
+    element.remove();
+  });
+
+  test('allows playback from a nearby keyframe without repeated resume seeks', async () => {
+    const player = new FakeVidstackPlayer();
+    player.play = vi.fn(async () => { player.currentTime = 44; player.paused = false; });
+    const engine = createVidstackEngine(player, async () => {});
+    const resumed = { ...source, url: source.url + '#t=45' };
+    engine.load(resumed);
+    const task = engine.play();
+    await Promise.resolve();
+    player.currentSrc = resumed.url;
+    dispatchSourceChange(player, resumed);
+    player.dispatchEvent(new Event('can-play'));
+    await task;
+    player.dispatchEvent(new Event('progress'));
+    expect(player.currentTime).toBe(44);
+    engine.release();
+  });
+
+  test('an explicit UI seek to zero overrides a pending startup resume', async () => {
+    const player = new FakeVidstackPlayer();
+    const engine = createVidstackEngine(player, async () => {});
+    const resumed = { ...source, url: source.url + '#t=45' };
+    engine.load(resumed);
+    const task = engine.play();
+    await Promise.resolve();
+    player.currentSrc = resumed.url;
+    dispatchSourceChange(player, resumed);
+    player.dispatchEvent(new Event('can-play'));
+    await task;
+    player.dispatchEvent(new CustomEvent('media-seek-request', { detail: 0 }));
+    player.currentTime = 0;
+    player.dispatchEvent(new Event('seeking'));
+    player.dispatchEvent(new Event('progress'));
+    expect(player.currentTime).toBe(0);
+    engine.release();
   });
 
   test('applies a resume fragment after can-play before starting playback', async () => {

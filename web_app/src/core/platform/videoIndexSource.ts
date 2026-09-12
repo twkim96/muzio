@@ -9,7 +9,7 @@ export function videoIndexSource(source: PlaybackSource): PlaybackSource {
   try {
     const base = new URL(port.videoIndexBaseUrl);
     const original = new URL(source.url, window.location.href);
-    if (base.protocol !== 'http:' || base.hostname !== '127.0.0.1' || !base.port ||
+    if (base.protocol !== 'http:' || !['localhost', '127.0.0.1'].includes(base.hostname) || !base.port ||
         base.username || base.password || base.search || base.hash ||
         !/^\/[a-f0-9]{32}\/$/.test(base.pathname) ||
         original.origin !== window.location.origin ||

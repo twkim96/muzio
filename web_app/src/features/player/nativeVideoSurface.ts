@@ -1,11 +1,11 @@
 import { nativeFullscreenChange, registerNativeVideoFullscreen } from './nativeVideoFullscreen';
 import { registerAndroidBack, androidShellBridge } from '../../core/platform/androidShell';
 
-/** The WK page stays above AVPlayerLayer, so menus, captions and controls retain
+/** The WK page stays above the native video surface, so menus, captions and controls retain
  * their normal DOM stacking and touch handling. Only the video background clears. */
 export function connectNativeVideoSurface(root: HTMLElement) {
   const bridge = androidShellBridge();
-  if (bridge?.platform !== 'ios' || !bridge.capabilities?.nativeVideo) return () => {};
+  if ((bridge?.platform !== 'ios' && bridge?.platform !== 'macos') || !bridge.capabilities?.nativeVideo) return () => {};
   const style = document.createElement('style');
   style.textContent = `[data-native-video-clear], [data-native-video-clear]::backdrop { background: transparent !important; }
     [data-native-video-clear] .vds-gesture[action='toggle:paused'] { display: block !important; }
@@ -48,6 +48,9 @@ export function connectNativeVideoSurface(root: HTMLElement) {
     // Rebuild transparency/occlusion after either direction of the move.
     previousHost = null;
   };
+  const unsubscribeHost = bridge.subscribe?.(event => {
+    if (event.type === 'videoFullscreen' && (event.state as { active?: boolean } | undefined)?.active === false) setFullscreen(false);
+  });
   const onKey = (event: KeyboardEvent) => {
     if (fullscreen && event.key === 'Escape') { event.preventDefault(); setFullscreen(false); }
   };
@@ -138,6 +141,7 @@ export function connectNativeVideoSurface(root: HTMLElement) {
   };
   update();
   return () => {
+    unsubscribeHost?.();
     cancelAnimationFrame(frame); setFullscreen(false);
     unregisterFullscreen?.(); window.removeEventListener('keydown', onKey);
     root.removeEventListener('pointerdown', onPointerDown, true);

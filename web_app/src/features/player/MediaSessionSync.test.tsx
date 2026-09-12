@@ -501,3 +501,20 @@ describe('MediaSessionSync', () => {
     expect(mediaSession.handlers.play).toBeTypeOf('function');
   });
 });
+
+test.each(['android', 'ios', 'macos'] as const)('leaves %s native video metadata and controls with the host', async platform => {
+  const { configureAndroidShell } = await import('../../core/platform/androidShell');
+  configureAndroidShell({ platform, capabilities: { nativeVideoSession: true }, request: async <T,>() => ({} as T) });
+  try {
+    const mediaSession = installMediaSession();
+    mediaSession.metadata = { title: 'Native video' };
+    const store = createPlayerStore();
+    store.setState({ active: 'video', video: { source: { kind: 'remote', mediaId: 'v1', mediaType: 'video', name: 'Clip', url: '/api/media/v1' },
+      status: { kind: 'playing' }, positionSec: 42, durationSec: 120 } });
+    const view = renderSync(store);
+    await act(async () => {});
+    expect(mediaSession.metadata).toEqual({ title: 'Native video' });
+    expect(mediaSession.setActionHandler).not.toHaveBeenCalled();
+    view.unmount();
+  } finally { configureAndroidShell(null); }
+});

@@ -1,3 +1,4 @@
+import { enableMusicSync, MUSIC_SYNC_EVENT } from './core/storage/musicSync';
 import { connectNativePlaybackHistory } from './core/platform/nativePlaybackHistory';
 import { connectNotificationLikes } from './core/platform/notificationLikes';
 import { StrictMode } from 'react';
@@ -31,6 +32,7 @@ import { createNativeBridge } from './core/platform/nativeBridge';
 import { configureAndroidShell, migrateNativePreferences, supportsNativeCapability } from './core/platform/androidShell';
 import { createLocalAwareLibraryStore, startLocalLibraryProgressSync, useNativeLocalLibrary } from './features/library/nativeLocalLibrary';
 import { AndroidServerSetup } from './core/platform/AndroidServerSetup';
+import { connectNativeVideoSession } from './features/player/nativeVideoSession';
 import { connectNativeAudio } from './features/player/nativeAudio';
 
 const rootElement = document.getElementById('root');
@@ -61,6 +63,7 @@ async function startApp() {
     }
     await migrateNativePreferences(bridge);
   }
+  const musicSync = enableMusicSync();
   const backendStatusStore = createBackendStatusStore();
   const libraryStores = {
     audio: createLibraryStore({
@@ -82,6 +85,12 @@ async function startApp() {
   const audioResumeCache = createAudioResumeCacheService();
   void audioResumeCache.initialize();
   const playerStore = createPlayerStore({ progressService, audioResumeCache, videoOptimization: videoOptimizationService, nativePlaybackHistory: bridge?.capabilities?.playbackHistory === true });
+
+  const refreshSyncedLikes = () => playerStore.setState({
+    likedMediaIds: JSON.parse(localStorage.getItem('music.likes.v1') ?? '[]'),
+  });
+  window.addEventListener(MUSIC_SYNC_EVENT, refreshSyncedLikes);
+  if (import.meta.hot) import.meta.hot.dispose(() => window.removeEventListener(MUSIC_SYNC_EVENT, refreshSyncedLikes));
 
   void syncThemeSettingsFromServer().catch(() => {
     // Keep the local fallback if the backend is unavailable during startup.
@@ -121,7 +130,11 @@ async function startApp() {
   }
 
   await connectNativeAudio(playerStore, supportsNativeCapability('nativeAudio', bridge) ? bridge : null);
-  connectNotificationLikes(playerStore, bridge);
+  const stopVideoSession = await connectNativeVideoSession(playerStore, bridge);
+  const notificationLikes = connectNotificationLikes(playerStore, bridge);
+  musicSync.beforeSync = notificationLikes.flush;
+  const stopMusicSync = musicSync.start();
+  if (import.meta.hot) import.meta.hot.dispose(() => { stopMusicSync(); notificationLikes(); stopVideoSession(); });
   await connectNativePlaybackHistory(playerStore, bridge, progressRepository).ready;
   seedMostRecentProgress();
   void progressRepository.syncFromRemote().then(() => {

@@ -240,7 +240,14 @@ export function FullPlayerScreen({
                   {sourceName}
                 </h1>
                 <p className="truncate text-lg text-white/65 sm:text-xl">
-                  {sourceDetail}
+                  {source?.artist?.trim() ? <>
+                    <button type="button" className="hover:text-white hover:underline focus-visible:underline"
+                      aria-label={`Search artist ${source.artist}`} onClick={() => {
+                        onCollapse?.();
+                        navigate('/library/music', { state: { artistSearch: source.artist } });
+                      }}>{source.artist}</button>
+                    {source.album ? ` · ${source.album}` : ''}
+                  </> : sourceDetail}
                 </p>
               </div>
             </div>

@@ -1,6 +1,9 @@
+import { useLocation } from 'react-router-dom';
+import { usePlayerStore } from '../player/PlayerContext';
+import { isPlayableLibraryItem, playbackSourceFromLibraryItem } from '../../core/playback/source/source';
 import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
 import { createPortal } from 'react-dom';
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FloatingSearchControl } from '../../app/FloatingSearchControl';
 
 import type {
@@ -53,6 +56,11 @@ const labels: Record<LibraryMediaType, { title: string; emptyHint: string }> = {
 type LibrarySortSelection = { key: LibrarySortKey; direction: LibrarySortDirection };
 
 export function LibraryScreen({ type }: { type: LibraryMediaType }) {
+  const location = useLocation();
+  const artistRequest = type === 'audio' && typeof location.state?.artistSearch === 'string'
+    ? location.state.artistSearch.trim() : '';
+  const handledArtistRequest = useRef<string>();
+  const [searchOpenRequest, setSearchOpenRequest] = useState<string>();
   const stores = useLibraryStores();
   const useStore =
     type === 'audio' ? stores.audio : type === 'video' ? stores.video : stores.image;
@@ -61,6 +69,8 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   const stale = useStore((state) => state.stale);
   const load = useStore((state) => state.load);
   const playlists = usePlaylists();
+  const playerStore = usePlayerStore();
+  const appendMusicQueue = playerStore(state => state.appendMusicQueue);
   const filterHost = useFilterHost();
   const [filterOpen, setFilterOpen] = useState(false);
   const preferencesRepository = useMemo(() => createLocalStorageLibraryViewPreferencesRepository(), []);
@@ -110,8 +120,20 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   useEffect(() => {
     preferencesRepository.write(type, currentPreferences);
   }, [currentPreferences, preferencesRepository, type]);
+  useEffect(() => {
+    if (!artistRequest || handledArtistRequest.current === location.key) return;
+    handledArtistRequest.current = location.key;
+    updateCurrentPreferences(current => ({ ...current, query: '', filters: {
+      ...EMPTY_LIBRARY_FILTERS, artists: [artistRequest.normalize('NFKC').toLocaleLowerCase().trim()],
+    } }));
+    setSearchOpenRequest(location.key);
+  }, [artistRequest, location.key, updateCurrentPreferences]);
   const deferredQuery = useDeferredValue(query);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  // Selection belongs to the current media type and filter results only.
+  useLayoutEffect(() => {
+    setSelectedIds(current => current.size === 0 ? current : new Set());
+  }, [type, query, deferredQuery, filters]);
   const selectionMode = selectedIds.size > 0;
   const selectionAnchorId = [...selectedIds].at(-1);
   const [addModalItems, setAddModalItems] = useState<LibraryItem[] | null>(null);
@@ -182,7 +204,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   }, []);
   const enterSelection = useCallback(
     (item: LibraryItem) => {
-      if (type === 'image') return;
+      if (type === 'image' || item.type !== type) return;
       setSelectedIds(new Set([item.id]));
     },
     [type],
@@ -232,6 +254,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
             query={query}
             onQueryChange={setQuery}
             renderPreview={renderSearchPreview}
+            openRequest={searchOpenRequest}
           />,
           searchHost,
         )
@@ -278,6 +301,12 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
         selectionMode={selectionMode}
         selectionAnchorId={selectionAnchorId}
         onAddSelection={() => openAddModal(selectedItems)}
+        onQueueSelection={type === 'audio' ? () => {
+          const remaining = new Map(selectedItems.map(item => [item.id, item]));
+          const ordered = visibleItems.filter(item => remaining.delete(item.id));
+          appendMusicQueue([...ordered, ...remaining.values()].filter(isPlayableLibraryItem).map(playbackSourceFromLibraryItem));
+          clearSelection();
+        } : undefined}
         onClearSelection={clearSelection}
       />
       {addModalItems !== null && (
@@ -336,6 +365,7 @@ function LibraryBody({
   selectionMode,
   selectionAnchorId,
   onAddSelection,
+  onQueueSelection,
   onClearSelection,
 }: {
   sortKey: LibrarySortKey;
@@ -353,6 +383,7 @@ function LibraryBody({
   selectionMode: boolean;
   selectionAnchorId?: string;
   onAddSelection: () => void;
+  onQueueSelection?: () => void;
   onClearSelection: () => void;
 }) {
   const rawItems =
@@ -393,8 +424,8 @@ function LibraryBody({
     }
     return (
       <>
-        <div className="border-b border-zinc-200/70 dark:border-white/10">
-          <div className={`border-b border-zinc-200/70 px-3 text-sm font-medium text-muted dark:border-white/10 sm:px-5 ${type === 'audio' ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_6.75rem] xl:gap-2' : ''}`}>
+        <div className={type === 'video' ? '' : 'border-b border-zinc-200/70 dark:border-white/10'}>
+          <div className={`${type === 'video' ? 'mb-3' : 'border-b border-zinc-200/70 dark:border-white/10'} px-3 text-sm font-medium text-muted sm:px-5 ${type === 'audio' ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_6.75rem] xl:gap-2' : ''}`}>
             <div
               role="group"
               aria-label="Sort library"
@@ -427,6 +458,7 @@ function LibraryBody({
             </div>
           </div>
           <VirtualizedLibraryList
+            key={type}
             items={visibleItems}
             onLongPressItem={onLongPressItem}
             onOpenAddToPlaylist={onOpenAddToPlaylist}
@@ -434,6 +466,7 @@ function LibraryBody({
             selectedIds={selectedIds}
             selectionMode={selectionMode}
             selectionAnchorId={selectionAnchorId}
+            onQueueSelection={onQueueSelection}
             onAddSelection={onAddSelection}
             onClearSelection={onClearSelection}
           />

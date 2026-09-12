@@ -15,10 +15,15 @@ data class PlaybackRuntimeState(
 
 /** Process-local command bridge to the service-owned playback policy. */
 object PlaybackRuntime {
+    val notificationQueue = PendingNotificationQueueRequest()
+
     private val mutableState = MutableStateFlow(PlaybackRuntimeState())
     val state: StateFlow<PlaybackRuntimeState> = mutableState.asStateFlow()
 
     internal var actions: PlaybackRuntimeActions? = null
+
+    fun updateVideo(owner: Any, payload: org.json.JSONObject, command: (org.json.JSONObject) -> Unit) = actions?.updateVideo(owner, payload, command) ?: Unit
+    fun releaseVideo(owner: Any? = null) = actions?.releaseVideo(owner) ?: Unit
 
     fun toggleStopAfterCurrent() = actions?.toggleStopAfterCurrent() ?: Unit
 
@@ -36,9 +41,25 @@ object PlaybackRuntime {
 }
 
 internal interface PlaybackRuntimeActions {
+    fun updateVideo(owner: Any, payload: org.json.JSONObject, command: (org.json.JSONObject) -> Unit)
+    fun releaseVideo(owner: Any?)
     fun toggleStopAfterCurrent()
     fun startSleepTimer(minutes: Double)
     fun cancelSleepTimer()
     fun setVolume(volume: Float)
     fun toggleMute()
+}
+
+/** Retains navigation until the web UI acknowledges it, even if Android blocks launch. */
+class PendingNotificationQueueRequest {
+    private val mutablePending = MutableStateFlow(false)
+    val pending: StateFlow<Boolean> = mutablePending.asStateFlow()
+
+    fun request() { mutablePending.value = true }
+
+    fun read(acknowledged: Boolean = false): Boolean {
+        val requested = mutablePending.value
+        if (acknowledged) mutablePending.value = false
+        return requested
+    }
 }

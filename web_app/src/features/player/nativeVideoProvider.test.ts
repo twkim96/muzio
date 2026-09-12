@@ -37,15 +37,22 @@ function harness(audioTracks = new AudioTrackList()) {
 
 describe('native Vidstack provider', () => {
   it.each([
-    ['https://muzio.test/movie.mp4', false],
-    ['https://muzio.test/playlist.m3u8?token=abc', false],
-    ['https://muzio.test/movie.mp4', true],
-  ] as const)('loads %s through the real engine and provider (pause while loading: %s)', async (sourceUrl, pauseWhileLoading) => {
+    ['https://muzio.test/movie.mp4', false, 'ios'],
+    ['https://muzio.test/playlist.m3u8?token=abc', false, 'ios'],
+    ['https://muzio.test/movie.mp4', true, 'ios'],
+    ['https://muzio.test/movie.mp4', false, 'macos'],
+    ['/api/media/v1?v=2#t=24', false, 'ios'],
+    ['/api/media/v1?v=2#t=24', false, 'macos'],
+  ] as const)('loads %s through the real engine and provider (pause while loading: %s, platform: %s)', async (sourceUrl, pauseWhileLoading, platform) => {
+    const proxyBase = 'http://localhost:12345/0123456789abcdef0123456789abcdef/';
+    const usesProxy = sourceUrl.startsWith('/api/');
+    if (usesProxy) vi.stubGlobal('MuzioNative', { platform, videoIndexBaseUrl: proxyBase, postMessage: vi.fn() });
+    const expectedSourceUrl = usesProxy ? `${proxyBase}${sourceUrl.slice(1)}` : sourceUrl;
     const hlsSupported = HLSProviderLoader.supported;
     HLSProviderLoader.supported = true;
     const listeners = new Set<(event: { type: string; state?: unknown }) => void>();
     const request = vi.fn(async (_command: string, _payload?: { generation?: string }) => ({}));
-    configureAndroidShell({ platform: 'ios', capabilities: { nativeVideo: true }, request,
+    configureAndroidShell({ platform, capabilities: { nativeVideo: true }, request,
       subscribe: (listener: (event: { type: string; state?: unknown }) => void) => {
         listeners.add(listener); return () => listeners.delete(listener);
       },
@@ -73,27 +80,46 @@ describe('native Vidstack provider', () => {
         playTask = engine!.play();
       });
       await waitFor(() => expect(request).toHaveBeenCalledWith('video.load', expect.objectContaining({
-        url: sourceUrl, generation: expect.any(String),
+        url: expectedSourceUrl, generation: expect.any(String),
       })));
       const generation = request.mock.calls.find(([command]) => command === 'video.load')![1]!.generation;
-      const emit = (playing: boolean, positionSec: number, ready = true) => {
+      const emit = (playing: boolean, positionSec: number, ready = true, seekable: number[][] = [[0, 120]]) => {
         const state = { generation, ready, playing, positionSec, durationSec: 120,
           volume: 1, muted: false, rate: 1, pip: false, seeking: false, ended: false,
-          buffered: [[0, 60]], seekable: [[0, 120]],
+          buffered: [[0, 60]], seekable,
         };
         for (const listener of listeners) listener({ type: 'video', state });
       };
-      // AVPlayer publishes its paused loading snapshot before it becomes ready.
+      // The native engine publishes its paused loading snapshot before readiness.
       act(() => emit(false, 0, false));
       if (pauseWhileLoading) act(() => engine!.pause());
+      if (platform === 'macos' || usesProxy) {
+        // A host may discover duration before VLC reports that seeking is ready.
+        act(() => emit(false, 0, true, []));
+        await waitFor(() => expect(player.current!.state.canPlay).toBe(true));
+        if (usesProxy) await act(async () => { await playTask; });
+      }
       act(() => emit(false, 0));
       await waitFor(() => expect(player.current!.state.canPlay).toBe(true));
+      await waitFor(() => {
+        expect(player.current!.state.streamType).toBe('on-demand');
+        expect(player.current!.state.duration).toBe(120);
+        expect(player.current!.state.live).toBe(false);
+        expect(player.current!.state.canSeek).toBe(true);
+      });
       await act(async () => { await playTask; });
       if (pauseWhileLoading) {
         expect(request.mock.calls.some(([command]) => command === 'video.play')).toBe(false);
         return;
       }
       await waitFor(() => expect(request).toHaveBeenCalledWith('video.play', { generation }));
+      if (usesProxy) {
+        // Cold mini-player playback must send the saved position to the host,
+        // even if readiness arrived before the native seekable range.
+        await waitFor(() => expect(request).toHaveBeenCalledWith('video.seek', {
+          generation, positionSec: 24,
+        }));
+      }
       act(() => emit(true, 24));
       await waitFor(() => {
         expect(player.current!.paused).toBe(false);
@@ -133,6 +159,7 @@ describe('native Vidstack provider', () => {
       view.unmount();
       configureAndroidShell(null);
       HLSProviderLoader.supported = hlsSupported;
+      if (usesProxy) vi.unstubAllGlobals();
     }
   });
 
@@ -183,6 +210,21 @@ describe('native Vidstack provider', () => {
     h.emit({ positionSec: 40, seeking: false });
     expect(h.notify).toHaveBeenCalledWith('seeked', 40);
     expect(h.request).toHaveBeenCalledWith('video.seek', expect.objectContaining({ positionSec: 40 }));
+  });
+
+  it('exposes PiP only after explicit native support and resets support on a new source', async () => {
+    const h = harness();
+    expect(h.provider.pictureInPicture.supported).toBe(false);
+    await h.provider.loadSource({ src: '/movie.mp4', type: 'video/mp4' });
+    h.emit();
+    expect(h.provider.pictureInPicture.supported).toBe(false);
+    h.emit({ pipSupported: true });
+    expect(h.provider.pictureInPicture.supported).toBe(true);
+    h.emit({ pipSupported: false });
+    expect(h.provider.pictureInPicture.supported).toBe(false);
+    h.emit({ pipSupported: true });
+    await h.provider.loadSource({ src: '/next.mp4', type: 'video/mp4' });
+    expect(h.provider.pictureInPicture.supported).toBe(false);
   });
 
   it('routes existing settings and PiP controls to the native engine and mirrors playback events', async () => {

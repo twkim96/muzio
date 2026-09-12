@@ -26,6 +26,7 @@ import {
   LikeGlyph,
   MoreGlyph,
   MusicGlyph,
+  QueueGlyph,
   VideoGlyph,
 } from '../../core/ui/AppIcons';
 import { usePlayerStore } from '../player/PlayerContext';
@@ -62,7 +63,6 @@ const LONG_PRESS_MOVE_TOLERANCE_PX = 12;
 function LibraryItemRowComponent({
   item,
   onLongPress,
-  onOpenAddToPlaylist,
   onToggleSelected,
   queueItems = [item],
   selected = false,
@@ -70,8 +70,10 @@ function LibraryItemRowComponent({
   showSelectionActions = false,
   selectionCount = 0,
   onAddSelection,
+  onQueueSelection,
   onClearSelection,
   style,
+  videoCard = false,
 }: {
   item: LibraryItem;
   onLongPress?: (item: LibraryItem) => void;
@@ -83,8 +85,10 @@ function LibraryItemRowComponent({
   showSelectionActions?: boolean;
   selectionCount?: number;
   onAddSelection?: () => void;
+  onQueueSelection?: () => void;
   onClearSelection?: () => void;
   style?: CSSProperties;
+  videoCard?: boolean;
 }) {
   const { directory, filename } = splitPath(item.relativePath);
   const metadata = item.metadata;
@@ -135,6 +139,18 @@ function LibraryItemRowComponent({
       document.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [optionsOpen]);
+
+  useEffect(() => () => {
+    if (longPressTimerRef.current !== null) window.clearTimeout(longPressTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    const closeOtherMenu = (event: Event) => {
+      if ((event as CustomEvent<string>).detail !== item.id) setOptionsOpen(false);
+    };
+    document.addEventListener('muzio-library-menu-open', closeOtherMenu);
+    return () => document.removeEventListener('muzio-library-menu-open', closeOtherMenu);
+  }, [item.id]);
 
   const handlePrimaryAction = () => {
     clearLongPress();
@@ -246,10 +262,7 @@ function LibraryItemRowComponent({
     const distance = Math.hypot(event.clientX - start.x, event.clientY - start.y);
     if (distance > LONG_PRESS_MOVE_TOLERANCE_PX) clearLongPress();
   };
-  const openAddToPlaylist = () => {
-    setOptionsOpen(false);
-    onOpenAddToPlaylist?.([item]);
-  };
+
 
   return (
     <li
@@ -258,7 +271,7 @@ function LibraryItemRowComponent({
       data-media-id={item.id}
       data-media-type={item.type}
       style={style}
-      className={`muzio-library-row group relative border-b border-zinc-200/70 last:border-b-0 dark:border-white/10 xl:h-[54px] ${
+      className={`muzio-library-row group relative ${videoCard ? "rounded-xl" : "border-b border-zinc-200/70 last:border-b-0 dark:border-white/10 xl:h-[54px]"} ${
         selected ? 'muzio-library-row-selected' : 'hover:bg-zinc-950/[0.035] dark:hover:bg-white/[0.055]'
       } ${showSelectionActions ? 'z-20 overflow-visible' : 'overflow-hidden'}`}
       onFocusCapture={prefetchVideoSidecar}
@@ -281,10 +294,32 @@ function LibraryItemRowComponent({
         <span className="muzio-selection-count">{selectionCount} selected</span>
         <button type="button" data-testid="selection-add-to-playlist" aria-label="Add selected items to playlist"
           className="muzio-selection-round" onClick={onAddSelection}><Plus aria-hidden className="h-5 w-5" /></button>
+        {onQueueSelection && <button type="button" data-testid="selection-add-to-queue" aria-label="Add selected items to queue" title="큐에 추가"
+          className="muzio-selection-round" onClick={onQueueSelection}><QueueGlyph aria-hidden className="h-5 w-5" /></button>}
         <button type="button" aria-label="Clear selection" className="muzio-selection-round"
           onClick={onClearSelection}><X aria-hidden className="h-5 w-5" /></button>
       </div>}
-      <div className="grid min-h-[54px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-[5px] sm:px-5 xl:h-full xl:min-h-0 xl:py-0">
+      {videoCard && (
+        <div data-testid="video-row-layout" className="relative h-full">
+          <button type="button" onClick={handlePrimaryAction} aria-label={`Play ${item.name}`} className="block w-full text-left">
+            <span className="relative block aspect-video overflow-hidden rounded-xl bg-zinc-200 dark:bg-white/10">
+              <LibraryThumbnail item={item} large />
+              {metadata?.durationSec && <span className="absolute bottom-2 right-2 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium tabular-nums text-white">{formatDuration(metadata.durationSec)}</span>}
+              <span data-testid="library-item-progress" aria-hidden className="absolute bottom-0 inset-x-0 h-1 bg-black/20">
+                <span className="block h-full bg-accent" style={{ width: `${progressPercent}%` }} data-progress-fraction={fraction ?? 0} />
+              </span>
+            </span>
+            <span className="block pr-10 pt-3">
+              <span data-testid="video-responsive-title" title={item.relativePath} className="line-clamp-2 text-base font-medium leading-6 text-zinc-950 dark:text-foreground">{displayTitle}</span>
+              <span data-testid="video-row-metadata" className="mt-1 block truncate text-xs text-muted">{metadata?.artist || directory.replace(/\/$/, '') || item.rootName}{progressLabel && ` · ${progressLabel}`}</span>
+            </span>
+          </button>
+          <div data-row-options-shell className="absolute right-0 flex w-9 justify-end" style={{ top: 'calc((100% - 88px) + 10px)' }}>
+            <LibraryRowActions item={item} liked={liked} likeKey={likeKey} optionsOpen={optionsOpen} setOptionsOpen={setOptionsOpen} toggleLike={toggleLike} compact />
+          </div>
+        </div>
+      )}
+      {!videoCard && <div className="grid min-h-[54px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-[5px] sm:px-5 xl:h-full xl:min-h-0 xl:py-0">
         {item.type !== 'audio' && (
           <div
             data-testid={`${item.type}-row-layout`}
@@ -349,7 +384,6 @@ function LibraryItemRowComponent({
                   liked={liked}
                   likeKey={likeKey}
                   optionsOpen={optionsOpen}
-                  onOpenAddToPlaylist={openAddToPlaylist}
                   setOptionsOpen={setOptionsOpen}
                   toggleLike={toggleLike}
                 />
@@ -411,14 +445,13 @@ function LibraryItemRowComponent({
               liked={liked}
               likeKey={likeKey}
               optionsOpen={optionsOpen}
-              onOpenAddToPlaylist={openAddToPlaylist}
               setOptionsOpen={setOptionsOpen}
               toggleLike={toggleLike}
             />
           </div>
         )}
-      </div>
-      {item.type === 'video' && (
+      </div>}
+      {item.type === 'video' && !videoCard && (
         <div
           data-testid="library-item-progress"
           aria-hidden
@@ -451,11 +484,15 @@ export function rowPropsEqual(
 ): boolean {
   return (
     previous.item === next.item &&
+    previous.videoCard === next.videoCard &&
+    previous.style?.width === next.style?.width &&
+    previous.style?.left === next.style?.left &&
     previous.selected === next.selected &&
     previous.selectionMode === next.selectionMode &&
     previous.showSelectionActions === next.showSelectionActions &&
     previous.selectionCount === next.selectionCount &&
     previous.onAddSelection === next.onAddSelection &&
+    previous.onQueueSelection === next.onQueueSelection &&
     previous.onClearSelection === next.onClearSelection &&
     previous.queueItems === next.queueItems &&
     previous.onLongPress === next.onLongPress &&
@@ -473,19 +510,39 @@ function LibraryRowActions({
   liked,
   likeKey,
   optionsOpen,
-  onOpenAddToPlaylist,
   setOptionsOpen,
   toggleLike,
+  compact = false,
 }: {
   item: LibraryItem;
   liked: boolean;
+  compact?: boolean;
   likeKey: string;
   optionsOpen: boolean;
-  onOpenAddToPlaylist: () => void;
   setOptionsOpen: Dispatch<SetStateAction<boolean>>;
   toggleLike: (key: string) => void;
 }) {
   const moreButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [copyStatus, setCopyStatus] = useState('누르면 복사됨');
+  const copyTitle = async () => {
+    const title = item.metadata?.title || item.name;
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(title);
+      copied = true;
+    } catch {
+      // Some embedded webviews only allow the legacy copy operation.
+      const field = document.createElement('textarea');
+      field.value = title;
+      field.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+      document.body.appendChild(field);
+      field.select();
+      try { copied = document.execCommand('copy'); } catch { /* Report failure below. */ }
+      field.remove();
+      moreButtonRef.current?.focus();
+    }
+    setCopyStatus(copied ? '복사됨' : '복사 실패 · 다시 시도');
+  };
   const [menuPosition, setMenuPosition] = useState<{
     left: number;
     top: number;
@@ -521,6 +578,8 @@ function LibraryRowActions({
       spaceBelow >= menuHeight + viewportPadding
         ? rect.bottom + 6
         : Math.max(viewportPadding, rect.top - menuHeight - 6);
+    document.dispatchEvent(new CustomEvent('muzio-library-menu-open', { detail: item.id }));
+    setCopyStatus('누르면 복사됨');
     setMenuPosition({ left, top });
     setOptionsOpen(true);
   };
@@ -552,13 +611,13 @@ function LibraryRowActions({
           data-testid="library-item-more"
           aria-label={`More options for ${item.name}`}
           title="More"
-          className="relative hidden h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-muted hover:bg-zinc-200/70 hover:text-zinc-950 dark:hover:bg-white/10 dark:hover:text-foreground sm:inline-flex"
+          className={`relative ${compact ? "inline-flex" : "hidden sm:inline-flex"} h-9 w-9 items-center justify-center rounded-full text-sm font-semibold text-muted hover:bg-zinc-200/70 hover:text-zinc-950 dark:hover:bg-white/10 dark:hover:text-foreground`}
           onClick={(event) => {
             event.stopPropagation();
             toggleOptions();
           }}
         >
-          <MoreGlyph className="h-5 w-5" />
+          <MoreGlyph className={`h-5 w-5 ${compact ? "rotate-90" : ""}`} />
         </button>
       )}
       {optionsOpen &&
@@ -576,10 +635,10 @@ function LibraryRowActions({
               className="flex w-full rounded-lg px-3 py-2 text-left font-semibold hover:bg-white/10"
               onClick={(event) => {
                 event.stopPropagation();
-                onOpenAddToPlaylist();
+                void copyTitle();
               }}
             >
-              Add to Playlist
+              <span aria-live="polite">{copyStatus}</span>
             </button>
           </div>,
           document.body,
@@ -588,7 +647,7 @@ function LibraryRowActions({
   );
 }
 
-function LibraryThumbnail({ item }: { item: LibraryItem }) {
+function LibraryThumbnail({ item, large = false }: { item: LibraryItem; large?: boolean }) {
   const [failed, setFailed] = useState(false);
   const thumbnail = useLibraryThumbnail(item);
   const thumbnailUrl =
@@ -607,7 +666,7 @@ function LibraryThumbnail({ item }: { item: LibraryItem }) {
         decoding="async"
         loading="lazy"
         className={
-          item.type === 'audio'
+          large ? 'h-full w-full object-cover' : item.type === 'audio'
             ? 'h-11 w-11 rounded-md bg-zinc-100 object-cover shadow-sm dark:bg-white/[0.08]'
             : 'h-11 w-[4.875rem] rounded-md bg-zinc-100 object-cover shadow-sm dark:bg-white/[0.08]'
         }
@@ -619,7 +678,7 @@ function LibraryThumbnail({ item }: { item: LibraryItem }) {
     <span
       aria-hidden
       className={
-        item.type === 'audio'
+        large ? 'flex h-full w-full items-center justify-center text-muted' : item.type === 'audio'
           ? 'flex h-11 w-11 items-center justify-center rounded-md bg-zinc-200/70 text-lg text-muted shadow-sm dark:bg-white/[0.08]'
           : 'flex h-11 w-[4.875rem] items-center justify-center rounded-md bg-zinc-200/70 text-lg text-muted shadow-sm dark:bg-white/[0.08]'
       }

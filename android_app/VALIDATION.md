@@ -1,5 +1,12 @@
 # Shared web UI host validation — 2026-09-06
 
+> 현재 후속 상태(2026-09-10 정리):1.4.7/vc15 APK 패키징·데이터 유지 설치·Activity 실행 완료.
+> 운영 서버 DNS 해석 실패로 서버 연결·동기화 실기기 수용은 미완료다.
+> 아래 초기 호스트/1.4.6 및9/9 검증은 당시 이력이다.
+> 1.4.7 알림 큐 연결 및 공용 셔플 버튼 수정은 컴파일·관련 검사까지 완료했고,
+> 해당 변경을 포함한 새 APK는 9/9 패키징·설치·실행 완료. 실제 버튼 동작 검증은 남아 있다.
+> Android 13+ 알림 큐의 즉시 앱 열기는 미확인이다. [현재 체크리스트](../update_1.4.7.md)를 따른다.
+
 Base: `main` at `c283d52`; implementation branch: `codex/android-shared-web-ui`.
 Android `1.2.0-web-dev` / versionCode 5. This is development acceptance, not a
 physical-device or release-signing report.
@@ -237,3 +244,61 @@ SHA-256: `03834f3f93339756abb1c004bc0f8283e716ae155e1694583710e5d3118433ec`
 - Physical installation and acceptance move to `../update_1.4.7.md` at the user’s request. The completed JVM/emulator evidence above remains valid.
 - The final APK includes shared web UI r20; the earlier fullscreen-only APK did not include the subsequent selection/playlist UI. No physical device was installed or tested during closeout.
 - Final artifact: `dist/releases/1.4.6-20260908/Muzio-1.4.6-web-r20-vc14.apk`; SHA-256 `47baf18addf8d343cb56943103a10dde406046d4be83ac8cbf0dc390886b9fd1`. Assembly exit0, r20 service worker verified inside the APK. Log: `/tmp/muzio-146-close-android-build.log`.
+
+
+## 1.4.7 notification Queue follow-up — 2026-09-08
+
+- Android 12 and below use an Activity PendingIntent directly for Queue. Session
+  commands retain an in-process pending request until the shared web UI displays
+  the drawer and acknowledges it; active/resumed WebViews receive the request.
+  This does not persist through process death or prove Android 13+ background launch.
+- Affected Kotlin compilation and `PendingNotificationQueueRequestTest` (2 tests)
+  passed: `./gradlew :app:testDebugUnitTest --tests com.twkim.videiomusic.playback.PendingNotificationQueueRequestTest -x :app:buildSharedWeb`, exit0.
+  Log: `/tmp/muzio-queue-android-handshake-check.log`.
+- Shared Queue shuffle UI: 7 drawer tests, 1 notification handshake test and web
+  build passed. No new APK/package/install was performed; the r20 closeout APK
+  above does not contain these subsequent changes. Device notification actions,
+  foreground/background return and shared shuffle touch behavior remain pending.
+
+## Android device installation — 2026-09-09
+
+User-requested update on SM-S936N / Android16: assembleDebug exit0, r23 bundled
+entry assets verified, adb install -r Success, am start -W Status ok (COLD).
+App data retained; display1.4.6/versionCode14, lastUpdateTime21:07:15.
+APK SHA256: `4ae18b155ae07d589f7d18255b3643472faf1df4d97748ec6b8c703e89fb155a`.
+Build log `/tmp/muzio-android-install-20260909-build.log`. Actual notification Queue
+tap, shuffle touch and media playback acceptance remain pending. Earlier no-install
+entries describe their original runs. This is not the1.4.7 release closeout.
+
+## 1.4.7 music sync release — 2026-09-10
+
+- Java21 and installed Android SDK with `:app:testDebugUnitTest :app:assembleDebug`: BUILD SUCCESSFUL,8suites27tests, no failures/errors. Shared TypeScript/Vite bundle rebuilt; packaged `assets/muzio-web/sw.js` contains1.4.7-r1. Native notification-queue followups already present in this checkout remain included.
+- `adb install -r` succeeded on SM-S936N, MainActivity started and package query confirmed1.4.7/versionCode15. Data was not cleared. The visible server setup field was empty; entering the current operating server address returned `Unable to resolve host` for its Tailscale hostname. Do not count installation/activity launch as successful network connection or cross-device sync.
+- New metadata fetches use the real configured server origin through the existing `/api/` network path; bundled asset routing does not intercept them. Native pending notification likes are drained with the existing bridge commands before remote refresh.
+- APK and SHA-256 are retained in `../dist/releases/1.4.7-20260910/manifest.json`. Physical duplicate edits/offline recovery and earlier notification/PiP checklist items remain pending.
+
+### Android r2 설치 — 2026-09-10
+
+- 사용자 설치 요청에 따라 공용 웹1.4.7-r2를 포함한 APK를 갱신했다. `:app:assembleDebug` 및 포함된 TypeScript/Vite 빌드 통과. APK 내부 서비스 워커 r2와 실제 JS의 `selection-add-to-queue` 버튼을 확인했다.
+- 연결된 SM-S936N에 `adb install -r` 성공, MainActivity 실행 요청 성공, 설치 버전1.4.7/versionCode15 확인. 기존 데이터를 지우지 않았다. 큐 버튼의 실제 터치 동작은 별도 사용자 확인 대상이다.
+- 산출물: `dist/releases/1.4.7-20260910/Muzio-1.4.7-r2-android.apk`. SHA-256: `a7c7473ee2a2847183a233fac1d90dcd430209ea6d80f131bf904c2b7d9f4e11`. 이전 r1 산출물은 보존했다. 앞선 APK 갱신 대기 기록은 이 설치로 해소됐다.
+
+### Android 런처 아이콘 내부 비율 수정 — 2026-09-10
+
+- 사용자 첨부 기준 iPad 로고 폭은 약54%, Android는 약83%였다. Android adaptive foreground와 monochrome 벡터에 중심(256,256) 기준2/3 스케일을 적용했다. 배경·로고 경로·색상, Apple 및 웹 아이콘은 유지했다. 로컬 아이콘 생성 스크립트에도 같은 보정을 반영했다.
+- `:app:assembleDebug` 및 리소스 merge/process, 공용 웹 빌드 통과. 사용자 요청의 수정 반영을 위해1.4.7/versionCode15 APK를 갱신하고 연결된 SM-S936N에 `adb install -r` 성공. 데이터 삭제 없음.
+- 설치 후 실제 앱 정보 화면 스크린샷에서79px 아이콘 안의 로고43×34px(폭54.4%, 높이43.0%)를 확인했다. 첨부 iPad의54.4%/42.3%와 근접한다. 런처 폴더에서의 최종 사용자 확인과 테마 단색 렌더는 별도이며, 검증 후 홈 화면으로 복귀했다.
+- 산출물 `dist/releases/1.4.7-20260910/Muzio-1.4.7-icon-android.apk`, SHA-256 `5d3350fe7e1c01a8ef9202cf4912e2c39966d1bfba3b2617caf7eb60200f1948`. 이전 패키지는 보존했고 최신 큐 버튼 및 r4 상단 롤백 UI도 포함된다.
+
+### 미니바 영상 이어보기 보완 — 2026-09-11
+
+- 공용 웹 엔진에서 초기 탐색이0초로 제한될 때 저장 위치를 취소하지 않고 탐색 범위 준비 후 재적용한다. 미니바 복원·영상 화면 사전 준비·수동0초 탐색·Apple provider 전달을 포함한 재생 관련379테스트 통과. Kotlin/Manifest/리소스/네이티브 계약 변경 없음.
+- `:app:assembleDebug` 성공. 포함된 TypeScript/Vite 빌드와 APK 내부 서비스 워커1.4.7-r5 및 수정 JS를 확인했다. 로그 `/tmp/muzio-resume-android-build.log`, 테스트 `/tmp/muzio-resume-playback-tests.log`.
+- APK `dist/releases/1.4.7-20260910/Muzio-1.4.7-resume-android.apk`, SHA-256 `4fdbef0b784a2c5b1ffc2d90f52993a4ac358f1b4b55e279e9d1c92ef829ba72`.1.4.7/versionCode15 유지. 기존 APK는 보존했다.
+- `adb devices -l`에 연결 기기 없음. **수정 APK 설치·실행·실기기 이어보기는 미완료**. 기존 아이콘 수정 APK 설치 기록은 이번 수정본 설치를 뜻하지 않는다.
+
+### 영상 알림·잠금화면 연결 — 2026-09-11
+
+- WebView 영상의 메타데이터/시간/상태를 서비스의 Media3 세션에 연결하고, 재생/일시정지·앞뒤10초·탐색 명령을 현재 영상에 전달한다. 음악 세션 전환, 이전 페이지 해제 차단, 배경/잠금 시 WebView 유지 포함.
+- `:app:testDebugUnitTest -x :app:buildSharedWeb` 최종 성공. 영향 Kotlin 컴파일 및29테스트(소유권 회귀2개 포함) 통과. 로그 `/tmp/muzio-system-android-complete.log`. 공용 웹119테스트 및 TypeScript/Vite 빌드 통과.
+- 배포 APK 패키징·설치 없음. `adb devices -l` 연결 기기 없음. 잠금화면·알림의 실제 버튼 배치/명령, PiP 닫기, 장시간 배경 유지 및 음악↔영상 전환은 실기기 미검증. 기존 r5 APK 설치는 이번 기능 적용을 의미하지 않는다.

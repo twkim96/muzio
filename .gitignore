@@ -31,3 +31,8 @@ ios_app/**/xcuserdata/
 ios_app/**/*.xcuserstate
 ios_app/**/*.mobileprovision
 ios_app/**/*.p12
+
+# VideoLAN binary packages and generated notices are acquired locally.
+ios_app/ThirdParty/**
+!ios_app/ThirdParty/
+!ios_app/ThirdParty/README.md

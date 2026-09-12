@@ -1,3 +1,5 @@
+import { musicSync } from './musicSync';
+
 export interface PlaylistItemRef {
   contentKey: string;
   addedAt: string;
@@ -37,10 +39,16 @@ export function createLocalStoragePlaylistRepository(
 ): PlaylistRepository {
   const targetStorage = storage ?? defaultLocalStorage();
 
-  const read = () => readDocument(targetStorage);
+  let beforeWrite: PlaylistRecord[] = [];
+  const read = () => {
+    const document = readDocument(targetStorage);
+    beforeWrite = structuredClone(document.playlists);
+    return document;
+  };
   const write = (document: PlaylistDocument) => {
     if (targetStorage === null) return;
     try {
+      musicSync()?.recordPlaylists(beforeWrite, document.playlists);
       targetStorage.setItem(STORAGE_KEY, JSON.stringify(document));
     } catch {
       // Best effort: the music library should stay usable without storage.
@@ -119,6 +127,7 @@ export function createLocalStoragePlaylistRepository(
       return read();
     },
     importData(data) {
+      read();
       const document = normalizeDocument(data);
       write(document);
       return document.playlists;

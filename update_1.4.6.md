@@ -359,3 +359,7 @@
 - Mac Release arm64/x86_64 universal build exit0, ad-hoc 서명 검증 및 ZIP 생성. 로그: `/tmp/muzio-146-close-mac-build.log`. 공증·스토어 배포는 하지 않았다. 앞선 `dist/apple` 파일은 이전 산출물이며 위 경로를 최종본으로 사용한다.
 - iOS는 `/tmp/muzio-ipad-build/Build/Products/Debug-iphoneos/Muzio.app`의 기존 서명/설치 성공본을 재사용한다. 이후 Swift 제품 변경이 없고 Apple은 서버 공용 UI를 읽으므로 이번에는 다시 패키징/설치하지 않았다. 개발 서명 만료·재연결이 필요한 경우 후속 검증에서 처리한다.
 - 마감 버전 검사: `VMA_VERSION=1.4.6 bash scripts/verify_version.sh` 통과. 변경 파일의 whitespace 검사도 통과했다.
+
+### 1.4.7 인계 — 2026-09-10
+
+1.4.6 마감과 탐색·인덱스 캐시 변경 이력은 유지한다. 후속 Apple VLC·공용 UI 및 기기 간 좋아요·플레이리스트 동기화는 [1.4.7](update_1.4.7.md)로 패치하며, 기존 실기기 미확인 항목도 해당 문서에서 계속 관리한다.

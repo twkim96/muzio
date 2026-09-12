@@ -135,6 +135,8 @@ export interface PlayerState extends PlayerSnapshot {
   playMusicQueue(sources: PlaybackSource[], startMediaId: string): Promise<void>;
   /** Insert a library audio source after the current Queue item and play it. */
   insertQueueItemAfterCurrentAndPlay(source: PlaybackSource): Promise<void>;
+  /** Append audio entries without loading a source or starting playback. */
+  appendMusicQueue(sources: readonly PlaybackSource[]): void;
   /**
    * Seeds the active slot with a source without starting playback. Used at
    * boot to surface a "Continue" mini-player based on the most recent
@@ -1493,6 +1495,16 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         await playSourceOnSlot(source);
       },
 
+      appendMusicQueue(sources) {
+        const entries = withQueueEntries(sources.filter(source => source.mediaType === 'audio').map(playbackSourceWithoutQueueEntry));
+        if (entries.length === 0) return;
+        set(state => ({
+          musicQueue: [...state.musicQueue, ...entries],
+          musicQueueIndex: state.musicQueue.length === 0 ? 0 : state.musicQueueIndex,
+          shuffleBaseQueue: state.shuffle ? [...(state.shuffleBaseQueue ?? state.musicQueue), ...entries] : null,
+        }));
+      },
+
       async insertQueueItemAfterCurrentAndPlay(source) {
         if (source.mediaType !== 'audio') {
           await get().playSource(source);
@@ -1746,8 +1758,11 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         } else {
           setIds.add(trimmed);
         }
-        const likedMediaIds = [...setIds];
-        likedRepository?.write(likedMediaIds);
+        let likedMediaIds = [...setIds];
+        if (likedRepository?.set) {
+          likedRepository.set(trimmed, setIds.has(trimmed));
+          likedMediaIds = likedRepository.list();
+        } else likedRepository?.write(likedMediaIds);
         set({ likedMediaIds });
       },
 

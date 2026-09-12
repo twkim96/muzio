@@ -214,7 +214,7 @@ function renderScreenWithoutVideoSurface(
 
 function LocationProbe() {
   const location = useLocation();
-  return <span data-testid="location">{location.pathname}</span>;
+  return <span data-testid="location" data-artist={location.state?.artistSearch}>{location.pathname}</span>;
 }
 
 function CollapsiblePlayerHarness() {
@@ -2006,3 +2006,13 @@ describe('FullPlayerScreen', () => {
     );
   });
 });
+
+ test('artist click opens the music artist filter without changing playback', () => {
+  const store = createPlayerStore();
+  store.getState().seedSource({ ...audioSource, artist: 'Artist Name', album: 'Album' }, { positionSec: 42, durationSec: 120 });
+  renderScreen(store);
+  fireEvent.click(screen.getByRole('button', { name: 'Search artist Artist Name' }));
+  expect(screen.getByTestId('location')).toHaveTextContent('/library/music');
+  expect(screen.getByTestId('location')).toHaveAttribute('data-artist', 'Artist Name');
+  expect(store.getState().audio.positionSec).toBe(42);
+ });

@@ -96,7 +96,7 @@ function mutateAudioList(list: AudioTrackList, operation: 'ADD' | 'REMOVE', item
 
 function nativeVideoBridge(): NativeBridge | null {
   const bridge = androidShellBridge() as NativeBridge | null;
-  return bridge?.platform === 'ios' &&
+  return (bridge?.platform === 'ios' || bridge?.platform === 'macos') &&
     bridge.capabilities?.nativeVideo === true &&
     typeof bridge.subscribe === 'function' ? bridge : null;
 }
@@ -139,7 +139,7 @@ export class NativeVideoProvider implements MediaProviderAdapter {
 
   readonly pictureInPicture = {
     get active() { return this.owner.state?.pip === true; },
-    get supported() { return this.owner.state?.pipSupported !== false; },
+    get supported() { return this.owner.state?.pipSupported === true; },
     owner: this,
     enter: async () => { await this.command('pip', { active: true }); },
     exit: async () => { await this.command('pip', { active: false }); },
@@ -196,7 +196,7 @@ export class NativeVideoProvider implements MediaProviderAdapter {
     this.state = null;
     this.context.notify('load-start');
     const generation = this.generation;
-    try { await this.command('load', { url: typeof src.src === 'string' ? decodeNativeVideoSource(src.src) : src.src }); }
+    try { await this.command('load', { title: this.context.$state?.title?.() ?? 'Video', url: typeof src.src === 'string' ? decodeNativeVideoSource(src.src) : src.src }); }
     catch (error) {
       if (generation !== this.generation || this.destroyed) return;
       this.reportError(error); throw error;
@@ -260,7 +260,7 @@ export class NativeVideoProvider implements MediaProviderAdapter {
       for (const info of tracks) {
         let track = this.nativeTextTracks.get(info.id);
         if (!track) {
-          // Cues are rendered by AVPlayerLayer (also in PiP); Vidstack owns menu
+          // Cues are rendered by the native video engine; Vidstack owns menu
           // selection. No web cue renderer or second subtitle download is needed.
           track = new TextTrack({ id: info.id, label: info.label, language: info.language, kind: 'subtitles' });
           this.nativeTextTracks.set(info.id, track);

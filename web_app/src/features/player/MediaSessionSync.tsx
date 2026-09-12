@@ -1,3 +1,4 @@
+import { supportsNativeCapability } from '../../core/platform/androidShell';
 import { useEffect, useRef } from 'react';
 
 import type { PlaybackStatus } from '../../core/playback/session/session';
@@ -68,6 +69,7 @@ const DEFAULT_SEEK_OFFSET_SEC = 10;
 export function MediaSessionSync() {
   const store = usePlayerStore();
   const activeState = store(selectActiveState);
+  const nativeVideoSession = supportsNativeCapability('nativeVideoSession');
   const nativeAudio = store((state) => state.nativeAudio);
   const source = nativeAudio && store.getState().active !== 'video' ? null : activeState.source;
   const status = activeState.status;
@@ -81,6 +83,7 @@ export function MediaSessionSync() {
   useEffect(() => {
     const generation = metadataGenerationRef.current + 1;
     metadataGenerationRef.current = generation;
+    if (nativeVideoSession && active === 'video') return;
     const mediaSession = mediaSessionOrNull();
     const MediaMetadata = mediaMetadataConstructorOrNull();
     if (mediaSession === null || MediaMetadata === null) return;
@@ -102,7 +105,7 @@ export function MediaSessionSync() {
 
     applyMetadata();
     queueMicrotask(applyMetadata);
-  }, [source, status, nativeAudio, active]);
+  }, [source, status, nativeAudio, active, nativeVideoSession]);
 
   useEffect(() => {
     const mediaSession = mediaSessionOrNull();
@@ -110,7 +113,7 @@ export function MediaSessionSync() {
       return;
     }
 
-    if (nativeAudio && active !== 'video') return;
+    if ((nativeAudio && active !== 'video') || (nativeVideoSession && active === 'video')) return;
 
     const queueSnapshot = {
       tracks: musicQueue,
@@ -173,7 +176,7 @@ export function MediaSessionSync() {
         setActionHandler(mediaSession, action, null);
       }
     };
-  }, [nativeAudio, active, musicQueue, musicQueueIndex, repeatMode, stopAfterCurrent, store]);
+  }, [nativeAudio, nativeVideoSession, active, musicQueue, musicQueueIndex, repeatMode, stopAfterCurrent, store]);
 
   return null;
 }

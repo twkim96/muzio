@@ -83,11 +83,11 @@ describe('QueueDrawer', () => {
 
     expect(screen.getByRole('dialog', { name: 'Queue' })).toHaveFocus();
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(screen.getByRole('button', { name: 'Close queue' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Shuffle' })).toHaveFocus();
     fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
     expect(screen.getByRole('button', { name: 'Play Track 1' })).toHaveFocus();
     fireEvent.keyDown(document, { key: 'Tab' });
-    expect(screen.getByRole('button', { name: 'Close queue' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Shuffle' })).toHaveFocus();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onClose).toHaveBeenCalledTimes(1);
     fireEvent.pointerDown(screen.getByTestId('queue-drawer-backdrop'));
@@ -95,6 +95,26 @@ describe('QueueDrawer', () => {
     unmount();
     expect(opener).toHaveFocus();
     opener.remove();
+  });
+
+  test('toggles shuffle without changing the current track and restores queue order', () => {
+    const store = createPlayerStore({ activityRepository: null, likedRepository: null, random: () => 0 });
+    const tracks = queueTracks(4);
+    store.setState({ musicQueue: tracks, musicQueueIndex: 1, shuffle: false });
+    const onClose = vi.fn();
+    render(<PlayerProvider store={store}><QueueDrawer open onClose={onClose} /></PlayerProvider>);
+
+    const button = screen.getByRole('button', { name: 'Shuffle' });
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(button);
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    expect(store.getState().musicQueue).not.toEqual(tracks);
+    expect(store.getState().musicQueue[store.getState().musicQueueIndex].mediaId).toBe('audio-1');
+    fireEvent.click(button);
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(store.getState().musicQueue).toEqual(tracks);
+    expect(store.getState().musicQueueIndex).toBe(1);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   test('renders a bounded window around the current item', () => {

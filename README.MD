@@ -1,14 +1,20 @@
-# Muzio 1.4.6
+# Muzio 1.4.7
 
 Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 브라우저에서 탐색하고 재생하는 경량 self-hosted 미디어 앱입니다.
+
+## 음악 동기화 (1.4.7)
+
+같은 서버에 연결한 웹·Android·iPhone/iPad·Mac에서 좋아요와 플레이리스트(곡·이름·순서)를 공유합니다. 같은 추가/삭제를 여러 기기가 보내도 한 번만 적용하며, 오래된 반대 요청은 현재 서버 상태를 덮어쓰지 않습니다. 최초 연결 시 기존 데이터를 합치고, 오프라인 변경은 재연결 때 전송합니다. 기기 전용 `local:` 식별자는 해당 기기에 남습니다.
+
+변경은 약200ms 후 전송하고, 열린 화면은15초 간격 및 앱 복귀 때 갱신합니다. 변경이 없으면304 응답만 받습니다. 서버 저장 파일은 config와 같은 폴더의 `music-sync.v1.json`입니다. 세부 규칙과 플랫폼별 검증 결과는 [1.4.7 변경 기록](update_1.4.7.md)을 참고하세요.
 
 ## Current State
 
 | Item | Current contract |
 | --- | --- |
 | Product/service name | `Muzio` |
-| Version | `1.4.6` |
+| Version | `1.4.7` |
 | Primary client | React + TypeScript web app |
 | Backend | Go `1.22`, CGO-free |
 | Normal runtime | Go server가 API, media, `web_app/dist`를 한 origin에서 제공 |
@@ -77,13 +83,17 @@ Android 설정에서 로컬 음악 폴더를 추가하면 네트워크 음악과
 `1.4.6`은 iPhone·iPad·Mac용 Apple 앱을 추가합니다. `WKWebView`가 선택한
 서버의 현재 웹 UI를 표시하고, 음악은 `AVPlayer`와 시스템 미디어 제어를
 연결합니다. UI를 앱에 묶는 Android와 달리 Apple 앱은 서버에 배포한 UI를
-사용하므로 첫 연결과 화면 로딩에 서버가 필요합니다. Apple 로컬 폴더·위젯·
-재생 큐의 전체 프로세스 복구는 아직 지원하지 않습니다.
+사용하므로 첫 연결과 화면 로딩에 서버가 필요합니다. Apple도 로컬 폴더 연결,
+목록 선표시와 메타데이터/썸네일 후속 갱신을 지원합니다. 위젯·오프라인 화면의
+콜드 실행·재생 큐의 전체 프로세스 복구는 아직 지원하지 않습니다.
 
-Mac 앱은 빌드/실행 및 테스트 음원 재생 검증을 완료했습니다. iPhone·iPad는
-공용 소스와 Xcode 타깃을 준비했으며, Xcode/iOS SDK와 서명 설정 후 빌드·
-실기기 검증이 남아 있습니다. [Apple 앱 빌드 및 지원 범위](ios_app/README.md)를
-참조하세요. Android 1.4.5는 versionCode13 설치 대기로 마감했습니다.
+개발 중인 `1.4.7`은 웹 컨트롤을 유지하면서 Apple 영상에 VLC를 연결합니다.
+Mac은 VLCKit 3.7.3, iPhone/iPad는 4.0.0-a24를 사용합니다. Mac 일반 실행 앱의
+영상 재생과 수정본 iPad의 기본 영상·소리 출력을 확인했습니다. iPad의 실제
+A→B→A·장시간·자동 PiP, iPhone 및 Android 후속 패치의 실기기 검증은 남아 있습니다.
+표시 버전은 웹·Android·iOS·macOS 모두1.4.7입니다. 검증·배포 및 남은 실기기 확인은 [1.4.7 변경 기록](update_1.4.7.md)을 따릅니다.
+[현재 개발·검증 상태](update_1.4.7.md)와 [Apple 빌드·지원 범위](ios_app/README.md)를
+참조하세요. 이전 릴리스의 산출물·검증 기록은 해당 update 문서에 보존합니다.
 
 ## Source Of Truth
 
@@ -333,8 +343,10 @@ of the package metadata and real-device acceptance evidence.
 on shutdown with a bounded deadline. Corrupt JSON starts with an empty progress
 store and a warning; filesystem permission errors remain fatal.
 
-Browser storage owns likes, playlists, activity analytics, appearance fallback,
-and local resume state. Playback activity is memory-cached and writes progress
+Browser storage caches shared likes/playlists and their pending sync operations.
+The server persists their shared state in `music-sync.v1.json`. Activity analytics,
+appearance fallback, and local resume state remain in browser storage. Playback
+activity is memory-cached and writes progress
 at most every `10 s`, plus terminal/lifecycle flushes.
 
 Do not treat saved browser metadata as local-file read permission. For mobile

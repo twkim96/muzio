@@ -6,9 +6,11 @@ enum NativeVideoSourcePolicy {
               var parts = URLComponents(url: resolved, resolvingAgainstBaseURL: false), let url = parts.url,
               url.user == nil, url.password == nil else { throw HostError.message("올바르지 않은 영상 주소입니다.") }
         var path = parts.percentEncodedPath
+        var currentProxy = false
         if let proxyBase, let prefix = URLComponents(url: proxyBase, resolvingAgainstBaseURL: false)?.percentEncodedPath,
            ServerPolicy.sameOrigin(url, proxyBase), path.hasPrefix(prefix) {
             path = "/" + path.dropFirst(prefix.count)
+            currentProxy = true
         } else if !ServerPolicy.sameOrigin(url, origin) {
             throw HostError.message("연결된 서버의 영상만 재생할 수 있습니다.")
         }
@@ -19,6 +21,9 @@ enum NativeVideoSourcePolicy {
             throw HostError.message("지원하지 않는 영상 경로입니다.")
         }
         parts.fragment = nil
+        // The cache listens on IPv4. Keep localhost exposed to WebKit, but give
+        // VLC the actual listener address after checking the current origin/token.
+        if currentProxy && parts.host == "localhost" { parts.host = "127.0.0.1" }
         return parts.url!
     }
 }

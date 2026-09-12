@@ -29,6 +29,7 @@ export function VirtualizedLibraryList({
   selectionMode = false,
   selectionAnchorId,
   onAddSelection,
+  onQueueSelection,
   onClearSelection,
 }: {
   items: readonly LibraryItem[];
@@ -39,11 +40,27 @@ export function VirtualizedLibraryList({
   selectionMode?: boolean;
   selectionAnchorId?: string;
   onAddSelection?: () => void;
+  onQueueSelection?: () => void;
   onClearSelection?: () => void;
 }) {
   const listRef = useRef<HTMLUListElement | null>(null);
   const frameRef = useRef<number | null>(null);
-  const rowHeight = useLibraryRowHeight(items[0]?.type);
+  const compactRowHeight = useLibraryRowHeight(items[0]?.type);
+  const videoCards = items[0]?.type === 'video';
+  const [listWidth, setListWidth] = useState(() => typeof window === 'undefined' ? 1024 : Math.max(1, window.innerWidth - 32));
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list || !videoCards) return;
+    const measure = () => setListWidth(list.getBoundingClientRect().width || Math.max(1, window.innerWidth - 32));
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(list);
+    window.addEventListener('resize', measure);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', measure); };
+  }, [videoCards]);
+  const columns = videoCards ? Math.max(1, Math.floor((listWidth + 24) / 344)) : 1;
+  const cardWidth = (listWidth - (columns - 1) * 24) / columns;
+  const rowHeight = videoCards ? Math.ceil(cardWidth * 9 / 16) + 112 : compactRowHeight;
   const overscanRows =
     items[0]?.type === 'image' ? IMAGE_OVERSCAN_ROWS : OVERSCAN_ROWS;
   const [range, setRange] = useState<VisibleRange>(() =>
@@ -62,11 +79,11 @@ export function VirtualizedLibraryList({
     const viewportTop = window.scrollY;
     const viewportBottom = viewportTop + window.innerHeight;
     const start = clampIndex(
-      Math.floor((viewportTop - listTop) / rowHeight) - overscanRows,
+      (Math.floor((viewportTop - listTop) / rowHeight) - overscanRows) * columns,
       items.length,
     );
     const end = clampIndex(
-      Math.ceil((viewportBottom - listTop) / rowHeight) + overscanRows,
+      (Math.ceil((viewportBottom - listTop) / rowHeight) + overscanRows) * columns,
       items.length,
     );
 
@@ -75,7 +92,7 @@ export function VirtualizedLibraryList({
         ? current
         : { start, end: Math.max(start, end) },
     );
-  }, [items.length, overscanRows, rowHeight]);
+  }, [items.length, overscanRows, rowHeight, columns]);
 
   const scheduleRangeUpdate = useCallback(() => {
     if (
@@ -112,12 +129,12 @@ export function VirtualizedLibraryList({
 
   const safeRange = useMemo(() => {
     if (items.length === 0) return { start: 0, end: 0 };
-    const start = Math.min(range.start, items.length - 1);
+    const start = Math.floor(Math.min(range.start, items.length - 1) / columns) * columns;
     const end = Math.min(Math.max(range.end, start + 1), items.length);
     return { start, end };
-  }, [items.length, range.end, range.start]);
+  }, [items.length, range.end, range.start, columns]);
   const visibleItems = items.slice(safeRange.start, safeRange.end);
-  const totalHeight = items.length * rowHeight;
+  const totalHeight = Math.ceil(items.length / columns) * rowHeight;
 
   return (
     <ul
@@ -126,6 +143,8 @@ export function VirtualizedLibraryList({
       data-total-count={items.length}
       data-rendered-count={visibleItems.length}
       data-row-height={rowHeight}
+      data-columns={columns}
+      data-layout={videoCards ? "video-cards" : "rows"}
       className="relative"
       style={{ height: totalHeight }}
     >
@@ -135,6 +154,7 @@ export function VirtualizedLibraryList({
           <LibraryItemRow
             key={item.id}
             item={item}
+            videoCard={videoCards}
             onLongPress={onLongPressItem}
             onOpenAddToPlaylist={onOpenAddToPlaylist}
             onToggleSelected={onToggleSelected}
@@ -143,15 +163,17 @@ export function VirtualizedLibraryList({
             selectionMode={selectionMode}
             showSelectionActions={selectionMode && item.id === selectionAnchorId}
             selectionCount={item.id === selectionAnchorId ? selectedIds.size : 0}
+            onQueueSelection={onQueueSelection}
             onAddSelection={onAddSelection}
             onClearSelection={onClearSelection}
             style={{
-              height: rowHeight,
-              left: 0,
+              height: videoCards ? rowHeight - 24 : rowHeight,
+              width: videoCards ? cardWidth : undefined,
+              left: videoCards ? (index % columns) * (cardWidth + 24) : 0,
               position: 'absolute',
-              right: 0,
+              right: videoCards ? undefined : 0,
               top: 0,
-              transform: `translateY(${index * rowHeight}px)`,
+              transform: `translateY(${Math.floor(index / columns) * rowHeight}px)`,
             }}
           />
         );

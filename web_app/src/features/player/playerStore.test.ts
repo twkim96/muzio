@@ -725,6 +725,39 @@ describe('playSource', () => {
   });
 });
 
+describe('appendMusicQueue', () => {
+  test('appends distinct entries in order without changing playback or shuffle restoration', async () => {
+    const session = makeFakeSession();
+    const store = createPlayerStore({ createSession: () => session, createEngine: () => fakeEngine() });
+    store.getState().attachElement('audio', fakeElement());
+    const second = { ...audioSource, mediaId: 'a2', url: '/api/media/a2' };
+    await store.getState().playMusicQueue([audioSource, second], 'a2');
+    store.getState().toggleShuffle();
+    const before = store.getState();
+    const loadCalls = session.calls.load.mock.calls.length;
+    store.getState().appendMusicQueue([before.musicQueue[before.musicQueueIndex], audioSource]);
+    const after = store.getState();
+    expect(after.musicQueue.slice(-2).map(s => s.mediaId)).toEqual(['a2', 'a1']);
+    expect(new Set(after.musicQueue.map(s => s.queueEntryId)).size).toBe(4);
+    expect(after.musicQueueIndex).toBe(before.musicQueueIndex);
+    expect(after.audio).toBe(before.audio);
+    expect(session.calls.load).toHaveBeenCalledTimes(loadCalls);
+    store.getState().toggleShuffle();
+    expect(store.getState().musicQueue.map(s => s.mediaId)).toEqual(['a1', 'a2', 'a2', 'a1']);
+  });
+
+  test('fills an empty queue without starting playback and ignores non-audio input', () => {
+    const store = createPlayerStore();
+    store.getState().appendMusicQueue([videoSource]);
+    expect(store.getState().musicQueue).toEqual([]);
+    store.getState().appendMusicQueue([audioSource, audioSource]);
+    expect(store.getState().musicQueue).toHaveLength(2);
+    expect(store.getState().musicQueueIndex).toBe(0);
+    expect(store.getState().active).toBeNull();
+    expect(store.getState().audio.source).toBeNull();
+  });
+});
+
 describe('playMusicQueue', () => {
   test('loads the selected track and stores the queue', async () => {
     const session = makeFakeSession();

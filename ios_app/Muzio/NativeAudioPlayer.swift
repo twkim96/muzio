@@ -49,6 +49,7 @@ final class NativeAudioPlayer: NSObject {
     private var notifications: [NSObjectProtocol] = []
     private var itemNotifications: [NSObjectProtocol] = []
     private var remoteTargets: [(MPRemoteCommand, Any)] = []
+    var onAcquirePlayback: (() -> Void)?
     private var ownsAudio = false
 
     init(origin: URL, resolveLocal: ((String) throws -> NativeAudioLocalAccess)? = nil, feedbackStore: AppleNotificationLikeStore? = nil, artworkProvider: ((String) throws -> Data?)? = nil, onEvent: @escaping ([String: Any]) -> Void) {
@@ -146,7 +147,7 @@ final class NativeAudioPlayer: NSObject {
         #endif
     }
 
-    /// Yield media-session ownership to WK video playback without disturbing its
+    /// Yield media-session ownership to video playback without disturbing its
     /// Now Playing metadata or another engine's shared command configuration.
     func relinquishForVideo() {
         guard !disposed else { return }
@@ -159,6 +160,7 @@ final class NativeAudioPlayer: NSObject {
     }
 
     private func acquireAudioOwnership() {
+        onAcquirePlayback?()
         guard !ownsAudio else { return }
         ownsAudio = true
         installRemoteCommands()
@@ -455,6 +457,8 @@ final class NativeAudioPlayer: NSObject {
     private func installRemoteCommands() {
         guard remoteTargets.isEmpty else { return }
         let center = MPRemoteCommandCenter.shared()
+        center.skipBackwardCommand.isEnabled = false
+        center.skipForwardCommand.isEnabled = false
         addRemote(center.likeCommand) { engine in
             guard let key = engine.current?["notificationLikeKey"] as? String, !key.isEmpty else { return }
             try engine.feedbackStore?.toggle(key)

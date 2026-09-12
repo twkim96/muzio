@@ -36,6 +36,7 @@ interface SourceGeneration {
   readonly originalSource: PlaybackSource;
   usedIndexProxy: boolean;
   becameReady: boolean;
+  failed: boolean;
   replacement?: SourceGeneration;
   playTask?: Promise<void>;
   readonly ready: Promise<boolean>;
@@ -147,6 +148,7 @@ export function createVidstackEngine(
   let pendingInternalSeekTargetSec: number | null = null;
   let released = false;
   let wantsPlay = false;
+  let lastResumeRetryAt = 0;
 
   const nativeMedia = () =>
     (
@@ -265,7 +267,7 @@ export function createVidstackEngine(
   };
   const applyGenerationStart = (
     generation: SourceGeneration,
-    reason: 'before_play' | 'after_play',
+    reason: 'before_play' | 'after_play' | 'provider_progress',
   ) => {
     if (!generation.resumeTargetActive) return;
     const startSec = mediaFragmentStartSec(generation.source);
@@ -282,12 +284,12 @@ export function createVidstackEngine(
       return;
     }
     if (
-      reason === 'after_play' &&
+      reason !== 'before_play' &&
       previousPositionSec < startSec - 0.5 &&
       previousPositionSec > 1 &&
       previousPositionSec >= startSec - 2
     ) {
-      record('resume_target_after_play_kept_position', {
+      record(`resume_target_${reason}_kept_position`, {
         previousPositionSec,
         targetPositionSec: startSec,
       });
@@ -318,18 +320,25 @@ export function createVidstackEngine(
     originalSource: PlaybackSource,
     usedIndexProxy: boolean,
   ) => {
+    const previous = activeGeneration;
+    // Vidstack can reuse an identical pending source without another source-change.
+    // Preserve only the identity actually observed; changed fragments and retries
+    // must establish their own source again when currentSrc is unavailable.
+    const sourceObserved = !!previous?.sourceObserved && !previous.becameReady && !previous.failed &&
+      previous.source.url === transportSource.url && previous.source.mediaId === transportSource.mediaId;
     activeGeneration?.settleReady(false);
     sourceGeneration += 1;
     seekGeneration = 0;
     pendingInternalSeekTargetSec = null;
     lastDurationSec = 0;
     lastTimePositionSec = null;
+    lastResumeRetryAt = 0;
     let finishReady = (_ready: boolean) => {};
     let settled = false;
     const ready = new Promise<boolean>((resolve) => { finishReady = resolve; });
     const generation: SourceGeneration = {
-      source: transportSource, originalSource, usedIndexProxy, becameReady: false,
-      commit: commitSource(transportSource), ready, sourceObserved: false,
+      source: transportSource, originalSource, usedIndexProxy, becameReady: false, failed: false,
+      commit: commitSource(transportSource), ready, sourceObserved,
       resumeTargetActive: true, resumeTargetReached: false,
       settleReady(value) {
         if (settled) return;
@@ -376,6 +385,18 @@ export function createVidstackEngine(
     generation.playTask = task;
     void task.then(() => { generation.playTask = undefined; }, () => { generation.playTask = undefined; });
     return task;
+  };
+
+  // can-play can precede a usable seekable range (notably cold Android
+  // WebView loads). Keep the target until provider time confirms it, and retry
+  // on provider progress instead of assuming a currentTime assignment succeeded.
+  const retryPendingResume = () => {
+    const generation = activeGeneration;
+    if (!wantsPlay || !generation?.becameReady || !generation.resumeTargetActive) return;
+    const now = Date.now();
+    if (now - lastResumeRetryAt < 250) return;
+    lastResumeRetryAt = now;
+    applyGenerationStart(generation, 'provider_progress');
   };
 
   const handlers: Record<string, EventListener> = {
@@ -442,6 +463,15 @@ export function createVidstackEngine(
       if (!activeGenerationAcceptsSourceEvent('waiting')) return;
       emit({ kind: 'waiting' });
     },
+    'media-seek-request': (event) => {
+      const generation = activeGeneration;
+      const target = eventDetailNumber(event, 'currentTime');
+      if (generation?.resumeTargetActive && target !== null &&
+          Math.abs(target - mediaFragmentStartSec(generation.source)) > 0.5) {
+        generation.resumeTargetActive = false;
+        pendingInternalSeekTargetSec = null;
+      }
+    },
     seeking: () => {
       if (!activeGenerationAcceptsSourceEvent('seeking')) return;
       const positionSec = finiteSeconds(player.currentTime);
@@ -450,6 +480,13 @@ export function createVidstackEngine(
       const isInternalSeek =
         internalTargetSec !== null &&
         Math.abs(positionSec - internalTargetSec) <= 0.5;
+      // A startup seek clamped to zero is not a user request to restart.
+      // Explicit UI seeks are handled above; store seeks are handled by seek().
+      if (generation?.resumeTargetActive && internalTargetSec !== null &&
+          internalTargetSec > 0 && positionSec === 0) {
+        record('resume_target_waiting_for_seekable', { targetPositionSec: internalTargetSec });
+        return;
+      }
       pendingInternalSeekTargetSec = null;
       if (generation !== null && generation.resumeTargetActive) {
         const resumeTargetSec = mediaFragmentStartSec(generation.source);
@@ -481,6 +518,7 @@ export function createVidstackEngine(
     },
     progress: () => {
       if (!activeGenerationAcceptsSourceEvent('progress')) return;
+      retryPendingResume();
       emit({ kind: 'progress' });
     },
     suspend: () => {
@@ -493,10 +531,12 @@ export function createVidstackEngine(
     },
     'time-change': (event) => {
       if (!activeGenerationAcceptsSourceEvent('time-change')) return;
+      retryPendingResume();
       emitTime(event, 'currentTime');
     },
     'time-update': (event) => {
       if (!activeGenerationAcceptsSourceEvent('time-update')) return;
+      retryPendingResume();
       emitTime(event, 'currentTime');
     },
     ended: () => {
@@ -513,6 +553,7 @@ export function createVidstackEngine(
         ) {
           return;
         }
+        generation.failed = true;
         if (generation.usedIndexProxy) {
           // Older WebKit versions may reject HTTPS -> loopback video. Restore
           // the direct URL once, retaining both the session and resume target.
@@ -606,6 +647,7 @@ export function createVidstackEngine(
         generation.resumeTargetActive &&
         resumeTargetSec > 0
       ) {
+        pendingInternalSeekTargetSec = positionSec;
         record('resume_target_immediate_seek', {
           previousPositionSec,
           targetPositionSec: positionSec,

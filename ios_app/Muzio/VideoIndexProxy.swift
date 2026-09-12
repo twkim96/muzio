@@ -212,7 +212,8 @@ final class VideoIndexProxy {
                     guard let self, let listener else { return }
                     switch state {
                     case .ready:
-                        if !reported { reported = true; completion(listener.port.flatMap { URL(string: "http://127.0.0.1:\($0.rawValue)/\(self.token)/") }) }
+                        // Older WebKit allows localhost media from HTTPS pages but blocks numeric loopback IPs.
+                        if !reported { reported = true; completion(listener.port.flatMap { URL(string: "http://localhost:\($0.rawValue)/\(self.token)/") }) }
                     case .failed, .cancelled:
                         if !reported { reported = true; completion(nil) }
                     default: break

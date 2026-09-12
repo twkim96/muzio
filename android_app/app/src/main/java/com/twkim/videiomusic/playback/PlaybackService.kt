@@ -17,6 +17,9 @@ import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.AdtsExtractor
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaNotification
+import androidx.core.app.NotificationCompat
+import androidx.core.graphics.drawable.IconCompat
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.CommandButton
 import androidx.media3.session.SessionCommand
@@ -58,6 +61,46 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
     }
     private lateinit var player: ExoPlayer
     private var mediaSession: MediaSession? = null
+    private var videoSession: MediaSession? = null
+    private var webVideo: WebVideoSessionPlayer? = null
+    private val videoOwner = VideoSessionOwner()
+
+    override fun updateVideo(owner: Any, payload: org.json.JSONObject, command: (org.json.JSONObject) -> Unit) {
+        if (!payload.optBoolean("active") || payload.optJSONObject("source") == null) { releaseVideo(owner); return }
+        if (!videoOwner.owns(owner)) releaseVideo(null)
+        videoOwner.claim(owner)
+        if (webVideo == null) {
+            player.pause()
+            mediaSession?.let { removeSession(it) }
+            webVideo = WebVideoSessionPlayer()
+            videoSession = MediaSession.Builder(this, webVideo!!)
+                .setId("web-video")
+                .setMediaButtonPreferences(listOf(
+                    CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10).setDisplayName("Back 10 seconds")
+                        .setPlayerCommand(Player.COMMAND_SEEK_BACK).setSlots(CommandButton.SLOT_BACK).build(),
+                    CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_10).setDisplayName("Forward 10 seconds")
+                        .setPlayerCommand(Player.COMMAND_SEEK_FORWARD).setSlots(CommandButton.SLOT_FORWARD).build(),
+                ))
+                .setSessionActivity(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)).build()
+            addSession(videoSession!!)
+        }
+        webVideo!!.dispatch = command
+        webVideo!!.update(payload)
+    }
+
+    override fun releaseVideo(owner: Any?) {
+        if (!videoOwner.release(owner)) return
+        // A web state clear already describes its playback transition. Sending
+        // Pause back here can cancel a same-video reload before its first Play.
+        // Only an explicit native music takeover needs to stop the web decoder.
+        if (owner == null) webVideo?.pause()
+        webVideo?.dispatch = null
+        videoSession?.let { removeSession(it); it.release() }
+        videoSession = null
+        webVideo?.release(); webVideo = null
+        mediaSession?.let { addSession(it) }
+    }
     private var lastSample: ProgressSample? = null
     private var lastSyncedAtMs = 0L
     private var progressLoop: Job? = null
@@ -90,8 +133,35 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
         publishVolumeState()
         val openApp = PendingIntent.getActivity(this, 0,
             Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        openQueue = createQueueIntent()
         if (Build.VERSION.SDK_INT < 33) {
             setMediaNotificationProvider(object : DefaultMediaNotificationProvider(this) {
+                override fun addNotificationActions(
+                    mediaSession: MediaSession,
+                    mediaButtons: ImmutableList<CommandButton>,
+                    builder: NotificationCompat.Builder,
+                    actionFactory: MediaNotification.ActionFactory,
+                ): IntArray = super.addNotificationActions(
+                    mediaSession, mediaButtons, builder,
+                    object : MediaNotification.ActionFactory by actionFactory {
+                        override fun createCustomActionFromCustomCommandButton(
+                            mediaSession: MediaSession,
+                            customCommandButton: CommandButton,
+                        ): NotificationCompat.Action {
+                            if (customCommandButton.sessionCommand?.customAction != ACTION_QUEUE) {
+                                return actionFactory.createCustomActionFromCustomCommandButton(mediaSession, customCommandButton)
+                            }
+                            // Notification taps must launch the Activity directly. Sending an
+                            // activity intent from the service is a blocked notification trampoline.
+                            return NotificationCompat.Action.Builder(
+                                IconCompat.createWithResource(this@PlaybackService, customCommandButton.iconResId),
+                                customCommandButton.displayName,
+                                openQueue,
+                            ).build()
+                        }
+                    },
+                )
+
                 override fun getMediaButtons(
                     session: MediaSession,
                     playerCommands: Player.Commands,
@@ -114,7 +184,6 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
                 }
             })
         }
-        openQueue = createQueueIntent()
         mediaSession = MediaSession.Builder(this, player)
             .setSessionActivity(openApp)
             .setCallback(sessionCallback)
@@ -134,15 +203,17 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
         }
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
+        if (controllerInfo.packageName == packageName) mediaSession else videoSession ?: mediaSession
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         sync(sampleCurrent())
-        if (!player.playWhenReady || player.mediaItemCount == 0) stopSelf()
+        if (videoSession == null && (!player.playWhenReady || player.mediaItemCount == 0)) stopSelf()
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
+        releaseVideo(null)
         sync(sampleCurrent())
         progressLoop?.cancel()
         likePreferences.unregisterOnSharedPreferenceChangeListener(likePreferenceListener)
@@ -200,6 +271,7 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
         ): ListenableFuture<SessionResult> {
             val result = when (customCommand.customAction) {
                 ACTION_QUEUE -> runCatching {
+                    PlaybackRuntime.notificationQueue.request()
                     val options = ActivityOptions.makeBasic().apply {
                         if (Build.VERSION.SDK_INT >= 36) {
                             setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOW_ALWAYS)

@@ -12,6 +12,7 @@ func require(_ condition: @autoclosure () -> Bool, _ message: String) throws {
         let proxy = try VideoIndexProxy(origin: origin, cacheRoot: cacheRoot)
         let base: URL? = await withCheckedContinuation { continuation in proxy.start { continuation.resume(returning: $0) } }
         guard let base else { fatalError("proxy did not start") }
+        try require(base.host == "localhost", "HTTPS WebKit requires the localhost compatibility hostname")
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 10
         let session = URLSession(configuration: config)

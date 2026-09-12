@@ -3,9 +3,9 @@ import { configureAndroidShell } from '../../core/platform/androidShell';
 import { connectNativeVideoSurface } from './nativeVideoSurface';
 import { nativeVideoFullscreenActive, setNativeVideoFullscreen } from './nativeVideoFullscreen';
 afterEach(() => { configureAndroidShell(null); document.body.innerHTML = ''; vi.restoreAllMocks(); });
-it('clears only the video backdrop, hides the underlying route, clips sticky overlap and restores on disposal', () => {
+it.each(['ios', 'macos'] as const)('%s clears only the video backdrop, hides the underlying route, clips sticky overlap and restores on disposal', (platform) => {
   const request = vi.fn().mockResolvedValue({});
-  configureAndroidShell({ platform: 'ios', capabilities: { nativeVideo: true }, request });
+  configureAndroidShell({ platform, capabilities: { nativeVideo: true }, request });
   vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
   vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
   document.body.innerHTML = `<div id="root"><div id="route">Library</div><div data-testid="player-screen"><div id="viewport"><div id="surface"><div data-media-player><button>Play</button></div></div></div><section data-testid="video-info">Info</section></div></div>`;
@@ -32,9 +32,12 @@ it('leaves ordinary web and Android rendering untouched', () => {
   expect(request).not.toHaveBeenCalled();
 });
 
-it('moves the same player through enter, exit, reenter and Escape, then restores all background state on disposal', () => {
+it.each(['ios', 'macos'] as const)('%s moves the same player through enter, exit, reenter and Escape, then restores all background state on disposal', (platform) => {
   const request = vi.fn().mockResolvedValue({});
-  configureAndroidShell({ platform: 'ios', capabilities: { nativeVideo: true }, request });
+  let receiveHost = (_event: { type: string; state?: unknown }) => {};
+  configureAndroidShell({ platform, capabilities: { nativeVideo: true }, request,
+    subscribe(listener) { receiveHost = listener; return () => {}; },
+  });
   let tick: FrameRequestCallback = () => {};
   vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => { tick = callback; return 1; });
   vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
@@ -73,6 +76,9 @@ it('moves the same player through enter, exit, reenter and Escape, then restores
     expect(route).toHaveAttribute('data-native-video-covered');
   };
   enter();
+  receiveHost({ type: 'videoFullscreen', state: { active: false } });
+  expectInline();
+  enter();
   setNativeVideoFullscreen(player, false);
   expectInline();
   enter();
@@ -94,6 +100,6 @@ it('moves the same player through enter, exit, reenter and Escape, then restores
   expect(root.parentElement).toBe(home);
   expect(document.querySelector('[data-native-video-clear], [data-native-video-covered], [data-native-video-expanded]')).toBeNull();
   expect(setNativeVideoFullscreen(player, true)).toBe(false);
-  expect(request.mock.calls.filter(([command]) => command === 'video.fullscreen').map(([, payload]) => payload.active)).toEqual([true, false, true, false, true, false, true, false]);
+  expect(request.mock.calls.filter(([command]) => command === 'video.fullscreen').map(([, payload]) => payload.active)).toEqual([true, false, true, false, true, false, true, false, true, false]);
   expect(request).toHaveBeenLastCalledWith('video.frame', { visible: false });
 });

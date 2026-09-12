@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { MUSIC_SYNC_EVENT } from '../../core/storage/musicSync';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 import {
   createLocalStoragePlaylistRepository,
@@ -33,6 +34,12 @@ export function PlaylistProvider({
   const [playlists, setPlaylists] = useState<PlaylistRecord[]>(() =>
     playlistRepository.list(),
   );
+
+  useEffect(() => {
+    const refresh = () => setPlaylists(playlistRepository.list());
+    window.addEventListener(MUSIC_SYNC_EVENT, refresh);
+    return () => window.removeEventListener(MUSIC_SYNC_EVENT, refresh);
+  }, [playlistRepository]);
 
   const replace = (next: PlaylistRecord[]) => {
     setPlaylists(next);

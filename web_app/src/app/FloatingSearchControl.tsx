@@ -8,11 +8,13 @@ export function FloatingSearchControl({
   query,
   title,
   renderPreview,
+  openRequest,
 }: {
   onQueryChange: (query: string) => void;
   query: string;
   title: string;
   renderPreview?: (close: () => void) => ReactNode;
+  openRequest?: string;
 }) {
   const popoverHost = useSearchPopoverHost();
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -20,6 +22,8 @@ export function FloatingSearchControl({
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const controlRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => { if (openRequest) setOpen(true); }, [openRequest]);
 
   const close = () => {
     setOpen(false);

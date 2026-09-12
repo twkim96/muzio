@@ -35,7 +35,7 @@ struct RootScreen: View {
         ZStack {
             host.appearanceColor.ignoresSafeArea()
             if let web = host.webView {
-                BrowserSurface(web: web).id(ObjectIdentifier(web))
+                BrowserSurface(web: web, video: host.video).id(ObjectIdentifier(web))
                 if host.loading { ProgressView().padding(12).background(.regularMaterial, in: Capsule()).frame(maxHeight: .infinity, alignment: .top).padding(.top, 8) }
                 if !host.loadError.isEmpty {
                     VStack(spacing: 16) {
@@ -88,9 +88,11 @@ struct ServerScreen: View {
 #if os(iOS)
 struct BrowserSurface: UIViewRepresentable {
     let web: WKWebView
+    let video: VLCVideoPlayer?
     func makeUIView(context: Context) -> UIView {
         let container = UIView()
         web.translatesAutoresizingMaskIntoConstraints = false
+        if let video { container.addSubview(video.surface) }
         container.addSubview(web)
         NSLayoutConstraint.activate([web.leadingAnchor.constraint(equalTo: container.leadingAnchor), web.trailingAnchor.constraint(equalTo: container.trailingAnchor), web.topAnchor.constraint(equalTo: container.topAnchor), web.bottomAnchor.constraint(equalTo: container.bottomAnchor)])
         return container
@@ -99,12 +101,16 @@ struct BrowserSurface: UIViewRepresentable {
 }
 
 #else
-// An explicit container keeps WebKit fullscreen resizing independent of SwiftUI layout.
+private final class FlippedBrowserContainer: NSView { override var isFlipped: Bool { true } }
+
+// Web geometry uses a top-left origin on both Apple hosts.
 struct BrowserSurface: NSViewRepresentable {
     let web: WKWebView
+    let video: VLCVideoPlayer?
     func makeNSView(context: Context) -> NSView {
-        let container = NSView()
+        let container = FlippedBrowserContainer()
         web.translatesAutoresizingMaskIntoConstraints = false
+        if let video { container.addSubview(video.surface) }
         container.addSubview(web)
         NSLayoutConstraint.activate([web.leadingAnchor.constraint(equalTo: container.leadingAnchor), web.trailingAnchor.constraint(equalTo: container.trailingAnchor), web.topAnchor.constraint(equalTo: container.topAnchor), web.bottomAnchor.constraint(equalTo: container.bottomAnchor)])
         return container

@@ -4,6 +4,7 @@ export interface NativeCapabilities {
   localLibrary?: boolean;
   nativeAudio?: boolean;
   nativeVideo?: boolean;
+  nativeVideoSession?: boolean;
   notificationLikes?: boolean;
   playbackHistory?: boolean;
 }

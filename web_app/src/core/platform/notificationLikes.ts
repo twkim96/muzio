@@ -6,9 +6,9 @@ type Snapshot = { pending: Change[] };
 
 /** Mirror web likes to the service; replay durable notification edits before syncing. */
 export function connectNotificationLikes(store: PlayerStoreApi, bridge: NativeBridge | null) {
-  if (!bridge || (bridge.platform && bridge.platform !== 'android' && !bridge.capabilities?.notificationLikes)) return () => {};
+  if (!bridge || (bridge.platform && bridge.platform !== 'android' && !bridge.capabilities?.notificationLikes)) return Object.assign(() => {}, { flush: async () => {} });
   let disposed = false;
-  let running = false;
+  let running: Promise<void> | undefined;
   let dirty = false;
   const applied = new Set<string>();
   const apply = (snapshot: Snapshot) => {
@@ -23,10 +23,11 @@ export function connectNotificationLikes(store: PlayerStoreApi, bridge: NativeBr
     }
     return acknowledged;
   };
-  const reconcile = async () => {
+  const reconcile = (): Promise<void> => {
     dirty = true;
-    if (running || disposed) return;
-    running = true;
+    if (disposed) return Promise.resolve();
+    if (running) return running;
+    running = (async () => {
     try {
       while (dirty && !disposed) {
         dirty = false;
@@ -44,7 +45,9 @@ export function connectNotificationLikes(store: PlayerStoreApi, bridge: NativeBr
     } catch {
       // Older installed shells do not expose this optional command. A later
       // resume/change retries without changing playback state or losing likes.
-    } finally { running = false; }
+    } finally { running = undefined; }
+    })();
+    return running;
   };
   const unsubscribe = store.subscribe((next, previous) => {
     if (next.likedMediaIds !== previous.likedMediaIds) void reconcile();
@@ -56,5 +59,5 @@ export function connectNotificationLikes(store: PlayerStoreApi, bridge: NativeBr
   const resume = () => { void reconcile(); };
   window.addEventListener('muzio-resume', resume);
   void reconcile();
-  return () => { disposed = true; unsubscribe(); unsubscribeBridge(); window.removeEventListener('muzio-resume', resume); };
+  return Object.assign(() => { disposed = true; unsubscribe(); unsubscribeBridge(); window.removeEventListener('muzio-resume', resume); }, { flush: reconcile });
 }
