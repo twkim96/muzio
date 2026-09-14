@@ -1,4 +1,4 @@
-import { act, render, screen, fireEvent } from '@testing-library/react';
+import { act, cleanup, render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -716,4 +716,24 @@ describe('mini title presentation', () => {
     expect(screen.queryByTestId('mini-timer-popover')).not.toBeInTheDocument();
     expect(store.getState().sleepTimer.kind).toBe('running');
   });
+});
+
+
+test('mini-player reads the shared HLS frame and retries when a later thumbnail arrives', async () => {
+  vi.useFakeTimers();
+  const store = createPlayerStore();
+  const source = { ...videoSource, transient: true, mediaId: 'shared-hls' };
+  store.getState().setSessionForTests('video', fakeSession({ status: { kind: 'playing' }, source, positionSec: 20, durationSec: 100 }));
+  const fetcher = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({items:[{id:'shared-hls',thumbnailUrl:'/api/hls-cache/shared/thumbnail.jpg?v=1'}]})));
+  renderWithStore(store);
+  try {
+    await act(async()=>{await vi.advanceTimersByTimeAsync(1)});
+    const image = screen.getByTestId('mini-player-artwork');
+    expect(image).toHaveAttribute('src','/api/hls-cache/shared/thumbnail.jpg?v=1');
+    fireEvent.error(image);expect(screen.queryByTestId('mini-player-artwork')).toBeNull();
+    fetcher.mockResolvedValue(new Response(JSON.stringify({items:[{id:'shared-hls',thumbnailUrl:'/api/hls-cache/shared/thumbnail.jpg?v=2'}]})));
+    await act(async()=>{await vi.advanceTimersByTimeAsync(10_000)});
+    expect(screen.getByTestId('mini-player-artwork')).toHaveAttribute('src','/api/hls-cache/shared/thumbnail.jpg?v=2');
+    expect(fetcher.mock.calls.every(([url])=>url==='/api/hls-sessions')).toBe(true);
+  } finally { cleanup(); vi.useRealTimers(); fetcher.mockRestore(); }
 });

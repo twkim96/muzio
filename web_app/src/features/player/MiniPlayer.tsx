@@ -1,3 +1,4 @@
+import { useHlsArtwork } from './hlsDvr/useHlsArtwork';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -39,6 +40,7 @@ export function MiniPlayer() {
   const store = usePlayerStore();
   const snapshot = store();
   const state = selectActiveState(snapshot);
+  const artworkUrl = useHlsArtwork(state.source);
   const [timerOpen, setTimerOpen] = useState(false);
   useAndroidBack(timerOpen, () => setTimerOpen(false), 50);
   const [scrubValueSec, setScrubValueSec] = useState<number | null>(null);
@@ -61,7 +63,7 @@ export function MiniPlayer() {
 
   useEffect(() => {
     setArtworkFailed(false);
-  }, [state.source?.artworkUrl]);
+  }, [artworkUrl]);
 
   useEffect(() => {
     return () => {
@@ -269,10 +271,10 @@ export function MiniPlayer() {
             data-testid="open-full-player"
             onClick={open}
           >
-            {state.source.artworkUrl && !artworkFailed ? (
+            {artworkUrl && !artworkFailed ? (
               <img
                 data-testid="mini-player-artwork"
-                src={state.source.artworkUrl}
+                src={artworkUrl}
                 alt=""
                 className="h-full w-full rounded-lg object-cover"
                 onError={() => setArtworkFailed(true)}
