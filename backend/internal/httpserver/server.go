@@ -33,6 +33,9 @@ func NewHandlerWithWeb(logger *slog.Logger, lister LibraryLister, streamHandler 
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthHandler)
+	hlsSessions := newHLSSessions()
+	mux.Handle("/api/hls-sessions", hlsSessions)
+	mux.Handle("/api/hls-cache/", hlsSessions)
 	mux.Handle("/api/library", libraryListHandler(lister))
 	if reader, ok := lister.(LibraryRevisionReader); ok {
 		mux.Handle("/api/library/changes", libraryChangesHandler(reader))
