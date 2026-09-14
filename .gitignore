@@ -11,6 +11,10 @@
 !web_app/
 !web_app/**
 
+# Local deployment rollback snapshots are not source assets.
+web_app/.hls-release-*/
+web_app/.hls-mini-release-*/
+
 !android_app/
 !android_app/**
 
