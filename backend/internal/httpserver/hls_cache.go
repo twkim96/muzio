@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const hlsCacheBudget int64 = 1 << 30
+const hlsCacheBudget int64 = 1536 << 20
 const maxHLSResource int64 = 32 << 20
 
 var hlsURI = regexp.MustCompile(`URI="([^"]+)"`)

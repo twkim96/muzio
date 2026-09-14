@@ -42,7 +42,7 @@ test('shows the shared frame beside the stream title and falls back if it expire
 test('shows stored size and deletes only the selected session without opening playback',async()=>{
  const requests:string[]=[];
  vi.stubGlobal('fetch',vi.fn(async(_url,init)=>{if(init?.method==='POST'){requests.push(JSON.parse(init.body).action);return new Response(null,{status:204})};return new Response(JSON.stringify({items:[{id:'a',url:stream,title:'A',state:'live',bytes:268435456},{id:'b',url:stream,title:'B',state:'live',bytes:0}]}))}));
- const {store}=mount(<SharedHlsSessions/>);expect(await screen.findByText('라이브 · 256.0MB / 1GB')).toBeInTheDocument();
+ const {store}=mount(<SharedHlsSessions/>);expect(await screen.findByText('라이브 · 256.0MB / 1.5GB')).toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:'저장분 삭제: A'}));await waitFor(()=>expect(screen.queryByRole('button',{name:'저장분 삭제: A'})).toBeNull());expect(screen.getByRole('button',{name:'저장분 삭제: B'})).toBeInTheDocument();expect(store.getState().video.source).toBeNull();expect(requests).toEqual(['delete']);
 });
 test('failed deletion leaves the session visible with a retryable error',async()=>{

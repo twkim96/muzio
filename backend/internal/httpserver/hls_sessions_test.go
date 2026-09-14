@@ -116,7 +116,7 @@ func TestHLSViewerGraceKeepsRecordingAndRejoinsBeforeExpiry(t *testing.T) {
 	s, now := testHLSRegistry(t)
 	row := registerHLS(t, s, "https://example.com/live")
 	row.polling = true // isolate the lease from asynchronous source I/O
-	*now = now.Add(29 * time.Minute)
+	*now = now.Add(19 * time.Minute)
 	maintainHLS(s)
 	if len(s.rows) != 1 || row.cache.stopped {
 		t.Fatal("brief viewer absence stopped recording")
@@ -125,11 +125,11 @@ func TestHLSViewerGraceKeepsRecordingAndRejoinsBeforeExpiry(t *testing.T) {
 	if row != again {
 		t.Fatal("returning viewer lost cached session")
 	}
-	*now = now.Add(29 * time.Minute)
+	*now = now.Add(19 * time.Minute)
 	if w := commandHLS(s, "heartbeat", row.ID, ""); w.Code != 204 {
 		t.Fatal(w.Code)
 	}
-	*now = now.Add(29 * time.Minute)
+	*now = now.Add(19 * time.Minute)
 	maintainHLS(s)
 	if s.rows[row.ID] == nil {
 		t.Fatal("another viewer heartbeat was ignored")
@@ -137,7 +137,7 @@ func TestHLSViewerGraceKeepsRecordingAndRejoinsBeforeExpiry(t *testing.T) {
 	*now = now.Add(time.Minute)
 	maintainHLS(s)
 	if len(s.rows) != 0 {
-		t.Fatal("30 min absent viewer retained")
+		t.Fatal("20 min absent viewer retained")
 	}
 	if _, err := os.Stat(row.cache.dir); !os.IsNotExist(err) {
 		t.Fatal("expired files retained")
@@ -152,7 +152,7 @@ func TestHLSViewerMediaRequestsRenewButListingAndRecorderDoNot(t *testing.T) {
 	row := registerHLS(t, s, "https://example.com/live")
 	row.cache.masters[row.cache.root] = "#EXTM3U\n"
 	row.polling = true
-	*now = now.Add(29 * time.Minute)
+	*now = now.Add(19 * time.Minute)
 	w := httptest.NewRecorder()
 	s.ServeHTTP(w, httptest.NewRequest("GET", "http://muzio.test"+row.PlaybackURL, nil))
 	if w.Code != 200 {
@@ -168,7 +168,7 @@ func TestHLSViewerMediaRequestsRenewButListingAndRecorderDoNot(t *testing.T) {
 	if !row.touched.Equal(touched) {
 		t.Fatal("server work or discovery renewed viewer lease")
 	}
-	*now = now.Add(29 * time.Minute)
+	*now = now.Add(19 * time.Minute)
 	maintainHLS(s)
 	if len(s.rows) != 0 {
 		t.Fatal("server kept itself alive")
@@ -180,14 +180,14 @@ func TestHLSEndedAndUnknownRecordingsKeepBytesWhileViewed(t *testing.T) {
 	row.cache.state = "ended"
 	row.cache.confirmed = now.Add(-4 * time.Hour)
 	row.polling = true
-	*now = now.Add(29 * time.Minute)
+	*now = now.Add(19 * time.Minute)
 	commandHLS(s, "heartbeat", row.ID, "")
 	maintainHLS(s)
 	if row.cache.state != "ended" || s.rows[row.ID] == nil {
 		t.Fatal("broadcast ending deleted history")
 	}
 	other := registerHLS(t, s, "https://example.com/unknown")
-	other.cache.confirmed = now.Add(-31 * time.Minute)
+	other.cache.confirmed = now.Add(-21 * time.Minute)
 	other.polling = true
 	maintainHLS(s)
 	if !other.cache.stopped || s.rows[other.ID] == nil {
@@ -273,7 +273,7 @@ func TestHLSAbandonedInstanceCleanupPreservesFreshServer(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	old := time.Now().Add(-31 * time.Minute)
+	old := time.Now().Add(-21 * time.Minute)
 	if err := os.Chtimes(filepath.Join(base, "instance-old", "lease"), old, old); err != nil {
 		t.Fatal(err)
 	}

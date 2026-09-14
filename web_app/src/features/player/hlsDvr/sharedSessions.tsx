@@ -27,7 +27,7 @@ export function SharedHlsSessionSync() {
       window.removeEventListener('pageshow', ping); window.removeEventListener('online', ping);
       document.removeEventListener('visibilitychange', ping);
       // Leaving a tab or switching video stops only this viewer's heartbeat.
-      // The shared recording continues until every viewer has been absent 30 min.
+      // The shared recording continues until every viewer has been absent 20 min.
     };
   }, [id]);
   return null;
@@ -45,7 +45,7 @@ export function SharedHlsSessions() {
   useEffect(() => {
     let disposed = false, inFlight = false, lastSuccess = Date.now();
     const refresh = async () => {
-      if (Date.now() - lastSuccess >= 30 * 60_000) setItems([]);
+      if (Date.now() - lastSuccess >= 20 * 60_000) setItems([]);
       if (inFlight) return; inFlight = true;
       try {
         const response = await fetch('/api/hls-sessions', { cache: 'no-store', signal: AbortSignal.timeout(10_000) });
@@ -77,7 +77,7 @@ export function SharedHlsSessions() {
         <HlsThumbnail url={item.thumbnailUrl} />
         <span className="min-w-0 flex-1">
         <span className="block truncate text-sm">{item.title}</span>
-        <span className="text-xs text-muted">{item.state === 'ended' ? '방송 종료 · 보관 중' : item.state === 'stopped' ? '수집 중지 · 보관 중' : item.state === 'unknown' ? '상태 확인 필요' : '라이브'} · {hlsStoredSize(item.bytes)} / 1GB{current?.mediaId === item.id ? ' · 현재 세션' : ''}{item.lastSeenAt && Number.isFinite(item.lastSeenAt) ? <span className="ml-2 inline-block" title={`마지막 시청 신호: ${new Date(item.lastSeenAt).toLocaleString('ko-KR')}`}>{new Date(item.lastSeenAt).toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit' })}</span> : null}</span>
+        <span className="text-xs text-muted">{item.state === 'ended' ? '방송 종료 · 보관 중' : item.state === 'stopped' ? '수집 중지 · 보관 중' : item.state === 'unknown' ? '상태 확인 필요' : '라이브'} · {hlsStoredSize(item.bytes)} / 1.5GB{current?.mediaId === item.id ? ' · 현재 세션' : ''}{item.lastSeenAt && Number.isFinite(item.lastSeenAt) ? <span className="ml-2 inline-block" title={`마지막 시청 신호: ${new Date(item.lastSeenAt).toLocaleString('ko-KR')}`}>{new Date(item.lastSeenAt).toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit' })}</span> : null}</span>
         </span>
       </button>
       <button type="button" aria-label={`저장분 삭제: ${item.title}`} title="공유 HLS 녹화와 저장분 즉시 삭제"

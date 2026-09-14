@@ -52,7 +52,7 @@ function HlsPlaybackDialog({ onClose, initialUrl = '', initialTitle = '', initia
           aria-invalid={!!error} aria-describedby={error ? 'hls-url-error' : 'hls-url-help'}
           onChange={event => { setUrl(event.target.value); setError(''); }} />
       </label>
-      <p id="hls-url-help" className="text-sm text-muted">라이브러리와 재생 이력에 저장하지 않고 이번에만 재생합니다. 같은 HLS 주소는 저장분을 공유하며 최대 1GB를 보관합니다. 마지막 시청 신호가 끊긴 뒤 30분 동안 수집과 저장을 유지하므로, 그 안에 다시 열면 이어서 볼 수 있습니다.</p>
+      <p id="hls-url-help" className="text-sm text-muted">라이브러리와 재생 이력에 저장하지 않고 이번에만 재생합니다. 같은 HLS 주소는 저장분을 공유하며 최대 1.5GB를 보관합니다. 마지막 시청 신호가 끊긴 뒤 20분 동안 수집과 저장을 유지하므로, 그 안에 다시 열면 이어서 볼 수 있습니다.</p>
       <p className="text-xs text-muted">로그인이나 원래 사이트에서의 접근이 필요한 주소는 재생되지 않을 수 있습니다.</p>
       {error && <p id="hls-url-error" role="alert" className="text-sm text-red-500">{error}</p>}
     </form>

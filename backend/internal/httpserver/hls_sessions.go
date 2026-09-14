@@ -16,8 +16,8 @@ import (
 	"time"
 )
 
-const hlsUnknownTTL = 30 * time.Minute
-const hlsViewerGrace = 30 * time.Minute
+const hlsUnknownTTL = 20 * time.Minute
+const hlsViewerGrace = 20 * time.Minute
 
 type hlsSession struct {
 	ID           string `json:"id"`

@@ -490,6 +490,6 @@ go test ./internal/library -run '^$' \
 비디오 정렬 행의 `HLS 재생`에서 URL을 입력하거나, 확장에서
 `/play/hls#url=<encoded URL>&title=<optional title>`로 열 수 있다.
 라이브러리·재생 이력에 저장하지 않는 임시 재생이다. 서버 캐시는 같은 HLS 주소끼리
-공유하며 HLS별 1GiB 한도만 적용한다. 저장 시간 제한은 없다. 재생 요청과
-1분 간격 시청 신호로 유지하고, 모든 시청 신호가 30분 이상 끊겼을 때 정리한다.
+공유하며 HLS별 1.5GiB 한도만 적용한다. 저장 시간 제한은 없다. 재생 요청과
+1분 간격 시청 신호로 유지하고, 모든 시청 신호가 20분 이상 끊겼을 때 정리한다.
 [확장 연동 계약과 플랫폼 동작](web_app/docs/temporary-hls-playback.md)을 참고한다.

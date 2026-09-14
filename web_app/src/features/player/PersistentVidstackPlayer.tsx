@@ -234,7 +234,7 @@ export function PersistentVidstackPlayer({
           <MediaProvider key={`${nativeVideo ? 'native' : 'web'}-${transient ? `${source?.mediaId}/${source?.url}` : 'library'}`} loaders={nativeVideoLoaders} />
           {transient && dvrStatus.kind !== 'idle' && (
             <div className="muzio-dvr-status" role="status">
-              {dvrStatus.kind === 'recording' ? `되감기 ${Math.floor(dvrStatus.seconds / 60)}분 · HLS별 서버 보관 최대 1GB` : '이 환경 또는 스트림에서는 임시 되감기를 사용할 수 없습니다.'}
+              {dvrStatus.kind === 'recording' ? `되감기 ${Math.floor(dvrStatus.seconds / 60)}분 · HLS별 서버 보관 최대 1.5GB` : '이 환경 또는 스트림에서는 임시 되감기를 사용할 수 없습니다.'}
             </div>
           )}
           {theaterMode && source && (
