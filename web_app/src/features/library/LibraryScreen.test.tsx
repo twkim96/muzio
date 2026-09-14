@@ -54,6 +54,7 @@ beforeEach(() => {
 const originalMatchMedia = window.matchMedia;
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
     writable: true,
@@ -636,24 +637,10 @@ describe('LibraryScreen', () => {
       },
     );
 
-    await waitFor(() => {
-      expect(screen.getByTestId('library-list')).toHaveAttribute(
-        'data-row-height',
-        '78',
-      );
-    });
-    expect(screen.getByTestId('library-item')).toHaveStyle({ height: '78px' });
-    expect(screen.getByTestId('image-row-layout')).toHaveClass(
-      'grid-cols-[minmax(0,1fr)_auto]',
-    );
-    expect(screen.getByTestId('image-responsive-title')).toHaveClass(
-      'max-h-12',
-      'overflow-clip',
-      'whitespace-normal',
-    );
-    expect(screen.getByTestId('image-row-metadata')).toHaveTextContent(
-      'downloads | 2.0 KB',
-    );
+    await waitFor(() => expect(screen.getByTestId('library-list')).toHaveAttribute('data-layout', 'image-cards'));
+    expect(screen.getByTestId('image-responsive-title')).toHaveClass('line-clamp-2');
+    expect(screen.queryByTestId('library-item-progress')).not.toBeInTheDocument();
+
   });
 
   test('uses a compact two-line image row on tablet and desktop', async () => {
@@ -678,16 +665,9 @@ describe('LibraryScreen', () => {
       },
     );
 
-    await waitFor(() => {
-      expect(screen.getByTestId('library-list')).toHaveAttribute(
-        'data-row-height',
-        '54',
-      );
-    });
-    expect(screen.getByTestId('library-item')).toHaveStyle({ height: '54px' });
-    expect(screen.getByTestId('image-responsive-title')).toHaveTextContent(
-      'Screenshots/capture.png',
-    );
+    await waitFor(() => expect(screen.getByTestId('library-list')).toHaveAttribute('data-layout', 'image-cards'));
+    expect(screen.getByTestId('image-responsive-title')).toHaveTextContent('capture.png');
+    expect(screen.getByTestId('image-row-metadata')).toHaveTextContent('Screenshots');
     expect(screen.getByLabelText('Open capture.png')).toBeInTheDocument();
   });
 
@@ -869,11 +849,14 @@ describe('LibraryScreen', () => {
       fireEvent.click(screen.getByLabelText('More options for one.mp4'));
       fireEvent.click(screen.getByLabelText('More options for two.mp4'));
       expect(screen.getAllByTestId('library-row-menu')).toHaveLength(1);
-      expect(within(screen.getByTestId('library-row-menu')).getAllByRole('button')).toHaveLength(1);
-      fireEvent.click(screen.getByRole('button', { name: '누르면 복사됨' }));
+      expect(within(screen.getByTestId('library-row-menu')).getAllByRole('button')).toHaveLength(2);
+      fireEvent.click(screen.getByRole('button', { name: '제목 복사' }));
       await screen.findByText('복사됨');
       expect(writeText).toHaveBeenCalledWith('Title two');
       expect(screen.queryByTestId('add-to-playlist-modal')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Add to Playlist' }));
+      expect(screen.getByTestId('add-to-playlist-modal')).toHaveTextContent('1 selected');
+      expect(screen.queryByTestId('library-row-menu')).not.toBeInTheDocument();
     } finally {
       if (previous) Object.defineProperty(navigator, 'clipboard', previous);
       else Reflect.deleteProperty(navigator, 'clipboard');
@@ -914,6 +897,50 @@ describe('LibraryScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sort and filter library' }));
     fireEvent.click(within(screen.getByTestId('library-filter-panel')).getByRole('button', { name: 'Show 1 items' }));
     expect(screen.queryByTestId('selection-actions')).not.toBeInTheDocument();
+  });
+
+  test('search text can be cleared from the active filter chip', async () => {
+    renderScreen('audio', { kind: 'ok', items: [{ id: 'a', type: 'audio', rootName: 'music', relativePath: 'song.mp3', name: 'song.mp3', sizeBytes: 1, modifiedAt: '2026-01-01T00:00:00Z' }] });
+    await screen.findByTestId('library-list');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Filter Music' }), { target: { value: 'song' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove search text' }));
+    expect(screen.getByRole('textbox', { name: 'Filter Music' })).toHaveValue('');
+    expect(screen.queryByRole('button', { name: 'Remove search text' })).not.toBeInTheDocument();
+  });
+
+  test('scroll-to-top control appears after scrolling and disappears at the top', async () => {
+    const originalY = window.scrollY;
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    try {
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
+      renderScreen('audio', { kind: 'ok', items: [] });
+      expect(screen.queryByLabelText('Scroll to top')).not.toBeInTheDocument();
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 500 });
+      fireEvent.scroll(window);
+      fireEvent.click(screen.getByLabelText('Scroll to top'));
+      expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
+      fireEvent.scroll(window);
+      expect(screen.queryByLabelText('Scroll to top')).not.toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: originalY });
+      scrollTo.mockRestore();
+    }
+  });
+
+  test.each(['video', 'image'] as const)('%s card favorite stays linked to player state without opening the item', async type => {
+    const result = { kind: 'ok' as const, items: [{ id: 'fav', type, rootName: 'media', relativePath: 'sample', name: 'sample', sizeBytes: 1, modifiedAt: '2026-01-01T00:00:00Z' }] };
+    const empty = { kind: 'ok' as const, items: [] };
+    const { playerStore } = renderScreen(type, empty, type === 'video' ? result : empty, type === 'image' ? result : empty);
+    const button = await screen.findByLabelText('Like sample');
+    fireEvent.click(button);
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    const key = playerStore.getState().likedMediaIds[0];
+    expect(key).toBeTruthy();
+    act(() => playerStore.getState().toggleLike(key));
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(playerStore.getState().video.source).toBeNull();
+    expect(screen.getByLabelText('More options for sample')).toBeInTheDocument();
   });
 
   test('stacked glass modals isolate dismissal and restore focus and scroll', () => {

@@ -6,6 +6,7 @@ import { createContext, useContext, type ReactNode } from 'react';
  * coupling the shell to one particular library implementation.
  */
 export const SearchHostContext = createContext<HTMLElement | null>(null);
+const ActiveFiltersHostContext = createContext<HTMLElement | null>(null);
 const FilterHostContext = createContext<HTMLElement | null>(null);
 const SearchPopoverHostContext = createContext<HTMLElement | null>(null);
 
@@ -14,16 +15,18 @@ export function SearchHostProvider({
   host,
   popoverHost = null,
   filterHost = null,
+  activeFiltersHost = null,
 }: {
   children: ReactNode;
   host: HTMLElement | null;
   popoverHost?: HTMLElement | null;
   filterHost?: HTMLElement | null;
+  activeFiltersHost?: HTMLElement | null;
 }) {
   return (
     <SearchHostContext.Provider value={host}>
       <SearchPopoverHostContext.Provider value={popoverHost}>
-        <FilterHostContext.Provider value={filterHost}>{children}</FilterHostContext.Provider>
+        <FilterHostContext.Provider value={filterHost}><ActiveFiltersHostContext.Provider value={activeFiltersHost}>{children}</ActiveFiltersHostContext.Provider></FilterHostContext.Provider>
       </SearchPopoverHostContext.Provider>
     </SearchHostContext.Provider>
   );
@@ -40,3 +43,5 @@ export function useSearchPopoverHost(): HTMLElement | null {
 export function useFilterHost(): HTMLElement | null {
   return useContext(FilterHostContext);
 }
+
+export function useActiveFiltersHost(): HTMLElement | null { return useContext(ActiveFiltersHostContext); }

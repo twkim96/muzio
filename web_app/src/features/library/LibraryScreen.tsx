@@ -1,3 +1,4 @@
+import { ArrowUp } from '@phosphor-icons/react/dist/csr/ArrowUp';
 import { useLocation } from 'react-router-dom';
 import { usePlayerStore } from '../player/PlayerContext';
 import { isPlayableLibraryItem, playbackSourceFromLibraryItem } from '../../core/playback/source/source';
@@ -134,6 +135,30 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   useLayoutEffect(() => {
     setSelectedIds(current => current.size === 0 ? current : new Set());
   }, [type, query, deferredQuery, filters]);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [scrollTopRight, setScrollTopRight] = useState(16);
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    const measure = () => {
+      const rect = content.getBoundingClientRect();
+      const padding = parseFloat(window.getComputedStyle(content).paddingRight) || 16;
+      setScrollTopRight(Math.max(16, window.innerWidth - rect.right + padding));
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(content);
+    window.addEventListener('resize', measure);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', measure); };
+  }, []);
+
+  useEffect(() => {
+    const update = () => setShowScrollTop(window.scrollY > 120);
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    return () => window.removeEventListener('scroll', update);
+  }, []);
   const selectionMode = selectedIds.size > 0;
   const selectionAnchorId = [...selectedIds].at(-1);
   const [addModalItems, setAddModalItems] = useState<LibraryItem[] | null>(null);
@@ -233,8 +258,29 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
     clearSelection();
   };
 
+  const activeFilters = ((filterCount > 0 || parsedQuery.text.trim() !== '') && <div className="muzio-popover muzio-active-filters fixed bottom-[calc(112px+env(safe-area-inset-bottom))] left-1/2 z-30 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-1.5 overflow-x-auto rounded-full p-1.5 scrollbar-none" aria-label="Active library filters">
+        {parsedQuery.text.trim() !== '' && <button type="button" className="muzio-glass-action muzio-glass-action-secondary" aria-label="Remove search text"
+          onClick={() => setQuery(libraryQueryWithArtists('', parsedQuery.artists, facets.artists))}>{parsedQuery.text} ×</button>}
+        {filters.storageIds.map((id) => <button key={id} type="button" className="muzio-glass-action muzio-glass-action-secondary" aria-label={`Remove storage ${facets.storage.find((entry) => entry.id === id)?.label ?? id}`}
+          onClick={() => setFilters((current) => ({ ...current, storageIds: current.storageIds.filter((value) => value !== id) }))}>{facets.storage.find((entry) => entry.id === id)?.label ?? id} ×</button>)}
+        {filters.locations.map((location) => <button key={location} type="button" className="muzio-glass-action muzio-glass-action-secondary" aria-label={`Remove ${location === 'local' ? 'Offline' : 'Online'} source`}
+          onClick={() => setFilters((current) => ({ ...current, locations: current.locations.filter((value) => value !== location) }))}>{location === 'local' ? 'Offline' : 'Online'} ×</button>)}
+        {selectedArtistIds.map((id) => {
+          const label = facets.artists.find((artist) => artist.id === id)?.label ?? id;
+          return <button key={id} type="button" className="muzio-glass-action muzio-glass-action-secondary" aria-label={`Remove artist ${label}`}
+            onClick={() => {
+              if (parsedQuery.artists.includes(id)) {
+                setQuery(libraryQueryWithArtists(parsedQuery.text, parsedQuery.artists.filter((artist) => artist !== id), facets.artists));
+              }
+              setFilters((current) => ({ ...current, artists: current.artists.filter((artist) => artist !== id) }));
+            }}>#{label} ×</button>;
+        })}
+        <button type="button" className="text-xs text-muted" onClick={clearFilters}>Clear filters</button>
+      </div>);
+
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 pb-7 pt-3 sm:px-8 lg:px-10">
+    <div ref={contentRef} className="mx-auto w-full max-w-7xl px-4 pb-7 pt-3 sm:px-8 lg:px-10">
+      {showScrollTop && <button type="button" aria-label="Scroll to top" title="맨 위로" className="muzio-selection-round fixed bottom-[30vh] z-40" style={{ right: scrollTopRight }} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp aria-hidden className="h-5 w-5" /></button>}
       {searchHost === null && <header className="mb-4 flex min-h-10 items-center">
         <h1 className="truncate text-xl font-semibold tracking-tight">{meta.title}</h1>
       </header>}
@@ -261,23 +307,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
       )}
 
       {filterHost ? createPortal(filterButton, filterHost) : <div className="mb-2 flex justify-end">{filterButton}</div>}
-      {filterCount > 0 && <div className="mb-3 flex flex-wrap items-center gap-2" aria-label="Active library filters">
-        {filters.storageIds.map((id) => <button key={id} type="button" className="muzio-glass-action muzio-glass-action-secondary" aria-label={`Remove storage ${facets.storage.find((entry) => entry.id === id)?.label ?? id}`}
-          onClick={() => setFilters((current) => ({ ...current, storageIds: current.storageIds.filter((value) => value !== id) }))}>{facets.storage.find((entry) => entry.id === id)?.label ?? id} ×</button>)}
-        {filters.locations.map((location) => <button key={location} type="button" className="muzio-glass-action muzio-glass-action-secondary" aria-label={`Remove ${location === 'local' ? 'Offline' : 'Online'} source`}
-          onClick={() => setFilters((current) => ({ ...current, locations: current.locations.filter((value) => value !== location) }))}>{location === 'local' ? 'Offline' : 'Online'} ×</button>)}
-        {selectedArtistIds.map((id) => {
-          const label = facets.artists.find((artist) => artist.id === id)?.label ?? id;
-          return <button key={id} type="button" className="muzio-glass-action muzio-glass-action-secondary" aria-label={`Remove artist ${label}`}
-            onClick={() => {
-              if (parsedQuery.artists.includes(id)) {
-                setQuery(libraryQueryWithArtists(parsedQuery.text, parsedQuery.artists.filter((artist) => artist !== id), facets.artists));
-              }
-              setFilters((current) => ({ ...current, artists: current.artists.filter((artist) => artist !== id) }));
-            }}>#{label} ×</button>;
-        })}
-        <button type="button" className="text-xs text-muted" onClick={clearFilters}>Clear filters</button>
-      </div>}
+      {activeFilters}
       {filterOpen && <LibraryFilterPanel items={rawItems} type={type} selection={{ filters: selectedFilters, sortKey, sortDirection, text: parsedQuery.text }} onClose={() => setFilterOpen(false)} onApply={(selection) => {
         setSort({ key: selection.sortKey, direction: selection.sortDirection });
         setFilters({ ...selection.filters, artists: [] });
@@ -285,10 +315,10 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
         setFilterOpen(false);
       }} />}
 
+      {(type === 'video' || (result?.kind === 'ok' && visibleItems.length > 0)) && (
+        <LibrarySortRow type={type} sortKey={sortKey} sortDirection={sortDirection} onSort={selectSort} />
+      )}
       <LibraryBody
-        sortKey={sortKey}
-        sortDirection={sortDirection}
-        onSort={selectSort}
         type={type}
         status={status}
         result={result}
@@ -350,9 +380,6 @@ function StandaloneLibrarySearch({
 }
 
 function LibraryBody({
-  sortKey,
-  sortDirection,
-  onSort,
   type,
   status,
   result,
@@ -368,9 +395,6 @@ function LibraryBody({
   onQueueSelection,
   onClearSelection,
 }: {
-  sortKey: LibrarySortKey;
-  sortDirection: LibrarySortDirection;
-  onSort: (key: LibrarySortKey) => void;
   type: LibraryMediaType;
   status: LibraryStatus;
   result: LibraryFetchResult | null;
@@ -424,39 +448,7 @@ function LibraryBody({
     }
     return (
       <>
-        <div className={type === 'video' ? '' : 'border-b border-zinc-200/70 dark:border-white/10'}>
-          <div className={`${type === 'video' ? 'mb-3' : 'border-b border-zinc-200/70 dark:border-white/10'} px-3 text-sm font-medium text-muted sm:px-5 ${type === 'audio' ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_6.75rem] xl:gap-2' : ''}`}>
-            <div
-              role="group"
-              aria-label="Sort library"
-              className={`flex min-h-[54px] flex-wrap items-center gap-x-4 ${type === 'audio' ? 'xl:grid xl:grid-cols-[2.75rem_minmax(11rem,1fr)_minmax(8rem,0.72fr)_6rem_7.5rem_minmax(6rem,0.6fr)] xl:gap-3' : ''}`}
-            >
-              {([
-                { key: 'name', label: type === 'audio' ? 'Song' : type === 'video' ? 'Video' : 'Image' },
-                ...(type === 'audio' ? [{ key: 'artist', label: 'Artist' }] : []),
-                { key: 'size', label: 'Size' },
-                { key: 'modified', label: 'Modified' },
-                { key: 'library', label: 'Library' },
-              ] as { key: LibrarySortKey; label: string }[]).map(({ key, label }, index) => {
-                const active = sortKey === key || (sortKey === 'latest' && key === 'modified');
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    aria-label={`Sort by ${label}`}
-                    aria-pressed={active}
-                    title={active ? `${label}: ${sortDirection === 'asc' ? 'ascending' : 'descending'}` : `Sort by ${label}`}
-                    onClick={() => onSort(key)}
-                    className={`relative inline-flex min-h-10 items-center justify-start gap-1 text-left hover:text-foreground ${active ? 'text-foreground' : ''} ${index === 0 && type === 'audio' ? 'xl:col-span-2' : ''}`}
-                  >
-                    {index > 0 && <span aria-hidden className="pointer-events-none absolute -left-2 text-[10px] font-normal text-muted/40">|</span>}
-                    <span>{label}</span>
-                    {active && <span aria-hidden className="text-[10px] text-muted">{sortDirection === 'asc' ? '↑' : '↓'}</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+        <div className={type !== 'audio' ? '' : 'border-b border-zinc-200/70 dark:border-white/10'}>
           <VirtualizedLibraryList
             key={type}
             items={visibleItems}
@@ -550,5 +542,45 @@ function AddToPlaylistModal({
         <p className="py-4 text-center text-sm text-muted">No playlists yet. Use + to create one.</p>
       )}
     </GlassModal>
+  );
+}
+
+function LibrarySortRow({ type, sortKey, sortDirection, onSort }: {
+  type: LibraryMediaType; sortKey: LibrarySortKey; sortDirection: LibrarySortDirection;
+  onSort: (key: LibrarySortKey) => void;
+}) {
+  return (
+    <div className={`${type !== 'audio' ? 'mb-3' : 'border-b border-zinc-200/70 dark:border-white/10'} px-3 text-sm font-medium text-muted sm:px-5 ${type === 'audio' ? 'xl:grid xl:grid-cols-[minmax(0,1fr)_6.75rem] xl:gap-2' : ''}`}>
+      <div
+        role="group"
+        aria-label="Sort library"
+        className={`flex min-h-[54px] flex-wrap items-center gap-x-4 ${type === 'audio' ? 'xl:grid xl:grid-cols-[2.75rem_minmax(11rem,1fr)_minmax(8rem,0.72fr)_6rem_7.5rem_minmax(6rem,0.6fr)] xl:gap-3' : ''}`}
+      >
+        {([
+          { key: 'name', label: type === 'audio' ? 'Song' : type === 'video' ? 'Video' : 'Image' },
+          ...(type === 'audio' ? [{ key: 'artist', label: 'Artist' }] : []),
+          { key: 'size', label: 'Size' },
+          { key: 'modified', label: 'Modified' },
+          { key: 'library', label: 'Library' },
+        ] as { key: LibrarySortKey; label: string }[]).map(({ key, label }, index) => {
+          const active = sortKey === key || (sortKey === 'latest' && key === 'modified');
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-label={`Sort by ${label}`}
+              aria-pressed={active}
+              title={active ? `${label}: ${sortDirection === 'asc' ? 'ascending' : 'descending'}` : `Sort by ${label}`}
+              onClick={() => onSort(key)}
+              className={`relative inline-flex min-h-10 items-center justify-start gap-1 text-left hover:text-foreground ${active ? 'text-foreground' : ''} ${index === 0 && type === 'audio' ? 'xl:col-span-2' : ''}`}
+            >
+              {index > 0 && <span aria-hidden className="pointer-events-none absolute -left-2 text-[10px] font-normal text-muted/40">|</span>}
+              <span>{label}</span>
+              {active && <span aria-hidden className="text-[10px] text-muted">{sortDirection === 'asc' ? '↑' : '↓'}</span>}
+            </button>
+          );
+        })}
+        </div>
+    </div>
   );
 }

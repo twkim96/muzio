@@ -46,21 +46,21 @@ export function VirtualizedLibraryList({
   const listRef = useRef<HTMLUListElement | null>(null);
   const frameRef = useRef<number | null>(null);
   const compactRowHeight = useLibraryRowHeight(items[0]?.type);
-  const videoCards = items[0]?.type === 'video';
+  const thumbnailCards = items[0]?.type === 'video' || items[0]?.type === 'image';
   const [listWidth, setListWidth] = useState(() => typeof window === 'undefined' ? 1024 : Math.max(1, window.innerWidth - 32));
   useLayoutEffect(() => {
     const list = listRef.current;
-    if (!list || !videoCards) return;
+    if (!list || !thumbnailCards) return;
     const measure = () => setListWidth(list.getBoundingClientRect().width || Math.max(1, window.innerWidth - 32));
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     observer?.observe(list);
     window.addEventListener('resize', measure);
     return () => { observer?.disconnect(); window.removeEventListener('resize', measure); };
-  }, [videoCards]);
-  const columns = videoCards ? Math.max(1, Math.floor((listWidth + 24) / 344)) : 1;
-  const cardWidth = (listWidth - (columns - 1) * 24) / columns;
-  const rowHeight = videoCards ? Math.ceil(cardWidth * 9 / 16) + 112 : compactRowHeight;
+  }, [thumbnailCards]);
+  const columns = thumbnailCards ? Math.max(1, Math.floor((listWidth + 16) / 276)) : 1;
+  const cardWidth = (listWidth - (columns - 1) * 16) / columns;
+  const rowHeight = thumbnailCards ? Math.ceil(cardWidth * 9 / 16) + 16 : compactRowHeight;
   const overscanRows =
     items[0]?.type === 'image' ? IMAGE_OVERSCAN_ROWS : OVERSCAN_ROWS;
   const [range, setRange] = useState<VisibleRange>(() =>
@@ -144,7 +144,7 @@ export function VirtualizedLibraryList({
       data-rendered-count={visibleItems.length}
       data-row-height={rowHeight}
       data-columns={columns}
-      data-layout={videoCards ? "video-cards" : "rows"}
+      data-layout={thumbnailCards ? `${items[0]?.type}-cards` : "rows"}
       className="relative"
       style={{ height: totalHeight }}
     >
@@ -154,7 +154,7 @@ export function VirtualizedLibraryList({
           <LibraryItemRow
             key={item.id}
             item={item}
-            videoCard={videoCards}
+            thumbnailCard={thumbnailCards}
             onLongPress={onLongPressItem}
             onOpenAddToPlaylist={onOpenAddToPlaylist}
             onToggleSelected={onToggleSelected}
@@ -167,11 +167,11 @@ export function VirtualizedLibraryList({
             onAddSelection={onAddSelection}
             onClearSelection={onClearSelection}
             style={{
-              height: videoCards ? rowHeight - 24 : rowHeight,
-              width: videoCards ? cardWidth : undefined,
-              left: videoCards ? (index % columns) * (cardWidth + 24) : 0,
+              height: thumbnailCards ? rowHeight - 16 : rowHeight,
+              width: thumbnailCards ? cardWidth : undefined,
+              left: thumbnailCards ? (index % columns) * (cardWidth + 16) : 0,
               position: 'absolute',
-              right: videoCards ? undefined : 0,
+              right: thumbnailCards ? undefined : 0,
               top: 0,
               transform: `translateY(${Math.floor(index / columns) * rowHeight}px)`,
             }}

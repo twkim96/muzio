@@ -1,3 +1,5 @@
+import { X } from '@phosphor-icons/react/dist/csr/X';
+import { MusicGlyph, VideoGlyph, ImageGlyph } from '../core/ui/AppIcons';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchPopoverHost } from './SearchHostContext';
@@ -16,6 +18,7 @@ export function FloatingSearchControl({
   renderPreview?: (close: () => void) => ReactNode;
   openRequest?: string;
 }) {
+  const ScreenIcon = title === 'Video' ? VideoGlyph : title === 'Image' ? ImageGlyph : MusicGlyph;
   const popoverHost = useSearchPopoverHost();
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -54,16 +57,18 @@ export function FloatingSearchControl({
       role="dialog"
       aria-label={`${title} search`}
       data-testid="search-popover"
-      className="absolute left-1/2 top-[calc(100%+0.75rem)] z-40 w-[calc(100%+6rem)] max-w-[calc(100vw-1.5rem)] -translate-x-1/2"
+      className="muzio-inline-search relative z-40 w-full"
     >
-      <div className="muzio-search flex h-[58px] items-center gap-3 px-5">
+      <div className="flex h-[var(--menu-bar-height,50.6px)] items-center gap-2">
+      <span className="muzio-search-screen-icon muzio-topbar flex h-[var(--menu-bar-height,50.6px)] w-[var(--menu-bar-height,50.6px)] shrink-0 items-center justify-center"><ScreenIcon aria-hidden className="h-6 w-6" /></span>
+      <div className="muzio-search-field muzio-search flex h-[var(--menu-bar-height,50.6px)] min-w-0 flex-1 items-center gap-2 px-3">
       <MagnifyingGlass aria-hidden className="h-5 w-5 shrink-0 text-muted" weight="regular" />
       <input
         ref={inputRef}
         aria-label={`Filter ${title}`}
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
-        placeholder="검색"
+        placeholder="검색어를 입력해주세요."
         className="min-w-0 flex-1 bg-transparent px-1 py-2 text-base outline-none placeholder:text-muted focus:text-zinc-950 dark:focus:text-foreground"
       />
       {query !== '' && (
@@ -80,7 +85,9 @@ export function FloatingSearchControl({
         </button>
       )}
       </div>
-      {renderPreview?.(close)}
+      <button type="button" aria-label={`Close ${title} search`} onClick={close} className="muzio-search-close muzio-topbar flex h-[var(--menu-bar-height,50.6px)] w-[var(--menu-bar-height,50.6px)] shrink-0 items-center justify-center"><X aria-hidden className="h-6 w-6" /></button>
+      </div>
+      {renderPreview && <div className="mt-2">{renderPreview(close)}</div>}
     </div>
   );
 

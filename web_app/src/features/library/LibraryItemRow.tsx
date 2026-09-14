@@ -1,7 +1,9 @@
+import { libraryRootLabel } from '../../core/media/libraryRootLabel';
 import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
 import { X } from '@phosphor-icons/react/dist/csr/X';
 import {
   useEffect,
+  useLayoutEffect,
   memo,
   useRef,
   useState,
@@ -63,6 +65,7 @@ const LONG_PRESS_MOVE_TOLERANCE_PX = 12;
 function LibraryItemRowComponent({
   item,
   onLongPress,
+  onOpenAddToPlaylist,
   onToggleSelected,
   queueItems = [item],
   selected = false,
@@ -73,7 +76,7 @@ function LibraryItemRowComponent({
   onQueueSelection,
   onClearSelection,
   style,
-  videoCard = false,
+  thumbnailCard = false,
 }: {
   item: LibraryItem;
   onLongPress?: (item: LibraryItem) => void;
@@ -88,7 +91,7 @@ function LibraryItemRowComponent({
   onQueueSelection?: () => void;
   onClearSelection?: () => void;
   style?: CSSProperties;
-  videoCard?: boolean;
+  thumbnailCard?: boolean;
 }) {
   const { directory, filename } = splitPath(item.relativePath);
   const metadata = item.metadata;
@@ -271,7 +274,7 @@ function LibraryItemRowComponent({
       data-media-id={item.id}
       data-media-type={item.type}
       style={style}
-      className={`muzio-library-row group relative ${videoCard ? "rounded-xl" : "border-b border-zinc-200/70 last:border-b-0 dark:border-white/10 xl:h-[54px]"} ${
+      className={`muzio-library-row group relative ${thumbnailCard ? "rounded-xl" : "border-b border-zinc-200/70 last:border-b-0 dark:border-white/10 xl:h-[54px]"} ${
         selected ? 'muzio-library-row-selected' : 'hover:bg-zinc-950/[0.035] dark:hover:bg-white/[0.055]'
       } ${showSelectionActions ? 'z-20 overflow-visible' : 'overflow-hidden'}`}
       onFocusCapture={prefetchVideoSidecar}
@@ -299,27 +302,27 @@ function LibraryItemRowComponent({
         <button type="button" aria-label="Clear selection" className="muzio-selection-round"
           onClick={onClearSelection}><X aria-hidden className="h-5 w-5" /></button>
       </div>}
-      {videoCard && (
-        <div data-testid="video-row-layout" className="relative h-full">
-          <button type="button" onClick={handlePrimaryAction} aria-label={`Play ${item.name}`} className="block w-full text-left">
+      {thumbnailCard && (
+        <div data-testid={`${item.type}-row-layout`} className="relative h-full">
+          <button type="button" onClick={handlePrimaryAction} aria-label={`${item.type === 'image' ? 'Open' : 'Play'} ${item.name}`} className="block w-full text-left">
             <span className="relative block aspect-video overflow-hidden rounded-xl bg-zinc-200 dark:bg-white/10">
               <LibraryThumbnail item={item} large />
-              {metadata?.durationSec && <span className="absolute bottom-2 right-2 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium tabular-nums text-white">{formatDuration(metadata.durationSec)}</span>}
-              <span data-testid="library-item-progress" aria-hidden className="absolute bottom-0 inset-x-0 h-1 bg-black/20">
-                <span className="block h-full bg-accent" style={{ width: `${progressPercent}%` }} data-progress-fraction={fraction ?? 0} />
+              {metadata?.durationSec && <span className="absolute left-2 top-2 rounded bg-black/75 px-1.5 py-0.5 text-xs font-medium tabular-nums text-white">{formatDuration(metadata.durationSec)}</span>}
+              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-3 pb-3 pt-12 text-white">
+                <span data-testid={`${item.type}-responsive-title`} title={item.relativePath} className="line-clamp-2 text-sm font-semibold leading-5 drop-shadow-sm">{displayTitle}</span>
+                <span data-testid={`${item.type}-row-metadata`} className="mt-1 block truncate text-xs text-white/70">{metadata?.artist || directory.replace(/\/$/, '') || libraryRootLabel(item)}{progressLabel && ` · ${progressLabel}`}</span>
               </span>
-            </span>
-            <span className="block pr-10 pt-3">
-              <span data-testid="video-responsive-title" title={item.relativePath} className="line-clamp-2 text-base font-medium leading-6 text-zinc-950 dark:text-foreground">{displayTitle}</span>
-              <span data-testid="video-row-metadata" className="mt-1 block truncate text-xs text-muted">{metadata?.artist || directory.replace(/\/$/, '') || item.rootName}{progressLabel && ` · ${progressLabel}`}</span>
+              {item.type === 'video' && <span data-testid="library-item-progress" aria-hidden className="absolute bottom-0 inset-x-0 h-1 bg-black/20">
+                <span className="block h-full bg-accent" style={{ width: `${progressPercent}%` }} data-progress-fraction={fraction ?? 0} />
+              </span>}
             </span>
           </button>
-          <div data-row-options-shell className="absolute right-0 flex w-9 justify-end" style={{ top: 'calc((100% - 88px) + 10px)' }}>
-            <LibraryRowActions item={item} liked={liked} likeKey={likeKey} optionsOpen={optionsOpen} setOptionsOpen={setOptionsOpen} toggleLike={toggleLike} compact />
+          <div data-row-options-shell className="muzio-popover muzio-library-actions absolute right-2 top-2 flex w-[74px] justify-end">
+            <LibraryRowActions onOpenAddToPlaylist={onOpenAddToPlaylist} item={item} liked={liked} likeKey={likeKey} optionsOpen={optionsOpen} setOptionsOpen={setOptionsOpen} toggleLike={toggleLike} compact />
           </div>
         </div>
       )}
-      {!videoCard && <div className="grid min-h-[54px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-[5px] sm:px-5 xl:h-full xl:min-h-0 xl:py-0">
+      {!thumbnailCard && <div className="grid min-h-[54px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-[5px] sm:px-5 xl:h-full xl:min-h-0 xl:py-0">
         {item.type !== 'audio' && (
           <div
             data-testid={`${item.type}-row-layout`}
@@ -364,7 +367,7 @@ function LibraryItemRowComponent({
                   )}
                   {item.type === 'image' && (
                     <>
-                      <span className="muzio-library-file-info">{item.rootName}</span>
+                      <span className="muzio-library-file-info">{libraryRootLabel(item)}</span>
                       <span aria-hidden className="text-[10px] text-muted/40"> | </span>
                     </>
                   )}
@@ -380,6 +383,7 @@ function LibraryItemRowComponent({
                 className={`relative w-[6.75rem] shrink-0 items-center justify-end gap-0.5 ${item.type === 'image' ? 'flex' : 'hidden sm:flex'}`}
               >
                 <LibraryRowActions
+                  onOpenAddToPlaylist={onOpenAddToPlaylist}
                   item={item}
                   liked={liked}
                   likeKey={likeKey}
@@ -417,7 +421,7 @@ function LibraryItemRowComponent({
                   {metadata?.artist && <span aria-hidden className="text-[10px] text-muted/40"> | </span>}
                   <span>{formatSize(item.sizeBytes)}</span>
                   <span aria-hidden className="text-[10px] text-muted/40"> | </span>
-                  <span title={item.rootName}>{item.rootName}</span>
+                  <span title={libraryRootLabel(item)}>{libraryRootLabel(item)}</span>
                 </span>
               </p>
             </div>
@@ -431,7 +435,7 @@ function LibraryItemRowComponent({
               {formatModified(item.modifiedAt)}
             </p>
             <p className="library-column hidden min-w-0 text-left text-sm text-muted xl:block">
-              <span className="muzio-library-file-info block truncate">{item.rootName}</span>
+              <span className="muzio-library-file-info block truncate">{libraryRootLabel(item)}</span>
             </p>
           </button>
         )}
@@ -441,6 +445,7 @@ function LibraryItemRowComponent({
             className="relative flex w-9 shrink-0 items-center justify-end gap-0.5 sm:w-[6.75rem]"
           >
             <LibraryRowActions
+                  onOpenAddToPlaylist={onOpenAddToPlaylist}
               item={item}
               liked={liked}
               likeKey={likeKey}
@@ -451,7 +456,7 @@ function LibraryItemRowComponent({
           </div>
         )}
       </div>}
-      {item.type === 'video' && !videoCard && (
+      {item.type === 'video' && !thumbnailCard && (
         <div
           data-testid="library-item-progress"
           aria-hidden
@@ -484,7 +489,7 @@ export function rowPropsEqual(
 ): boolean {
   return (
     previous.item === next.item &&
-    previous.videoCard === next.videoCard &&
+    previous.thumbnailCard === next.thumbnailCard &&
     previous.style?.width === next.style?.width &&
     previous.style?.left === next.style?.left &&
     previous.selected === next.selected &&
@@ -507,6 +512,7 @@ export const LibraryItemRow = memo(LibraryItemRowComponent, rowPropsEqual);
 
 function LibraryRowActions({
   item,
+  onOpenAddToPlaylist,
   liked,
   likeKey,
   optionsOpen,
@@ -515,6 +521,7 @@ function LibraryRowActions({
   compact = false,
 }: {
   item: LibraryItem;
+  onOpenAddToPlaylist?: (items: LibraryItem[]) => void;
   liked: boolean;
   compact?: boolean;
   likeKey: string;
@@ -522,8 +529,9 @@ function LibraryRowActions({
   setOptionsOpen: Dispatch<SetStateAction<boolean>>;
   toggleLike: (key: string) => void;
 }) {
+  const menuRef = useRef<HTMLDivElement>(null);
   const moreButtonRef = useRef<HTMLButtonElement | null>(null);
-  const [copyStatus, setCopyStatus] = useState('누르면 복사됨');
+  const [copyStatus, setCopyStatus] = useState('제목 복사');
   const copyTitle = async () => {
     const title = item.metadata?.title || item.name;
     let copied = false;
@@ -559,6 +567,17 @@ function LibraryRowActions({
     };
   }, [optionsOpen, setOptionsOpen]);
 
+  useLayoutEffect(() => {
+    if (!optionsOpen || !menuRef.current || !moreButtonRef.current) return;
+    const menu = menuRef.current.getBoundingClientRect();
+    const button = moreButtonRef.current.getBoundingClientRect();
+    setMenuPosition({
+      left: Math.max(12, Math.min(button.right - menu.width, window.innerWidth - menu.width - 12)),
+      top: window.innerHeight - button.bottom >= menu.height + 12
+        ? button.bottom + 6 : Math.max(12, button.top - menu.height - 6),
+    });
+  }, [optionsOpen, copyStatus]);
+
   const toggleOptions = () => {
     if (optionsOpen) {
       setOptionsOpen(false);
@@ -567,7 +586,7 @@ function LibraryRowActions({
     const rect = moreButtonRef.current?.getBoundingClientRect();
     if (rect === undefined) return;
     const menuWidth = 176;
-    const menuHeight = 48;
+    const menuHeight = onOpenAddToPlaylist ? 84 : 48;
     const viewportPadding = 12;
     const left = Math.min(
       Math.max(rect.right - menuWidth, viewportPadding),
@@ -579,14 +598,14 @@ function LibraryRowActions({
         ? rect.bottom + 6
         : Math.max(viewportPadding, rect.top - menuHeight - 6);
     document.dispatchEvent(new CustomEvent('muzio-library-menu-open', { detail: item.id }));
-    setCopyStatus('누르면 복사됨');
+    setCopyStatus('제목 복사');
     setMenuPosition({ left, top });
     setOptionsOpen(true);
   };
 
   return (
     <>
-      {(item.type === 'audio' || item.type === 'image') && (
+      {(
         <button
           type="button"
           data-row-action
@@ -603,7 +622,7 @@ function LibraryRowActions({
           <LikeGlyph liked={liked} className="h-5 w-5" />
         </button>
       )}
-      {item.type !== 'image' && (
+      {(
         <button
           ref={moreButtonRef}
           type="button"
@@ -624,15 +643,21 @@ function LibraryRowActions({
         menuPosition !== null &&
         createPortal(
           <div
+            ref={menuRef}
             data-testid="library-row-menu"
             data-row-action
             data-row-options-shell
-            className="muzio-popover fixed z-[80] min-w-44 rounded-xl border border-white/14 bg-[#111113]/96 p-1 text-sm text-foreground shadow-2xl shadow-black/40 backdrop-blur-[34px]"
+            className="muzio-popover muzio-library-menu fixed z-[80] w-max rounded-xl p-1 text-sm"
             style={menuPosition}
           >
+            {onOpenAddToPlaylist && <button type="button" className="flex w-full whitespace-nowrap rounded-lg px-3 py-2 text-left font-semibold hover:bg-white/10" onClick={(event) => {
+              event.stopPropagation();
+              setOptionsOpen(false);
+              onOpenAddToPlaylist([item]);
+            }}>Add to Playlist</button>}
             <button
               type="button"
-              className="flex w-full rounded-lg px-3 py-2 text-left font-semibold hover:bg-white/10"
+              className="flex w-full whitespace-nowrap rounded-lg px-3 py-2 text-left font-semibold hover:bg-white/10"
               onClick={(event) => {
                 event.stopPropagation();
                 void copyTitle();

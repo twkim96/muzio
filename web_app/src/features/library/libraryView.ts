@@ -1,3 +1,4 @@
+import { libraryRootLabel } from '../../core/media/libraryRootLabel';
 import type { LibraryItem, LibraryMediaType } from '../../core/api/libraryClient';
 
 export type LibrarySortKey =
@@ -39,7 +40,7 @@ export function libraryFacets(items: readonly LibraryItem[]) {
     else map.set(id, { id, label, count: 1 });
   };
   for (const item of items) {
-    add(storage, libraryStorageId(item), item.rootName);
+    add(storage, libraryStorageId(item), libraryRootLabel(item));
     locations[item.location ?? 'network']++;
     const artist = item.metadata?.artist?.trim();
     if (artist) add(artists, normalize(artist), artist);

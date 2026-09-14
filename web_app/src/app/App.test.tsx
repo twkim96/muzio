@@ -140,6 +140,38 @@ function renderApp(pathname: string) {
 }
 
 describe('App routes', () => {
+  test('shows shading only at edges with remaining scroll content', () => {
+    const originalScrollY = window.scrollY;
+    const heightDescriptor = Object.getOwnPropertyDescriptor(document.documentElement, 'scrollHeight');
+    try {
+      Object.defineProperty(document.documentElement, 'scrollHeight', { configurable: true, value: window.innerHeight + 500 });
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
+      renderApp('/library/music');
+      const shade = document.querySelector('.muzio-library-edge-shade');
+      expect(shade).toHaveAttribute('data-top-visible', 'false');
+      expect(shade).toHaveAttribute('data-bottom-visible', 'true');
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 180 });
+      fireEvent.scroll(window);
+      expect(shade).toHaveAttribute('data-top-visible', 'true');
+      expect(shade).toHaveAttribute('data-bottom-visible', 'true');
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 500 });
+      fireEvent.scroll(window);
+      expect(shade).toHaveAttribute('data-top-visible', 'true');
+      expect(shade).toHaveAttribute('data-bottom-visible', 'false');
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
+      fireEvent.scroll(window);
+      expect(shade).toHaveAttribute('data-top-visible', 'false');
+      expect(shade).toHaveAttribute('data-bottom-visible', 'true');
+      Object.defineProperty(document.documentElement, 'scrollHeight', { configurable: true, value: window.innerHeight });
+      fireEvent.resize(window);
+      expect(shade).toHaveAttribute('data-bottom-visible', 'false');
+    } finally {
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: originalScrollY });
+      if (heightDescriptor) Object.defineProperty(document.documentElement, 'scrollHeight', heightDescriptor);
+      else Reflect.deleteProperty(document.documentElement, 'scrollHeight');
+    }
+  });
+
   test('updates the mini-player when a video thumbnail becomes ready', async () => {
     const { playerStore, libraryStores } = renderApp('/library/video');
     await waitFor(() => expect(libraryStores.video.getState().status).toBe('ok'));
@@ -269,7 +301,7 @@ describe('App routes', () => {
   test('menu button controls the drawer and restores focus after backdrop close', async () => {
     renderApp('/library/music');
 
-    const menuButton = screen.getByTestId('navigation-menu-button');
+    const menuButton = screen.getByTestId('title-navigation-button');
     expect(menuButton).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(menuButton);
     expect(menuButton).toHaveAttribute('aria-expanded', 'true');
@@ -370,10 +402,10 @@ describe('App routes', () => {
     renderApp('/library/music');
 
     await waitFor(() => {
-      expect(screen.getByTestId('navigation-menu-button')).toBeInTheDocument();
+      expect(screen.getByTestId('title-navigation-button')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByTestId('navigation-menu-button'));
+    fireEvent.click(screen.getByTestId('title-navigation-button'));
     const navigation = screen.getByTestId('mobile-navigation');
     expect(within(navigation).getAllByText('Music')).toHaveLength(1);
     expect(within(navigation).queryByText('Library')).not.toBeInTheDocument();
@@ -401,7 +433,7 @@ describe('App routes', () => {
   test('creates a custom playlist from the mobile menu plus button', async () => {
     renderApp('/library/music');
 
-    fireEvent.click(screen.getByTestId('navigation-menu-button'));
+    fireEvent.click(screen.getByTestId('title-navigation-button'));
     fireEvent.click(
       within(screen.getByTestId('mobile-navigation')).getByLabelText(
         'Create playlist',
@@ -419,7 +451,7 @@ describe('App routes', () => {
   test('mobile menu edit mode renames and deletes custom playlists only after confirmation', async () => {
     renderApp('/library/music');
 
-    fireEvent.click(screen.getByTestId('navigation-menu-button'));
+    fireEvent.click(screen.getByTestId('title-navigation-button'));
     const navigation = screen.getByTestId('mobile-navigation');
     expect(within(navigation).getByTestId('mobile-menu-title')).toHaveClass(
       'text-left',
@@ -476,7 +508,7 @@ describe('App routes', () => {
       expect(screen.getByText('second.mp3')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByTestId('navigation-menu-button'));
+    fireEvent.click(screen.getByTestId('title-navigation-button'));
     fireEvent.click(within(screen.getByTestId('mobile-navigation')).getByText('Road'));
 
     const drawer = screen.getByTestId('playlist-drawer');
@@ -503,7 +535,7 @@ describe('App routes', () => {
     });
     fireEvent.click(screen.getByLabelText('Like song.mp3'));
 
-    fireEvent.click(screen.getByTestId('navigation-menu-button'));
+    fireEvent.click(screen.getByTestId('title-navigation-button'));
     const navigation = screen.getByTestId('mobile-navigation');
     fireEvent.click(within(navigation).getByText('좋아하는 음악'));
 
@@ -523,7 +555,7 @@ describe('App routes', () => {
     renderApp('/library/music');
     await screen.findByText('song.mp3');
     fireEvent.click(screen.getByLabelText('Like song.mp3'));
-    fireEvent.click(screen.getByTestId('navigation-menu-button'));
+    fireEvent.click(screen.getByTestId('title-navigation-button'));
     fireEvent.click(within(screen.getByTestId('mobile-navigation')).getByText('좋아하는 음악'));
     const drawer = screen.getByTestId('playlist-drawer');
     const list = within(drawer).getByRole('list');
@@ -604,7 +636,7 @@ describe('App routes', () => {
     swipe(music.querySelector('p')!, -90);
     const video = await screen.findByLabelText('Play newer.mp4');
     expect(screen.getByRole('link', { name: 'Video' })).toHaveAttribute('aria-current', 'page');
-    swipe(video.querySelector('p')!, 90);
+    swipe(within(video).getByTestId('video-responsive-title'), 90);
     const musicAgain = await screen.findByLabelText('Play song.mp3');
     expect(screen.getByRole('link', { name: 'Music' })).toHaveAttribute('aria-current', 'page');
     expect(playerStore.getState().video.source).toBeNull();
@@ -711,7 +743,7 @@ describe('App routes', () => {
   test('video mobile menu exposes the recently watching playlist', async () => {
     renderApp('/library/video');
 
-    fireEvent.click(screen.getByTestId('navigation-menu-button'));
+    fireEvent.click(screen.getByTestId('title-navigation-button'));
 
     expect(
       within(screen.getByTestId('mobile-navigation')).getByText(
@@ -760,7 +792,7 @@ describe('App routes', () => {
       });
     });
 
-    fireEvent.click(screen.getByTestId('navigation-menu-button'));
+    fireEvent.click(screen.getByTestId('title-navigation-button'));
     const navigation = screen.getByTestId('mobile-navigation');
     const entry = within(navigation).getByRole('button', {
       name: /최근 시청한 영상/,
@@ -780,10 +812,10 @@ describe('App routes', () => {
     renderApp('/library/music');
 
     await waitFor(() => {
-      expect(screen.getByTestId('navigation-menu-button')).toBeInTheDocument();
+      expect(screen.getByTestId('title-navigation-button')).toBeInTheDocument();
     });
 
-    const target = screen.getByTestId('navigation-menu-button');
+    const target = screen.getByTestId('title-navigation-button');
     const start = new Event('touchstart', { bubbles: true, cancelable: true });
     Object.defineProperty(start, 'touches', {
       value: [{ clientY: 100 }],

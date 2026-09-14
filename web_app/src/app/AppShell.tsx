@@ -10,7 +10,6 @@ import {
   type TouchEvent as ReactTouchEvent,
 } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { SidebarSimple } from '@phosphor-icons/react/dist/csr/SidebarSimple';
 import { Heart } from '@phosphor-icons/react/dist/csr/Heart';
 import { ChartBar } from '@phosphor-icons/react/dist/csr/ChartBar';
 import { ClockCounterClockwise } from '@phosphor-icons/react/dist/csr/ClockCounterClockwise';
@@ -41,13 +40,13 @@ import {
 } from '../features/playlists/smartCollections';
 import { backgroundLocationFrom } from './backgroundLocation';
 import { GlassModal } from '../core/ui/GlassModal';
-import { CloseGlyph, QueueGlyph } from '../core/ui/AppIcons';
+import { CloseGlyph, QueueGlyph, MusicGlyph, VideoGlyph, ImageGlyph } from '../core/ui/AppIcons';
 import { SearchHostProvider } from './SearchHostContext';
 
 const primaryTabs = [
-  { to: '/library/music', label: 'Music', match: '/library/music' },
-  { to: '/library/video', label: 'Video', match: '/library/video' },
-  { to: '/library/image', label: 'Image', match: '/library/image' },
+  { to: '/library/music', label: 'Music', icon: MusicGlyph, match: '/library/music' },
+  { to: '/library/video', label: 'Video', icon: VideoGlyph, match: '/library/video' },
+  { to: '/library/image', label: 'Image', icon: ImageGlyph, match: '/library/image' },
 ] as const;
 
 const sideSections = {
@@ -112,6 +111,28 @@ export function AppShell({ children }: { children: ReactNode }) {
   const videoPresentation = libraryStores.video(
     (state) => activeVideoMediaId === null ? undefined : state.presentation.get(activeVideoMediaId),
   );
+  const [libraryEdges, setLibraryEdges] = useState({ top: false, bottom: false });
+  useEffect(() => {
+    const updateShade = () => {
+      const scrollTop = Math.max(0, window.scrollY);
+      const height = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+      const top = scrollTop > 0;
+      const bottom = scrollTop + window.innerHeight < height - 1;
+      setLibraryEdges(previous => previous.top === top && previous.bottom === bottom
+        ? previous : { top, bottom });
+    };
+    updateShade();
+    window.addEventListener('scroll', updateShade, { passive: true });
+    window.addEventListener('resize', updateShade);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateShade);
+    observer?.observe(document.body);
+    observer?.observe(document.documentElement);
+    return () => {
+      window.removeEventListener('scroll', updateShade);
+      window.removeEventListener('resize', updateShade);
+      observer?.disconnect();
+    };
+  }, []);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   useEffect(() => {
@@ -147,10 +168,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     else if (playlistDrawer !== null) setPlaylistDrawer(null);
     else setDrawerOpen(false);
   }, 50);
+  const [activeFiltersHost, setActiveFiltersHost] = useState<HTMLElement | null>(null);
   const [filterHost, setFilterHost] = useState<HTMLElement | null>(null);
   const [searchHost, setSearchHost] = useState<HTMLElement | null>(null);
   const [searchPopoverHost, setSearchPopoverHost] = useState<HTMLElement | null>(null);
-  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const navigationTriggerRef = useRef<HTMLButtonElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -161,11 +182,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const hasLibraryFilter = shellLocation.pathname.startsWith('/library/');
   const section = sectionForPath(shellLocation.pathname);
   const sidebar = section === null ? null : sideSections[section];
-  const hasMobileMenu = sidebar !== null;
   const canCreatePlaylist = section === 'music' || section === 'video';
   const closeDrawer = () => {
     setDrawerOpen(false);
-    requestAnimationFrame(() => (navigationTriggerRef.current ?? menuButtonRef.current)?.focus());
+    requestAnimationFrame(() => navigationTriggerRef.current?.focus());
   };
   useEffect(() => {
     if (!drawerOpen || createPlaylistOpen || renameTarget !== null || deleteTarget !== null) return;
@@ -374,7 +394,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   return (
-    <SearchHostProvider filterHost={filterHost} host={searchHost} popoverHost={searchPopoverHost}>
+    <SearchHostProvider activeFiltersHost={activeFiltersHost} filterHost={filterHost} host={searchHost} popoverHost={searchPopoverHost}>
       <div
         data-testid="library-swipe-surface"
         onClickCapture={librarySwipeHandlers.onClickCapture}
@@ -388,65 +408,48 @@ export function AppShell({ children }: { children: ReactNode }) {
         onTouchStartCapture={librarySwipeHandlers.onTouchStart}
         className="min-h-screen touch-pan-y bg-zinc-50 text-zinc-950 transition-colors dark:bg-surface dark:text-foreground"
       >
+        {!isImmersiveRoute && !playerOverlay.isOpen && section !== null && section !== 'settings' && <div aria-hidden data-top-visible={libraryEdges.top} data-bottom-visible={libraryEdges.bottom} className="muzio-library-edge-shade pointer-events-none fixed inset-0 z-20" />}
         {!isImmersiveRoute && (
           <header className="sticky top-3 z-30 mx-auto mt-3 max-w-7xl px-3 sm:px-8 lg:px-10">
             {section !== null && (
-              <div className="absolute top-[5.8px] hidden h-[46.4px] w-fit [--title-scale:1.16] md:block">
+              <div className="absolute top-[-1px] sm:top-[2.3px] hidden h-[46px] w-fit md:block">
                 <h1 className="w-fit text-lg font-semibold tracking-tight sm:text-xl">
                   <button
                     type="button"
                     aria-expanded={drawerOpen}
                     aria-controls="app-sidebar-drawer"
                     data-testid="title-navigation-button"
-                    className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 sm:h-10"
+                    className="muzio-title relative flex h-[46px] w-fit items-center px-4"
                     onClick={(event) => {
                       navigationTriggerRef.current = event.currentTarget;
                       setDrawerOpen((open) => !open);
                     }}
                   >
-                    <span className="scale-[calc(1/var(--title-scale))]">{sideSections[section].title}</span>
+                    <span>{sideSections[section].title}</span>
                   </button>
                 </h1>
               </div>
             )}
-            <div className="relative mx-auto w-fit max-w-full">
-              <div className="muzio-topbar relative px-1.5 py-1.5">
-                <div className="flex h-11 items-center justify-center gap-0.5 sm:gap-1">
-                  {hasMobileMenu ? (
-                    <button
-                      ref={menuButtonRef}
-                      type="button"
-                      aria-label="Open navigation"
-                      aria-expanded={drawerOpen}
-                      aria-controls="app-sidebar-drawer"
-                      data-testid="navigation-menu-button"
-                      className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground transition hover:bg-foreground/10"
-                      onClick={(event) => {
-                        navigationTriggerRef.current = event.currentTarget;
-                        setDrawerOpen((open) => !open);
-                      }}
-                    >
-                      <SidebarSimple aria-hidden className="h-6 w-6" weight="regular" />
-                    </button>
-                  ) : (
-                    <span className="h-10 w-10 shrink-0" aria-hidden />
-                  )}
+            <div className="muzio-menu-cluster relative mx-auto w-fit max-w-full min-[480px]:max-md:max-w-[calc(100%-112px)]">
+              <div data-menu-groups className="flex items-center justify-center gap-2">
+                <div className="muzio-topbar flex h-[var(--menu-bar-height,50.6px)] min-w-0 items-center px-1">
                   <SegmentedTabs onNavigate={closeDrawer} />
-                  {hasLibraryFilter && <div ref={setFilterHost} data-testid="filter-host" className="flex h-10 w-10 shrink-0 items-center" />}
-                  <div
-                    ref={setSearchHost}
-                    data-testid="search-host"
-                    className="flex h-10 w-10 shrink-0 items-center justify-end"
-                  />
+                </div>
+                <div className="muzio-topbar flex h-[var(--menu-bar-height,50.6px)] shrink-0 items-center px-1">
+                  {hasLibraryFilter && <div ref={setFilterHost} data-testid="filter-host" className="flex h-11 w-11 shrink-0 items-center justify-center" />}
+                  <div ref={setSearchHost} data-testid="search-host" className="flex h-11 w-11 shrink-0 items-center justify-center" />
                 </div>
               </div>
-              <div ref={setSearchPopoverHost} />
+              <div className="pointer-events-none absolute inset-x-0 top-0">
+                <div ref={setSearchPopoverHost} className="min-h-[var(--menu-bar-height,50.6px)] [&>*]:pointer-events-auto" />
+                <div ref={setActiveFiltersHost} className="mt-2 flex justify-center [&>*]:pointer-events-auto" />
+              </div>
             </div>
             <NavLink
               to="/settings"
               aria-label="Settings"
               onClick={closeDrawer}
-              className="muzio-settings-button absolute right-3 top-[5.8px] hidden h-[46.4px] w-[46.4px] items-center justify-center text-foreground min-[480px]:flex sm:right-8 lg:right-10"
+              className="muzio-settings-button absolute right-3 top-[-1px] sm:top-[2.3px] hidden h-[46px] w-[46px] items-center justify-center text-foreground min-[480px]:flex sm:right-8 lg:right-10"
             >
               <GearSix aria-hidden className="h-[21.1px] w-[21.1px]" />
             </NavLink>
@@ -605,7 +608,7 @@ function SidebarDrawer({
               className="muzio-sheet-title h-[46.4px] w-fit text-left [--title-scale:1.45] sm:[--title-scale:1.16]"
             >
               <span className="muzio-title relative flex h-8 w-fit origin-top-left scale-[var(--title-scale)] items-center px-4 text-lg font-semibold tracking-tight sm:h-10 sm:text-xl">
-                <span className="scale-[calc(1/var(--title-scale))]">{sidebar.title}</span>
+                <span>{sidebar.title}</span>
               </span>
             </h2>
             <button type="button" aria-label="Close navigation" onClick={onClose} className="muzio-sheet-header-action muzio-settings-button flex h-[46.4px] w-[46.4px] shrink-0 items-center justify-center">
@@ -803,10 +806,11 @@ function SegmentedTabs({ onNavigate }: { onNavigate?: () => void }) {
             onClick={onNavigate}
             className={
               active
-                ? 'rounded-full bg-white/62 px-2 py-2 max-[359px]:px-1.5 text-base max-[359px]:text-sm font-medium leading-5 text-zinc-950 shadow-sm sm:px-5 dark:bg-white/[0.10] dark:text-foreground'
-                : 'rounded-full px-2 py-2 max-[359px]:px-1.5 text-base max-[359px]:text-sm font-medium leading-5 text-zinc-500 hover:text-zinc-950 sm:px-5 dark:text-muted dark:hover:text-foreground'
+                ? 'inline-flex items-center gap-1 rounded-full bg-white/62 px-2 py-2 max-[359px]:px-1 text-base max-[359px]:text-xs font-medium leading-5 text-zinc-950 shadow-sm sm:px-5 dark:bg-white/[0.10] dark:text-foreground'
+                : 'inline-flex items-center gap-1 rounded-full px-2 py-2 max-[359px]:px-1 text-base max-[359px]:text-xs font-medium leading-5 text-zinc-500 hover:text-zinc-950 sm:px-5 dark:text-muted dark:hover:text-foreground'
             }
           >
+            <tab.icon aria-hidden className="h-4 w-4 shrink-0" />
             {tab.label}
           </NavLink>
         );

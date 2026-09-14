@@ -1,3 +1,4 @@
+import { libraryRootLabel } from '../../core/media/libraryRootLabel';
 import { ArrowLeft } from '@phosphor-icons/react/dist/csr/ArrowLeft';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -171,7 +172,7 @@ export function PlaylistDrawer({
                       {item.metadata?.title || item.name}
                     </span>
                     <span className="block truncate text-xs text-muted">
-                      {[item.metadata?.artist, item.metadata?.album].filter(Boolean).join(' · ') || item.rootName}
+                      {[item.metadata?.artist, item.metadata?.album].filter(Boolean).join(' · ') || libraryRootLabel(item)}
                     </span>
                   </span>
                   {item.type !== 'image' && (

@@ -14,3 +14,16 @@ it('opens and focuses artist search requests, and can reopen after dismissal', (
   view.rerender(<FloatingSearchControl title="Music" query="" onQueryChange={onQueryChange} openRequest="next-artist" />);
   expect(screen.getByRole('textbox', { name: 'Filter Music' })).toHaveFocus();
 });
+
+it('closes inline search with X or outside pointer without clearing the query', () => {
+  const change = vi.fn();
+  render(<FloatingSearchControl title="Video" query="saved" onQueryChange={change} />);
+  fireEvent.click(screen.getByLabelText('Search Video'));
+  expect(screen.getByLabelText('Filter Video')).toHaveValue('saved');
+  fireEvent.click(screen.getByLabelText('Close Video search'));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText('Search Video'));
+  fireEvent.pointerDown(document.body);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(change).not.toHaveBeenCalled();
+});

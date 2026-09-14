@@ -414,6 +414,15 @@ html:has(.muzio-side-sheet, .muzio-modal-backdrop) { overflow: hidden; }
 @supports not (backdrop-filter: blur(1px)) {
   .wr-kit :is(.muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-title, .muzio-settings-button, .muzio-sidebar, .muzio-search) { background-color: var(--viewer-theme-bg); }
 }
+.wr-kit .muzio-library-actions,
+.wr-kit .muzio-library-menu {
+  background: var(--app-menu-surface);
+  backdrop-filter: var(--app-menu-filter);
+  -webkit-backdrop-filter: var(--app-menu-filter);
+}
+.wr-kit .muzio-library-actions { border-radius: 999px; }
+.muzio-library-actions button:not([aria-pressed='true']) { color: var(--app-menu-ink); }
+
 .no-glass :is([data-glass], .muzio-dialog, .muzio-drawer, .muzio-popover, .muzio-dock, .muzio-topbar, .muzio-title, .muzio-settings-button, .muzio-sidebar, .muzio-search) {
   background-color: rgb(var(--surface));
   -webkit-backdrop-filter: none;
@@ -480,4 +489,103 @@ html:has(.muzio-side-sheet, .muzio-modal-backdrop) { overflow: hidden; }
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+
+/* Preserve the cluster width while search replaces both menu groups. */
+ .muzio-menu-cluster [data-menu-groups] {
+  transition: opacity 220ms ease, transform 280ms cubic-bezier(.2,.7,.2,1), visibility 220ms;
+  transform-origin: right center;
+}
+.muzio-menu-cluster:has([data-testid='search-popover']) [data-menu-groups] {
+  visibility: hidden; opacity: 0; transform: translateX(8px) scale(.97); pointer-events: none;
+}
+.muzio-menu-cluster nav a { font-size: 1.1rem; }
+.muzio-menu-cluster nav a svg { width: calc(1.1rem + 2px); height: calc(1.1rem + 2px); }
+@media (max-width: 639px) {
+  .muzio-menu-cluster nav a { padding-inline: 10px; font-size: 14px; gap: 3px; }
+  .muzio-menu-cluster nav a svg { width: 18px; height: 18px; }
+  .muzio-menu-cluster [data-testid='filter-host'], .muzio-menu-cluster [data-testid='search-host'] { width: 36px; }
+}
+@media (max-width: 359px) {
+  .muzio-menu-cluster nav a { padding-inline: 10px; font-size: 12px; }
+}
+
+/* ci.me navigation gradients; each edge follows its remaining scroll content. */
+.muzio-library-edge-shade::before,
+.muzio-library-edge-shade::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  opacity: 0;
+  transition: opacity .6s;
+}
+.muzio-library-edge-shade::before {
+  top: 0;
+  height: 136px;
+  background: linear-gradient(to bottom, rgb(0 0 0 / .85), rgb(0 0 0 / 0));
+}
+.muzio-library-edge-shade::after {
+  bottom: 0;
+  height: 80px;
+  background: linear-gradient(to top, rgb(0 0 0), rgb(0 0 0 / 0));
+}
+.muzio-library-edge-shade[data-top-visible='true']::before,
+.muzio-library-edge-shade[data-bottom-visible='true']::after { opacity: 1; }
+@media (max-width: 639px) {
+  .muzio-library-edge-shade::before {
+    height: 108px;
+    background: linear-gradient(to bottom, rgb(20 21 23 / .7) 10%, rgb(20 21 23 / .5) 60%, rgb(20 21 23 / .3) 80%, rgb(20 21 23 / 0) 100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .muzio-library-edge-shade::before, .muzio-library-edge-shade::after { transition: none; }
+}
+/* Opacity animation on an ancestor creates a backdrop root and prevents the
+   glass children from sampling the list behind them (including fill-mode). */
+.muzio-inline-search { animation: none; }
+.muzio-search-field { transform-origin: right center; animation: muzio-search-expand 300ms cubic-bezier(.2,.7,.2,1) both; }
+.muzio-search-screen-icon { animation: muzio-search-icon 300ms cubic-bezier(.2,.7,.2,1) both; }
+.muzio-search-close svg { animation: muzio-search-close 280ms ease both; }
+@keyframes muzio-search-expand { from { opacity: 0; transform: translateX(14px) scaleX(.86); } to { opacity: 1; transform: none; } }
+@keyframes muzio-search-icon { from { opacity: 0; transform: translateX(20px) scale(.88); } to { opacity: 1; transform: none; } }
+@keyframes muzio-search-close { from { opacity: 0; transform: rotate(-70deg) scale(.8); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .muzio-inline-search, .muzio-search-field, .muzio-search-screen-icon, .muzio-search-close svg { animation: none; }
+  .muzio-menu-cluster [data-menu-groups] { transition: none; }
+}
+
+.wr-kit .muzio-active-filters { background: var(--app-menu-surface); border-radius: 999px; }
+.muzio-active-filters .muzio-glass-action {
+  min-height: 28px; padding: 4px 9px; font-size: 12px; line-height: 18px;
+  border-radius: 999px; flex-shrink: 0; white-space: nowrap;
+}
+.muzio-active-filters > button:last-child { flex-shrink: 0; white-space: nowrap; padding: 4px 8px; font-size: 11px; }
+.muzio-menu-cluster [data-testid='filter-host'] svg,
+.muzio-menu-cluster [data-testid='search-toggle'] svg { width: 26px; height: 26px; }
+
+@media (max-width: 639px) {
+  .muzio-menu-cluster { --menu-bar-height: 44px; }
+  .muzio-menu-cluster nav a { padding-block: 6px; }
+}
+
+/* Search uses the same material as the menu; its end controls stay circular. */
+.wr-kit .muzio-search-field {
+  background: var(--app-menu-surface);
+  border-color: var(--app-menu-border);
+  box-shadow: var(--app-menu-panel-shadow);
+  backdrop-filter: var(--app-menu-filter);
+  -webkit-backdrop-filter: var(--app-menu-filter);
+}
+.wr-kit .muzio-search-screen-icon,
+.wr-kit .muzio-search-close {
+  width: var(--menu-bar-height,50.6px);
+  height: var(--menu-bar-height,50.6px);
+  flex: 0 0 var(--menu-bar-height,50.6px);
+  padding: 0;
+  border-radius: 50%;
+}
+@media (min-width: 640px) {
+  .muzio-menu-cluster nav a { padding-block: 8px; }
+  .muzio-menu-cluster [data-testid='filter-host'],
+  .muzio-menu-cluster [data-testid='search-host'] { height: 44px; }
 }
