@@ -59,6 +59,7 @@ export function createProgressService(
         if (!Number.isFinite(positionSec) || positionSec <= 0) return;
         if (!Number.isFinite(durationSec) || durationSec <= 0) return;
         const liveSource = session.getState().source;
+        if (liveSource?.transient) return;
         const sourceMeta =
           liveSource !== null &&
           liveSource.mediaId === sourceId &&

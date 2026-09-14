@@ -425,6 +425,19 @@ describe('playSource', () => {
     expect(store.getState().active).toBe('audio');
   });
 
+  test.each([audioSource, videoSource])('late $mediaType progress restoration cannot replace an extension HLS request waiting for the player', async (restored) => {
+    const session = makeFakeSession();
+    const store = createPlayerStore({ createSession: () => session, createEngine: () => fakeEngine() });
+    const hls: PlaybackSource = { ...videoSource, mediaId: 'temporary-hls:new', transient: true,
+      url: 'https://example.com/live.m3u8', mimeType: 'application/vnd.apple.mpegurl' };
+    await store.getState().playSource(hls);
+    store.getState().seedSource(restored, { positionSec: 120, durationSec: 300 });
+    store.getState().attachElement('video', fakeElement());
+    expect(session.calls.load).toHaveBeenCalledWith(hls);
+    expect(session.calls.play).toHaveBeenCalled();
+    expect(store.getState().video.source?.mediaId).toBe(hls.mediaId);
+  });
+
   test('a queued pending source plays as soon as the element attaches', async () => {
     const session = makeFakeSession();
     const store = createPlayerStore({
@@ -2156,3 +2169,34 @@ describe('subscribe propagation', () => {
 // import is not pruned by isolatedModules.
 const _engineEvent: EngineEvent = { kind: 'paused' };
 void _engineEvent;
+
+test('temporary HLS preserves the external URL through playback and seek without history, progress or optimization', async () => {
+  const source: PlaybackSource = { kind: 'remote', mediaId: 'temporary-hls:test', mediaType: 'video', transient: true,
+    name: 'Temporary HLS', url: 'https://example.com/live.m3u8?sig=a%2Bb', mimeType: 'application/vnd.apple.mpegurl' };
+  const session = makeFakeSession();
+  const progress = memoryProgressRepository();
+  const resolve = vi.fn((value: PlaybackSource) => value);
+  const store = createPlayerStore({
+    createSession: () => session, createEngine: () => fakeEngine(), progressService: createProgressService(progress),
+    videoOptimization: { status: async () => null, prepare: async () => null, cancel: async () => null, clear: async () => null,
+      invalidate: vi.fn(), supportsHLSPlayback: () => true, preferOriginal: vi.fn(), resolve },
+  });
+  store.getState().attachElement('video', fakeElement());
+  await store.getState().playSource(source);
+  session.setState({ source, status: { kind: 'playing' }, positionSec: 20, durationSec: 120 });
+  store.getState().seekActive(40);
+  store.getState().pauseActive();
+  store.getState().flushActivity();
+  expect(session.getState().source?.url).toBe(source.url);
+  expect(resolve).not.toHaveBeenCalled();
+  expect(progress.entries()).toEqual([]);
+  expect(store.getState().activityRecords).toEqual([]);
+  expect(store.getState().recentlyPlayed).toEqual([]);
+  expect(store.getState().musicQueue).toEqual([]);
+  await store.getState().playSource(videoSource);
+  session.setState({ source: videoSource, status: { kind: 'paused' }, positionSec: 30, durationSec: 120 });
+  expect(progress.read(videoSource.mediaId)?.positionSec).toBe(30);
+  expect(store.getState().activityRecords).toHaveLength(1);
+  expect(resolve).toHaveBeenCalledTimes(1);
+  store.getState().detachElement('video');
+});

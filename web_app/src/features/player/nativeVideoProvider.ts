@@ -350,7 +350,10 @@ export class NativeVideoProvider implements MediaProviderAdapter {
 export class NativeVideoProviderLoader implements MediaProviderLoader<NativeVideoProvider> {
   readonly name = 'muzio-native-video';
   target: HTMLElement | null = null;
-  canPlay(src: Src) { return supportsNativeVideo() && typeof src.src === 'string'; }
+  canPlay(src: Src) {
+    return supportsNativeVideo() && typeof src.src === 'string' &&
+      src.src.startsWith('muzio-native://source/');
+  }
   mediaType() { return 'video' as const; }
   async load(context: MediaContext) {
     const bridge = nativeVideoBridge();

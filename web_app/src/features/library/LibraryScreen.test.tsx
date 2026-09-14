@@ -1774,3 +1774,20 @@ test('player artist navigation filters by artist rather than a title substring',
   expect(screen.getByTestId('library-item')).toHaveTextContent('match');
   expect(screen.getByRole('button', { name: 'Remove artist Artist Name' })).toBeInTheDocument();
 });
+
+test('video header offers temporary HLS input even when the library is empty', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (_url, init) => new Response(JSON.stringify(init?.method === 'POST' ? { id: 'temporary-hls:shared-test', playbackUrl: '/api/hls-cache/test/media' } : { items: [] }))));
+  const { playerStore } = renderScreen('video', { kind: 'ok', items: [] });
+  await screen.findByTestId('library-empty');
+  fireEvent.click(screen.getByRole('button', { name: 'HLS 재생' }));
+  const dialog = screen.getByRole('dialog', { name: 'HLS 재생' });
+  const input = within(dialog).getByLabelText('HLS URL');
+  fireEvent.change(input, { target: { value: 'javascript:alert(1)' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: '재생' }));
+  expect(await within(dialog).findByRole('alert')).toBeInTheDocument();
+  expect(playerStore.getState().video.source).toBeNull();
+  fireEvent.change(input, { target: { value: 'https://example.com/live.m3u8?sig=a%2Bb&n=2' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: '재생' }));
+  await waitFor(() => expect(playerStore.getState().video.source).toMatchObject({ transient: true, hlsOriginalUrl: 'https://example.com/live.m3u8?sig=a%2Bb&n=2', url: `${location.origin}/api/hls-cache/test/media` }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});

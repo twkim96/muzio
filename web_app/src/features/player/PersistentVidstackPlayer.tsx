@@ -1,3 +1,6 @@
+import { connectHlsThumbnail } from './hlsDvr/thumbnail';
+import { configureHlsDvr } from './hlsDvr/session';
+import type { DvrStatus } from './hlsDvr/session';
 import './videoFeedback.css';
 import { connectVideoTapFeedback } from './videoTapFeedback';
 import { connectAndroidVideoPip } from '../../core/platform/androidVideoPip';
@@ -8,6 +11,7 @@ import {
   MediaPlayer,
   MediaProvider,
   type MediaPlayerInstance,
+  type MediaProviderAdapter,
   type PlayerSrc,
   type HLSMimeType,
   type VideoMimeType,
@@ -55,16 +59,18 @@ export function PersistentVidstackPlayer({
   portalRoot: HTMLDivElement;
   theaterMode: boolean;
 }) {
+  const [dvrStatus, setDvrStatus] = useState<DvrStatus>({ kind: 'idle', seconds: 0 });
+  const dvrCleanup = useRef<(() => void) | null>(null);
   const [tapFeedback, setTapFeedback] = useState<'play' | 'pause' | null>(null);
   const store = usePlayerStore();
   const overlay = useOptionalPlayerOverlay();
-  const nativeVideo = supportsNativeVideo();
   const parkingHostRef = useRef<HTMLDivElement | null>(null);
   const [player, setPlayer] = useState<MediaPlayerInstance | null>(null);
   const [committedSource, setCommittedSource] = useState<CommittedSource>({
     source: null,
     revision: 0,
   });
+  const nativeVideo = supportsNativeVideo() && !committedSource.source?.transient;
   const revisionRef = useRef(0);
   const commitResolversRef = useRef(new Map<number, () => void>());
 
@@ -153,7 +159,7 @@ export function PersistentVidstackPlayer({
   }, [host, player, store]);
 
   useLayoutEffect(() => connectAndroidVideoPip(portalRoot), [portalRoot]);
-  useLayoutEffect(() => connectNativeVideoSurface(portalRoot), [portalRoot]);
+  useLayoutEffect(() => nativeVideo ? connectNativeVideoSurface(portalRoot) : undefined, [portalRoot, nativeVideo]);
   useLayoutEffect(() => {
     if (!nativeVideo) return;
     return androidShellBridge()?.subscribe?.((event) => {
@@ -167,6 +173,22 @@ export function PersistentVidstackPlayer({
   }, [player]);
 
   const source = committedSource.source;
+  const transient = source?.transient === true;
+  useLayoutEffect(() => {
+    if (!player?.el || !source?.transient) return;
+    return connectHlsThumbnail(player.el, source.url);
+  }, [player, source?.mediaId, source?.url, source?.transient]);
+  const dvrPlayerRef = useRef(player);
+  dvrPlayerRef.current = player;
+  const transientRef = useRef(transient);
+  transientRef.current = transient;
+  const configureProvider = useCallback((provider: MediaProviderAdapter | null) => {
+    dvrCleanup.current?.(); dvrCleanup.current = null;
+    setDvrStatus({ kind: 'idle', seconds: 0 });
+    if (provider && transientRef.current) dvrCleanup.current = configureHlsDvr(provider, setDvrStatus, dvrPlayerRef.current);
+    else configureEmbeddedHLSProvider(provider);
+  }, []);
+  useLayoutEffect(() => () => { dvrCleanup.current?.(); dvrCleanup.current = null; }, []);
   const playerSource: PlayerSrc | undefined =
     source === null
       ? undefined
@@ -197,16 +219,29 @@ export function PersistentVidstackPlayer({
           style={{ display: 'flex', ...(theaterMode ? { border: 0 } : {}) }}
           src={playerSource}
           crossOrigin={nativeMessagePort() ? undefined : 'anonymous'}
-          title={source?.name ?? 'Video'}
+          title={source?.title ?? source?.name ?? 'Video'}
           viewType="video"
           logLevel="silent"
           load="custom"
           preload="metadata"
           playsInline
-          streamType="on-demand"
-          onProviderChange={configureEmbeddedHLSProvider}
+          minLiveDVRWindow={transient ? 12 : 60}
+          streamType={dvrStatus.kind === 'recording' && transient ? 'live:dvr' : transient ? 'unknown' : 'on-demand'}
+          onProviderChange={configureProvider}
         >
-          <MediaProvider loaders={nativeVideo ? nativeVideoLoaders : undefined} />
+          {/* Vidstack reuses a video outlet across loaders. Remount only the outlet
+              when switching between native pixels and an actual HTML video. */}
+          <MediaProvider key={`${nativeVideo ? 'native' : 'web'}-${transient ? `${source?.mediaId}/${source?.url}` : 'library'}`} loaders={nativeVideoLoaders} />
+          {transient && dvrStatus.kind !== 'idle' && (
+            <div className="muzio-dvr-status" role="status">
+              {dvrStatus.kind === 'recording' ? `되감기 ${Math.floor(dvrStatus.seconds / 60)}분 · HLS별 서버 보관 최대 1GB` : '이 환경 또는 스트림에서는 임시 되감기를 사용할 수 없습니다.'}
+            </div>
+          )}
+          {theaterMode && source && (
+            <div className="muzio-theater-title" data-testid="video-theater-title">
+              <span>{source.title ?? source.name}</span>
+            </div>
+          )}
           {tapFeedback && <div key={tapFeedback} className="muzio-video-feedback" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="currentColor">{tapFeedback === 'play'
               ? <path d="M8 5v14l11-7z" />

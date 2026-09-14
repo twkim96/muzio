@@ -518,3 +518,23 @@ test.each(['android', 'ios', 'macos'] as const)('leaves %s native video metadata
     view.unmount();
   } finally { configureAndroidShell(null); }
 });
+
+test.each(['ios', 'macos'] as const)('%s temporary HLS uses web media controls and returns ownership to native library video', async platform => {
+  const { configureAndroidShell } = await import('../../core/platform/androidShell');
+  configureAndroidShell({ platform, capabilities: { nativeVideoSession: true }, request: async <T,>() => ({} as T) });
+  try {
+    const mediaSession = installMediaSession();
+    const store = createPlayerStore();
+    const video = { source: { kind: 'remote' as const, mediaId: 'temporary-hls:test', mediaType: 'video' as const,
+      name: 'Temporary HLS', transient: true, url: 'https://example.com/live.m3u8' },
+      status: { kind: 'playing' as const }, positionSec: 42, durationSec: 120 };
+    store.setState({ active: 'video', video });
+    const view = renderSync(store);
+    await act(async () => {});
+    expect(mediaSession.metadata).toMatchObject({ title: 'Temporary HLS' });
+    expect(mediaSession.handlers.pause).toBeTypeOf('function');
+    act(() => store.setState({ video: { ...video, source: { ...video.source, transient: false, url: '/api/media/v1' } } }));
+    expect(mediaSession.handlers.pause).toBeNull();
+    view.unmount();
+  } finally { configureAndroidShell(null); }
+});

@@ -1,3 +1,5 @@
+import { SharedHlsSessions } from '../player/hlsDvr/sharedSessions';
+import { HlsPlaybackButton } from '../player/HlsPlaybackEntry';
 import { ArrowUp } from '@phosphor-icons/react/dist/csr/ArrowUp';
 import { useLocation } from 'react-router-dom';
 import { usePlayerStore } from '../player/PlayerContext';
@@ -318,6 +320,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
       {(type === 'video' || (result?.kind === 'ok' && visibleItems.length > 0)) && (
         <LibrarySortRow type={type} sortKey={sortKey} sortDirection={sortDirection} onSort={selectSort} />
       )}
+      {type === 'video' && <SharedHlsSessions />}
       <LibraryBody
         type={type}
         status={status}
@@ -580,7 +583,8 @@ function LibrarySortRow({ type, sortKey, sortDirection, onSort }: {
             </button>
           );
         })}
-        </div>
+        {type === 'video' && <HlsPlaybackButton />}
+      </div>
     </div>
   );
 }

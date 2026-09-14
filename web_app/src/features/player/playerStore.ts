@@ -707,6 +707,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       }
       if (
         targetKind === 'video' &&
+        !source.transient &&
         videoOptimization !== null &&
         !options.skipVideoOptimization
       ) {
@@ -750,7 +751,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           syncActivityProgress(targetKind, slot.session.getState(), true);
         }
         const activityRecords =
-          activityRepository !== null && !(targetKind === 'audio' && get().nativeAudio && nativePlaybackHistory)
+          !playbackSource.transient && activityRepository !== null && !(targetKind === 'audio' && get().nativeAudio && nativePlaybackHistory)
             ? activityRepository.recordPlay(
                 activitySourceFromPlaybackSource(playbackSource),
                 now(),
@@ -829,7 +830,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       const source = session.getState().source;
       if (
         source === null ||
-        source.mediaType !== 'video' ||
+        source.mediaType !== 'video' || source.transient ||
         source.optimizationOriginalUrl !== undefined ||
         source.optimizationAutoSwitchBlocked === true
       ) {
@@ -908,7 +909,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
     ) => {
       if (
         activityRepository === null ||
-        state.source === null
+        state.source === null || state.source.transient
       ) {
         return;
       }
@@ -1356,8 +1357,10 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         const slot = slots[targetKind];
         // Skip when a real source is already loaded so the boot-time seed cannot
         // overwrite live playback or a route-remount parking-lot source.
+        // Remote progress can arrive while an extension request is waiting for
+        // its lazy player mount. Do not clear that request or steal its focus.
         const liveSource = slot.session?.getState().source ?? null;
-        if (liveSource !== null) return;
+        if (liveSource !== null || slots.audio.pendingPlay !== null || slots.video.pendingPlay !== null) return;
         const positionSec =
           typeof savedState?.positionSec === 'number' &&
           Number.isFinite(savedState.positionSec) &&

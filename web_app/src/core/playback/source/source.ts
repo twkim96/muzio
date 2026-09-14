@@ -12,6 +12,10 @@ export type PlaybackSource = RemotePlaybackSource;
 
 export interface RemotePlaybackSource {
   kind: 'remote';
+  /** One-time external playback, excluded from library persistence and optimization. */
+  transient?: boolean;
+  /** Original signed URL; transport can be the shared server HLS cache. */
+  hlsOriginalUrl?: string;
   /** Local items use an opaque native library handle, never an arbitrary URI. */
   location?: 'local' | 'network';
   /** Stable media id from the backend; useful as a cache key. */

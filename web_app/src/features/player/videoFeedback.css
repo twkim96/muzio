@@ -32,3 +32,45 @@
 .muzio-video .vds-video-layout[data-sm] .vds-controls .vds-play-button {
   display: none;
 }
+
+/* Theater titles share Vidstack's control visibility, including native Apple video. */
+.muzio-theater-title {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 10;
+  padding: 24px 104px 40px 80px;
+  color: white;
+  font-size: clamp(16px, 2vw, 24px);
+  font-weight: 600;
+  line-height: 1.4;
+  text-shadow: 0 2px 8px rgb(0 0 0 / .75);
+  background: linear-gradient(rgb(0 0 0 / .5), transparent);
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 180ms ease, visibility 180ms;
+}
+.muzio-theater-title > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.muzio-video[data-controls] .muzio-theater-title { visibility: visible; opacity: 1; }
+@media (min-width: 640px) {
+  .muzio-theater-title { padding-top: 32px; padding-left: 88px; }
+}
+.muzio-video[data-fullscreen] .muzio-theater-title,
+[data-native-video-expanded] .muzio-theater-title { padding-left: 24px; }
+@media (prefers-reduced-motion: reduce) {
+  .muzio-theater-title { transition: none; }
+}
+
+.muzio-dvr-status {
+  position: absolute; left: 16px; bottom: 100px; z-index: 10;
+  max-width: calc(100% - 32px); color: white; font-size: 12px;
+  padding: 4px 8px; border-radius: 8px; background: rgb(0 0 0 / .55);
+  pointer-events: none; visibility: hidden;
+}
+.muzio-video[data-controls] .muzio-dvr-status { visibility: visible; }

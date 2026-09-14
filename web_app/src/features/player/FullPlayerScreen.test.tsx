@@ -1110,6 +1110,13 @@ describe('FullPlayerScreen', () => {
     expect(summary.querySelector('p')).toBeNull();
     expect(summary).toContainElement(screen.getByTestId('video-open-stream'));
     expect(summary).toContainElement(screen.getByTestId('video-share-stream'));
+    const favorite = screen.getByTestId('video-favorite');
+    expect(summary).toContainElement(favorite);
+    fireEvent.click(favorite);
+    expect(favorite).toHaveAttribute('aria-pressed', 'true');
+    expect(store.getState().likedMediaIds.length).toBeGreaterThan(0);
+    fireEvent.click(favorite);
+    expect(favorite).toHaveAttribute('aria-pressed', 'false');
     const layout = screen.getByTestId('video-watch-layout');
     expect(layout.style.getPropertyValue('--video-summary-height')).toBe('128px');
     summaryHeight = 196;
@@ -1118,7 +1125,7 @@ describe('FullPlayerScreen', () => {
     expect(layout).toHaveClass('overflow-y-auto');
   });
 
-  test('video theater mode reserves information space and restores the watch layout without remounting playback', async () => {
+  test('video theater mode fills the viewport and adds a control title without remounting playback', async () => {
     const store = createPlayerStore();
     store.getState().setSessionForTests(
       'video',
@@ -1156,9 +1163,11 @@ describe('FullPlayerScreen', () => {
     expect(layout).not.toHaveClass('pt-14', 'sm:pt-16');
     expect(layout).not.toHaveClass('max-w-[var(--video-watch-max-width)]');
     expect(primaryColumn).toHaveClass('lg:col-span-full');
-    expect(viewport).toHaveClass('aspect-video', 'w-full',
+    expect(viewport).toHaveClass('w-full', 'h-[100svh]');
+    expect(viewport).not.toHaveClass('aspect-video',
       'lg:max-h-[max(0px,calc(100svh-var(--video-summary-height)-var(--video-watch-top)-1rem))]');
-    expect(viewport).not.toHaveClass('h-[100svh]');
+    expect(screen.getByTestId('video-theater-title')).toHaveTextContent('clip.mp4');
+    expect(mount).toContainElement(screen.getByTestId('video-theater-title'));
     expect(mount).toHaveClass('aspect-auto', '[&_video]:h-full', '[&_video]:object-contain');
     expect(mount).toHaveStyle({ display: 'flex', border: '0px' });
     expect(secondaryColumn).not.toHaveClass('overflow-y-auto');
@@ -1168,6 +1177,7 @@ describe('FullPlayerScreen', () => {
     expect(layout.scrollTop).toBe(0);
     expect(layout).toHaveClass('w-full', 'max-w-none', '[--video-watch-top:0px]');
     expect(viewport).toHaveClass('aspect-video');
+    expect(screen.queryByTestId('video-theater-title')).not.toBeInTheDocument();
     expect(screen.getByTestId('video-mount')).toBe(mount);
   });
 
@@ -2016,3 +2026,32 @@ describe('FullPlayerScreen', () => {
   expect(screen.getByTestId('location')).toHaveAttribute('data-artist', 'Artist Name');
   expect(store.getState().audio.positionSec).toBe(42);
  });
+
+test.each([
+  ['browser blocked playback; press play to retry', '재생'],
+  ['network error', '다시 연결'],
+])('temporary HLS error %s offers the appropriate recovery', async (message, button) => {
+  const store = createPlayerStore();
+  const source: PlaybackSource = { kind: 'remote', mediaType: 'video', mediaId: 'temporary-hls:test', transient: true,
+    name: 'HLS test', mimeType: 'application/vnd.apple.mpegurl', url: 'https://example.com/live.m3u8?sig=a%2Bb' };
+  const playSource = vi.fn(async (_source: PlaybackSource) => {});
+  const retryActivePlayback = vi.fn(async () => {});
+  const optimization = vi.spyOn(videoOptimizationService, 'status');
+  const fallback = vi.spyOn(fallbackClient, 'fetchFallbackPlan');
+  store.setState({ active: 'video', video: { source, status: { kind: 'error', message }, positionSec: 0, durationSec: 0 },
+    playSource, retryActivePlayback });
+  renderScreenWithoutVideoSurface(store);
+  fireEvent.click(screen.getByRole('button', { name: button }));
+  if (button === '재생') {
+    expect(retryActivePlayback).toHaveBeenCalledOnce();
+    expect(playSource).not.toHaveBeenCalled();
+  } else {
+    expect(playSource).toHaveBeenCalledOnce();
+    const retried = playSource.mock.calls[0][0];
+    expect(new URL(retried.url).search).toBe('?sig=a%2Bb');
+    expect(retried.url).not.toBe(source.url);
+  }
+  expect(screen.queryByTestId('video-favorite')).not.toBeInTheDocument();
+  expect(optimization).not.toHaveBeenCalled();
+  expect(fallback).not.toHaveBeenCalled();
+});

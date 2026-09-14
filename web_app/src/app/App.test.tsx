@@ -919,3 +919,39 @@ test('notification queue opens after resume and acknowledges only after showing 
     expect(pending).toBe(false);
   } finally { configureAndroidShell(null); }
 });
+
+test('extension HLS entry consumes the fragment once and opens the temporary player', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (_url, init) => new Response(JSON.stringify(init?.method === 'POST' ? { id: 'temporary-hls:shared-test', playbackUrl: '/api/hls-cache/test/media' } : { items: [] }))));
+  const url = 'https://example.com/play?sig=a%2Bb%3D&token=two+words';
+  const { playerStore } = renderApp(`/play/hls#${new URLSearchParams({ url, title: '확장 영상' })}`);
+  await waitFor(() => expect(playerStore.getState().video.source).toMatchObject({ hlsOriginalUrl: url, url: `${location.origin}/api/hls-cache/test/media`, name: '확장 영상', transient: true }));
+  expect(window.location.pathname).toBe('/library/video');
+  expect(window.location.hash).toBe('');
+  expect(screen.getByTestId('player-overlay')).toBeInTheDocument();
+  expect(playerStore.getState().activityRecords).toEqual([]);
+});
+
+test('invalid extension HLS entry allows correction without starting playback', async () => {
+  vi.stubGlobal('fetch', vi.fn(async (_url, init) => new Response(JSON.stringify(init?.method === 'POST' ? { id: 'temporary-hls:shared-test', playbackUrl: '/api/hls-cache/test/media' } : { items: [] }))));
+  const { playerStore } = renderApp('/play/hls#url=javascript%3Aalert(1)');
+  await screen.findByRole('alert');
+  expect(window.location.hash).toBe('');
+  expect(playerStore.getState().video.source).toBeNull();
+  fireEvent.change(screen.getByLabelText('HLS URL'), { target: { value: 'https://example.com/stream.m3u8' } });
+  fireEvent.click(screen.getByRole('button', { name: '재생' }));
+  await waitFor(() => expect(playerStore.getState().video.source?.transient).toBe(true));
+  expect(screen.getByTestId('player-overlay')).toBeInTheDocument();
+});
+
+ test('shows HLS input immediately when navigating between populated library sections', async () => {
+  renderApp('/library/music');
+  for (const tab of ['Video', 'Image', 'Video']) {
+    fireEvent.click(screen.getByRole('link', { name: tab }));
+    if (tab === 'Video') {
+      const button = await screen.findByRole('button', { name: 'HLS 재생' });
+      expect(button).toBeVisible();
+      await screen.findByRole('button', { name: 'Sort by Video' });
+      expect(screen.getAllByRole('button', { name: 'HLS 재생' })).toHaveLength(1);
+    } else expect(screen.queryByRole('button', { name: 'HLS 재생' })).not.toBeInTheDocument();
+  }
+});

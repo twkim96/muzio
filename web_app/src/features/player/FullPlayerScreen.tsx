@@ -1,3 +1,4 @@
+import { supportsEmbeddedHLSPlayback } from './hlsPlaybackSupport';
 import { SleepTimerPopover } from './SleepTimerPopover';
 import { useAndroidBack } from '../../core/platform/androidShell';
 import { MediaCollapseButton } from '../../core/ui/MediaCollapseButton';
@@ -94,11 +95,11 @@ export function FullPlayerScreen({
   const source = state.source;
   const networkHint = usePlaybackNetworkHint(state.status, source);
 
-  const playability =
+  const playability = source?.transient && supportsEmbeddedHLSPlayback() ? 'probably' :
     state.source?.mimeType !== undefined
       ? canPlayMime(state.source.mimeType)
       : 'maybe';
-  const sourceId = state.source?.mediaId ?? null;
+  const sourceId = state.source?.transient ? null : state.source?.mediaId ?? null;
 
   useEffect(() => {
     if (sourceId === null || playability !== 'no') {

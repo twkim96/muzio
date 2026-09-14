@@ -1,3 +1,7 @@
+import { SharedHlsSessionSync } from '../features/player/hlsDvr/sharedSessions';
+import { useEffect } from 'react';
+import { cleanAbandonedHlsDvr } from '../features/player/hlsDvr/session';
+import { HlsPlaybackEntryRoute } from '../features/player/HlsPlaybackEntry';
 import { androidShellBridge, useAndroidBack } from '../core/platform/androidShell';
 import {
   BrowserRouter,
@@ -26,6 +30,7 @@ import {
 } from '../features/player/PlayerOverlayContext';
 
 export function App() {
+  useEffect(cleanAbandonedHlsDvr, []);
   return (
     <BrowserRouter
       future={{
@@ -35,6 +40,7 @@ export function App() {
     >
       <AudioMount />
       <MediaSessionSync />
+      <SharedHlsSessionSync />
       <PlayerOverlayProvider>
         <VideoSurfaceProvider>
           <PlaylistProvider>
@@ -77,6 +83,7 @@ function RoutedContent() {
         <Route path="/library/video" element={<LibraryScreen type="video" />} />
         <Route path="/library/image" element={<LibraryScreen type="image" />} />
         <Route path="/image/:mediaId" element={<ImageViewerScreen />} />
+        <Route path="/play/hls" element={<HlsPlaybackEntryRoute />} />
         <Route path="/player" element={<FullPlayerScreen />} />
         <Route path="/settings" element={<SettingsScreen />} />
         <Route path="/settings/backend" element={<BackendStatusScreen />} />

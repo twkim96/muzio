@@ -1,3 +1,8 @@
+import { SharedHlsSessions } from './hlsDvr/sharedSessions';
+import { reconnectTemporaryHlsSource } from './temporaryHlsSource';
+import { LikeGlyph } from '../../core/ui/AppIcons';
+import { contentKeyForLibraryItem, contentKeysForLibraryItem, contentIdentityForPlaybackSource } from '../../core/media/contentIdentity';
+import { libraryRootLabel } from '../../core/media/libraryRootLabel';
 import { nativeVideoFullscreenActive, setNativeVideoFullscreen } from './nativeVideoFullscreen';
 import { MediaCollapseButton } from '../../core/ui/MediaCollapseButton';
 import {
@@ -80,6 +85,9 @@ export function VideoWatchScreen({
   fallbackState,
   onCollapse,
 }: VideoWatchScreenProps) {
+  const playerStore = usePlayerStore();
+  const playbackStatus = playerStore(state => state.video.status);
+  const autoplayBlocked = playbackStatus.kind === 'error' && playbackStatus.message.includes('browser blocked playback');
   const videoStore = useLibraryStores().video;
   const videoStatus = videoStore((state) => state.status);
   const videoResult = videoStore((state) => state.result);
@@ -174,10 +182,10 @@ export function VideoWatchScreen({
               className="sticky top-[var(--video-watch-top)] z-20 self-start bg-black lg:relative lg:top-auto lg:z-auto"
             >
               <VideoViewport
-                className={`aspect-video w-full max-h-[calc(100svh-6rem)] lg:max-h-[max(0px,calc(100svh-var(--video-summary-height)-var(--video-watch-top)-1rem))] touch-none overflow-hidden rounded-none bg-black ${
+                className={`w-full touch-none overflow-hidden rounded-none bg-black ${
                   theaterMode
-                    ? ''
-                    : 'sm:rounded-[var(--video-watch-radius)]'
+                    ? 'h-[100svh]'
+                    : 'aspect-video max-h-[calc(100svh-6rem)] lg:max-h-[max(0px,calc(100svh-var(--video-summary-height)-var(--video-watch-top)-1rem))] sm:rounded-[var(--video-watch-radius)]'
                 }`}
                 onHostChange={watchGesture.setFullscreenHost}
               />
@@ -195,8 +203,17 @@ export function VideoWatchScreen({
                 >
                   {title}
                 </h1>
-                <ExternalPlaybackActions source={source} title={title} />
+                <ExternalPlaybackActions source={source} title={title} item={currentItem ?? undefined} />
               </div>
+              {source?.transient && playbackStatus.kind === 'error' && (
+                <div role="alert" className="mt-3 space-y-2 text-sm text-muted">
+                  <p>{autoplayBlocked ? '브라우저에서 자동 재생을 제한했습니다. 재생을 눌러 시작해 주세요.' : 'HLS를 재생하지 못했습니다. 주소 만료 또는 원본 사이트의 접근 제한을 확인해 주세요.'}</p>
+                  <button type="button" className="muzio-glass-action" onClick={() => {
+                    const state = playerStore.getState();
+                    void (autoplayBlocked ? state.retryActivePlayback() : state.playSource(reconnectTemporaryHlsSource(source))).catch(() => {});
+                  }}>{autoplayBlocked ? '재생' : '다시 연결'}</button>
+                </div>
+              )}
               <VideoOptimizationPanel source={source} positionSec={positionSec} playability={playability} />
               {playability === 'no' && (
                 <div className="mt-3 rounded-[var(--video-watch-row-radius)] border border-[color:var(--color-border)] bg-[var(--color-control)] px-3 py-2">
@@ -254,7 +271,7 @@ function VideoOptimizationPanel({
   const [status, setStatus] = useState<VideoOptimizationStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
-  const mediaId = source?.mediaId ?? '';
+  const mediaId = source?.transient ? '' : source?.mediaId ?? '';
 
   useEffect(() => {
     if (mediaId === '') { setStatus(null); return; }
@@ -426,17 +443,24 @@ function VideoDescription({
 function ExternalPlaybackActions({
   source,
   title,
+  item,
 }: {
   source: PlaybackSource | null;
   title: string;
+  item?: LibraryItem;
 }) {
+  const store = usePlayerStore();
+  const likes = store(state => state.likedMediaIds);
+  const toggleLike = store(state => state.toggleLike);
+  const key = item ? contentKeyForLibraryItem(item) : source ? contentIdentityForPlaybackSource(source).key : '';
+  const liked = (item ? contentKeysForLibraryItem(item) : [key]).some(value => likes.includes(value)) || likes.includes(source?.mediaId ?? '');
   const [message, setMessage] = useState('');
   if (source === null) return null;
   const openStream = () => {
-    openPlaybackStream(source.url);
+    openPlaybackStream(source.hlsOriginalUrl ?? source.url);
   };
   const shareStream = async () => {
-    const result = await shareOrCopyPlaybackStream(title, source.url);
+    const result = await shareOrCopyPlaybackStream(title, source.hlsOriginalUrl ?? source.url);
     if (result === 'cancelled') return;
     setMessage(
       result === 'shared'
@@ -451,6 +475,7 @@ function ExternalPlaybackActions({
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
+      {!source.transient && <button type="button" data-testid="video-favorite" aria-label={liked ? 'Unlike video' : 'Like video'} aria-pressed={liked} onClick={() => toggleLike(key)} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--color-border)] bg-[var(--color-control)] text-[var(--color-fg)] hover:bg-[var(--color-control-hover)] aria-pressed:text-accent"><LikeGlyph liked={liked} className="h-5 w-5" /></button>}
       <button
         type="button"
         data-testid="video-open-stream"
@@ -509,6 +534,7 @@ function VideoUpNextList({
         data-testid="video-side-scrollport"
         className={`scrollbar-none min-h-0 touch-pan-y ${theaterMode ? '' : 'lg:flex-1 lg:overflow-y-auto lg:overscroll-contain'}`}
       >
+        <SharedHlsSessions />
         {status === 'loading' && visibleItems.length === 0 ? (
           <p className="text-sm text-[var(--color-muted)]">Loading videos...</p>
         ) : visibleItems.length === 0 ? (
@@ -553,7 +579,7 @@ function VideoUpNextRow({
   const progressRecord = useProgressRecord(item.id);
   const fraction = progressFractionFor(progressRecord);
   const duration = formatDuration(item.metadata?.durationSec);
-  const detail = [item.rootName, item.relativePath].filter(Boolean).join(' / ');
+  const detail = [libraryRootLabel(item), item.relativePath].filter(Boolean).join(' / ');
   const title = item.metadata?.title ?? item.name;
   const progressLabel =
     fraction === null

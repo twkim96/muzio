@@ -1,4 +1,4 @@
-import { supportsNativeCapability } from '../../core/platform/androidShell';
+import { androidShellBridge, supportsNativeCapability } from '../../core/platform/androidShell';
 import { useEffect, useRef } from 'react';
 
 import type { PlaybackStatus } from '../../core/playback/session/session';
@@ -69,7 +69,8 @@ const DEFAULT_SEEK_OFFSET_SEC = 10;
 export function MediaSessionSync() {
   const store = usePlayerStore();
   const activeState = store(selectActiveState);
-  const nativeVideoSession = supportsNativeCapability('nativeVideoSession');
+  const nativeVideoSession = supportsNativeCapability('nativeVideoSession') &&
+    !(activeState.source?.transient && ['ios', 'macos'].includes(androidShellBridge()?.platform ?? ''));
   const nativeAudio = store((state) => state.nativeAudio);
   const source = nativeAudio && store.getState().active !== 'video' ? null : activeState.source;
   const status = activeState.status;
