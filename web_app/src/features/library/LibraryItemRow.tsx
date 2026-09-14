@@ -531,6 +531,8 @@ function LibraryRowActions({
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const moreButtonRef = useRef<HTMLButtonElement | null>(null);
+  const navigate = useNavigate();
+  const artist = item.metadata?.artist?.trim();
   const [copyStatus, setCopyStatus] = useState('제목 복사');
   const copyTitle = async () => {
     const title = item.metadata?.title || item.name;
@@ -586,7 +588,7 @@ function LibraryRowActions({
     const rect = moreButtonRef.current?.getBoundingClientRect();
     if (rect === undefined) return;
     const menuWidth = 176;
-    const menuHeight = onOpenAddToPlaylist ? 84 : 48;
+    const menuHeight = 48 + (onOpenAddToPlaylist ? 36 : 0) + (artist ? 36 : 0);
     const viewportPadding = 12;
     const left = Math.min(
       Math.max(rect.right - menuWidth, viewportPadding),
@@ -650,6 +652,13 @@ function LibraryRowActions({
             className="muzio-popover muzio-library-menu fixed z-[80] w-max rounded-xl p-1 text-sm"
             style={menuPosition}
           >
+            {artist && <button type="button" className="flex w-full whitespace-nowrap rounded-lg px-3 py-2 text-left font-semibold hover:bg-white/10" onClick={(event) => {
+              event.stopPropagation();
+              setOptionsOpen(false);
+              navigate(`/library/${item.type === 'audio' ? 'music' : item.type}`, {
+                state: { artistSearch: artist, artistFilterOnly: true },
+              });
+            }}>Filter by Artist</button>}
             {onOpenAddToPlaylist && <button type="button" className="flex w-full whitespace-nowrap rounded-lg px-3 py-2 text-left font-semibold hover:bg-white/10" onClick={(event) => {
               event.stopPropagation();
               setOptionsOpen(false);

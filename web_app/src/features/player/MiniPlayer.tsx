@@ -1,3 +1,4 @@
+import { useSmoothViewportMotion } from './useSmoothViewportMotion';
 import { useHlsArtwork } from './hlsDvr/useHlsArtwork';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -40,6 +41,7 @@ export function MiniPlayer() {
   const store = usePlayerStore();
   const snapshot = store();
   const state = selectActiveState(snapshot);
+  const viewportMotionRef = useSmoothViewportMotion(state.source !== null);
   const artworkUrl = useHlsArtwork(state.source);
   const [timerOpen, setTimerOpen] = useState(false);
   useAndroidBack(timerOpen, () => setTimerOpen(false), 50);
@@ -205,6 +207,7 @@ export function MiniPlayer() {
   };
   return (
     <div
+      ref={viewportMotionRef}
       data-testid="mini-player"
       data-no-menu-swipe
       className="fixed inset-x-0 bottom-0 z-40 px-3 pb-3 sm:px-6"

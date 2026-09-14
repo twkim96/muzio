@@ -60,7 +60,7 @@ type LibrarySortSelection = { key: LibrarySortKey; direction: LibrarySortDirecti
 
 export function LibraryScreen({ type }: { type: LibraryMediaType }) {
   const location = useLocation();
-  const artistRequest = type === 'audio' && typeof location.state?.artistSearch === 'string'
+  const artistRequest = typeof location.state?.artistSearch === 'string'
     ? location.state.artistSearch.trim() : '';
   const handledArtistRequest = useRef<string>();
   const [searchOpenRequest, setSearchOpenRequest] = useState<string>();
@@ -129,7 +129,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
     updateCurrentPreferences(current => ({ ...current, query: '', filters: {
       ...EMPTY_LIBRARY_FILTERS, artists: [artistRequest.normalize('NFKC').toLocaleLowerCase().trim()],
     } }));
-    setSearchOpenRequest(location.key);
+    if (!location.state?.artistFilterOnly) setSearchOpenRequest(location.key);
   }, [artistRequest, location.key, updateCurrentPreferences]);
   const deferredQuery = useDeferredValue(query);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());

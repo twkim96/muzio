@@ -863,6 +863,24 @@ describe('LibraryScreen', () => {
     }
   });
 
+  test.each(['audio', 'video', 'image'] as const)('filters %s from the artist menu and omits missing artists', async (type) => {
+    const items: LibraryItem[] = ['one', 'two', 'three'].map((id, index) => ({
+      id, type, name: `${id}.file`, rootName: 'Media', relativePath: `${id}.file`, sizeBytes: 100, modifiedAt: '2026-09-14',
+      metadata: { title: id, artist: index === 0 ? 'Artist A' : index === 1 ? 'Artist B' : '   ' },
+    }));
+    const result: LibraryFetchResult = { kind: 'ok', items };
+    const empty: LibraryFetchResult = { kind: 'ok', items: [] };
+    renderScreen(type, type === 'audio' ? result : empty, type === 'video' ? result : empty, type === 'image' ? result : empty);
+    fireEvent.click(await screen.findByLabelText('More options for three.file'));
+    expect(screen.queryByRole('button', { name: 'Filter by Artist' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('More options for one.file'));
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by Artist' }));
+    expect(await screen.findByRole('button', { name: 'Remove artist Artist A' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('More options for two.file')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('More options for one.file')).toBeInTheDocument();
+    expect(screen.queryByTestId('library-row-menu')).not.toBeInTheDocument();
+  });
+
   test('clears selection on media switches, text search, and applied filters', async () => {
     const item = (type: 'audio' | 'video' | 'image'): LibraryItem => ({
       id: type, type, rootName: type, relativePath: `${type}.mp4`, name: `${type}.mp4`,
