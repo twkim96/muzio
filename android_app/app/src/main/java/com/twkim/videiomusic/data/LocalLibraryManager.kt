@@ -35,6 +35,23 @@ class LocalLibraryManager(context: Context) {
 
     private val artworkDirectory = File(app.cacheDir, "local_music_artwork_v1")
 
+    private data class ResolveRoot(val uri: String, val available: Boolean)
+    private data class ResolveItem(
+        val storageId: String,
+        val documentUri: String,
+        val mimeType: String,
+        val name: String,
+        val modifiedMs: Long,
+        val sizeBytes: Long,
+    )
+    private data class ResolveCatalog(
+        val revision: Long,
+        val roots: Map<String, ResolveRoot>,
+        val items: Map<String, ResolveItem>,
+    )
+
+    private val resolveCatalogCache = RevisionedCache<ResolveCatalog>()
+
     suspend fun list(): JSONObject = withContext(Dispatchers.IO) {
         var data = read()
         // Only the one-time legacy migration needs the mutation lock. Normal list reads
@@ -83,7 +100,7 @@ class LocalLibraryManager(context: Context) {
         root.put("needsScan", true)
         save(data)
         scan(data, setOf(id))
-        save(data)
+        save(data, playbackIndexChanged = true)
         startEnrichment()
         publicSnapshot(data)
     } }
@@ -94,7 +111,7 @@ class LocalLibraryManager(context: Context) {
         for (i in 0 until roots.length()) roots.getJSONObject(i).put("needsScan", true)
         save(data)
         scan(data)
-        save(data)
+        save(data, playbackIndexChanged = true)
         startEnrichment()
         publicSnapshot(data)
     } }
@@ -105,7 +122,7 @@ class LocalLibraryManager(context: Context) {
         val target = (0 until roots.length()).map { roots.getJSONObject(it) }.firstOrNull { it.getString("id") == id }
         data.put("roots", JSONArray((0 until roots.length()).map { roots.getJSONObject(it) }.filter { it.getString("id") != id }))
         filterItems(data) { it.getString("storageId") != id }
-        save(data)
+        save(data, playbackIndexChanged = true)
         if (target?.optBoolean("ownsGrant") == true) runCatching {
             resolver.releasePersistableUriPermission(Uri.parse(target.getString("uri")), Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
@@ -113,26 +130,23 @@ class LocalLibraryManager(context: Context) {
     } }
 
     /** Called off the main thread before constructing a Media3 item. Never trusts a web URI. */
-    suspend fun resolveAll(mediaIds: Set<String>): Map<String, Uri> = withContext(Dispatchers.IO) { synchronized(lock) {
-        if (mediaIds.isEmpty()) return@synchronized emptyMap()
+    suspend fun resolveAll(mediaIds: Set<String>): Map<String, Uri> = withContext(Dispatchers.IO) {
+        if (mediaIds.isEmpty()) return@withContext emptyMap()
         mediaIds.forEach(LocalLibraryPolicy::requireId)
-        val data = read()
-        val roots = data.getJSONArray("roots")
-        val authorized = (0 until roots.length()).map { roots.getJSONObject(it) }
-            .filter { hasGrant(it) && it.optBoolean("available", false) }.map { it.getString("id") }.toSet()
-        val items = data.getJSONArray("items")
-        val resolved = mutableMapOf<String, Uri>()
-        for (i in 0 until items.length()) {
-            val item = items.getJSONObject(i)
-            val id = item.getString("id")
-            if (id !in mediaIds) continue
-            require(item.getString("storageId") in authorized) { "Local folder unavailable. Select or refresh the folder again." }
-            require(LocalLibraryPolicy.isAudio(item.optString("mimeType"), item.getString("name"))) { "Only local audio is supported" }
-            resolved[id] = Uri.parse(item.getString("documentUri"))
+        val catalog = resolveCatalog()
+        val grantedUris = resolver.persistedUriPermissions.asSequence()
+            .filter { it.isReadPermission }.map { it.uri.toString() }.toSet()
+        mediaIds.associateWith { id ->
+            val item = catalog.items[id]
+                ?: error("Local track is no longer in an authorized folder. Refresh local folders.")
+            val root = catalog.roots[item.storageId]
+            require(root != null && root.available && root.uri in grantedUris) {
+                "Local folder unavailable. Select or refresh the folder again."
+            }
+            require(LocalLibraryPolicy.isAudio(item.mimeType, item.name)) { "Only local audio is supported" }
+            Uri.parse(item.documentUri)
         }
-        require(resolved.keys.containsAll(mediaIds)) { "Local track is no longer in an authorized folder. Refresh local folders." }
-        resolved
-    } }
+    }
 
     /** WebView calls this on its request worker; paths are derived solely from registry records. */
     fun openArtwork(id: String): java.io.InputStream? = runBlocking(Dispatchers.IO) {
@@ -150,12 +164,49 @@ class LocalLibraryManager(context: Context) {
      */
     suspend fun artworkUris(ids: Set<String>, selectedId: String?): Map<String, Uri> = withContext(Dispatchers.IO) {
         ids.forEach(LocalLibraryPolicy::requireId)
-        val authorized = authorizedItems()
-        selectedId?.takeIf { it in ids }?.let(authorized::get)?.let(::scheduleArtworkExtraction)
-        ids.mapNotNull { id ->
-            val item = authorized[id] ?: return@mapNotNull null
-            artworkFile(item).takeIf { it.isFile }?.let { id to Uri.fromFile(it) }
+        val catalog = resolveCatalog()
+        val grantedUris = resolver.persistedUriPermissions.asSequence()
+            .filter { it.isReadPermission }.map { it.uri.toString() }.toSet()
+        val authorized = ids.mapNotNull { id ->
+            val item = catalog.items[id] ?: return@mapNotNull null
+            val root = catalog.roots[item.storageId] ?: return@mapNotNull null
+            if (!root.available || root.uri !in grantedUris || !LocalLibraryPolicy.isAudio(item.mimeType, item.name)) return@mapNotNull null
+            id to item
         }.toMap()
+        selectedId?.takeIf { it in ids }?.let(authorized::get)?.let {
+            scheduleArtworkExtraction(selectedId, artworkKey(selectedId, it.modifiedMs, it.sizeBytes))
+        }
+        authorized.mapNotNull { (id, item) ->
+            val key = artworkKey(id, item.modifiedMs, item.sizeBytes)
+            artworkFile(key).takeIf { it.isFile }?.let { id to Uri.fromFile(it) }
+        }.toMap()
+    }
+
+    private fun resolveCatalog(): ResolveCatalog = synchronized(lock) {
+        val revision = playbackCatalogRevision
+        resolveCatalogCache.get(revision) {
+            val data = read()
+            val rootArray = data.getJSONArray("roots")
+            val roots = HashMap<String, ResolveRoot>(rootArray.length())
+            for (index in 0 until rootArray.length()) {
+                val root = rootArray.getJSONObject(index)
+                roots[root.getString("id")] = ResolveRoot(root.getString("uri"), root.optBoolean("available", false))
+            }
+            val itemArray = data.getJSONArray("items")
+            val items = HashMap<String, ResolveItem>(itemArray.length())
+            for (index in 0 until itemArray.length()) {
+                val item = itemArray.getJSONObject(index)
+                items[item.getString("id")] = ResolveItem(
+                    storageId = item.getString("storageId"),
+                    documentUri = item.getString("documentUri"),
+                    mimeType = item.optString("mimeType"),
+                    name = item.getString("name"),
+                    modifiedMs = item.optLong("modifiedMs"),
+                    sizeBytes = item.optLong("sizeBytes"),
+                )
+            }
+            ResolveCatalog(revision, roots, items)
+        }
     }
 
     private fun authorizedItems(): Map<String, JSONObject> {
@@ -169,8 +220,10 @@ class LocalLibraryManager(context: Context) {
             .associateBy { it.getString("id") }
     }
 
-    private fun artworkKey(item: JSONObject) = LocalLibraryPolicy.id(item.getString("id") + ":" + item.optLong("modifiedMs") + ":" + item.optLong("sizeBytes"))
-    private fun artworkFile(item: JSONObject) = File(artworkDirectory, artworkKey(item) + ".jpg")
+    private fun artworkKey(id: String, modifiedMs: Long, sizeBytes: Long) = LocalLibraryPolicy.id("$id:$modifiedMs:$sizeBytes")
+    private fun artworkKey(item: JSONObject) = artworkKey(item.getString("id"), item.optLong("modifiedMs"), item.optLong("sizeBytes"))
+    private fun artworkFile(key: String) = File(artworkDirectory, "$key.jpg")
+    private fun artworkFile(item: JSONObject) = artworkFile(artworkKey(item))
 
     private fun extractArtwork(item: JSONObject) {
         val file = artworkFile(item)
@@ -225,10 +278,8 @@ class LocalLibraryManager(context: Context) {
         return data
     }
 
-    private fun scheduleArtworkExtraction(item: JSONObject) {
-        val id = item.getString("id")
-        val expectedKey = artworkKey(item)
-        if (artworkFile(item).exists() || File(artworkDirectory, "$expectedKey.missing").exists()) return
+    private fun scheduleArtworkExtraction(id: String, expectedKey: String) {
+        if (artworkFile(expectedKey).exists() || File(artworkDirectory, "$expectedKey.missing").exists()) return
         enrichmentScope.launch {
             artworkExtraction.withLock {
                 val current = authorizedItems()[id] ?: return@withLock
@@ -344,7 +395,7 @@ class LocalLibraryManager(context: Context) {
                         val roots = data.getJSONArray("roots")
                         val pendingRoots = (0 until roots.length()).map { roots.getJSONObject(it) }
                             .filter { it.optBoolean("needsScan", false) }.map { it.getString("id") }.toSet()
-                        if (pendingRoots.isNotEmpty()) { scan(data, pendingRoots); save(data) }
+                        if (pendingRoots.isNotEmpty()) { scan(data, pendingRoots); save(data, playbackIndexChanged = true) }
                         authorizedItems().values.filter { it.optBoolean("metadataPending", false) }.take(8)
                     }
                     if (batch.isEmpty()) {
@@ -392,10 +443,11 @@ class LocalLibraryManager(context: Context) {
         catch (_: java.io.FileNotFoundException) { JSONObject().put("roots", JSONArray()).put("items", JSONArray()) }
     }
 
-    private fun save(data: JSONObject) = synchronized(lock) {
+    private fun save(data: JSONObject, playbackIndexChanged: Boolean = false) = synchronized(lock) {
         val output = cache.startWrite()
         try { output.write(data.toString().toByteArray(Charsets.UTF_8)); cache.finishWrite(output) }
         catch (error: Exception) { cache.failWrite(output); throw error }
+        if (playbackIndexChanged) playbackCatalogRevision += 1
         runCatching {
             val items = data.getJSONArray("items")
             val keys = (0 until items.length()).map { artworkKey(items.getJSONObject(it)) }.toSet()
@@ -441,5 +493,6 @@ class LocalLibraryManager(context: Context) {
         private val workerLock = Any()
         private val enrichmentScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private var worker: Job? = null
+        private var playbackCatalogRevision = 0L
     }
 }
