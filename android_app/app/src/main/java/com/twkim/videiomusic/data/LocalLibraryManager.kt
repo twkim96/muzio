@@ -129,18 +129,31 @@ class LocalLibraryManager(context: Context) {
         publicSnapshot(data)
     } }
 
+    private fun grantedUris(): Set<String> = resolver.persistedUriPermissions.asSequence()
+        .filter { it.isReadPermission }.map { it.uri.toString() }.toSet()
+
+    private fun authorizedResolveItem(
+        id: String,
+        catalog: ResolveCatalog = resolveCatalog(),
+        grants: Set<String> = grantedUris(),
+    ): ResolveItem? {
+        val item = catalog.items[id] ?: return null
+        val root = catalog.roots[item.storageId] ?: return null
+        if (!root.available || root.uri !in grants || !LocalLibraryPolicy.isAudio(item.mimeType, item.name)) return null
+        return item
+    }
+
     /** Called off the main thread before constructing a Media3 item. Never trusts a web URI. */
     suspend fun resolveAll(mediaIds: Set<String>): Map<String, Uri> = withContext(Dispatchers.IO) {
         if (mediaIds.isEmpty()) return@withContext emptyMap()
         mediaIds.forEach(LocalLibraryPolicy::requireId)
         val catalog = resolveCatalog()
-        val grantedUris = resolver.persistedUriPermissions.asSequence()
-            .filter { it.isReadPermission }.map { it.uri.toString() }.toSet()
+        val grants = grantedUris()
         mediaIds.associateWith { id ->
             val item = catalog.items[id]
                 ?: error("Local track is no longer in an authorized folder. Refresh local folders.")
             val root = catalog.roots[item.storageId]
-            require(root != null && root.available && root.uri in grantedUris) {
+            require(root != null && root.available && root.uri in grants) {
                 "Local folder unavailable. Select or refresh the folder again."
             }
             require(LocalLibraryPolicy.isAudio(item.mimeType, item.name)) { "Only local audio is supported" }
@@ -151,11 +164,12 @@ class LocalLibraryManager(context: Context) {
     /** WebView calls this on its request worker; paths are derived solely from registry records. */
     fun openArtwork(id: String): java.io.InputStream? = runBlocking(Dispatchers.IO) {
         LocalLibraryPolicy.requireId(id)
-        val item = authorizedItems()[id] ?: return@runBlocking null
-        artworkExtraction.withLock { if (!artworkFile(item).exists()) extractArtwork(item) }
-        val current = authorizedItems()[id] ?: return@runBlocking null
-        if (artworkKey(current) != artworkKey(item)) return@runBlocking null
-        artworkFile(current).takeIf { it.isFile }?.inputStream()
+        val item = authorizedResolveItem(id) ?: return@runBlocking null
+        val expectedKey = artworkKey(id, item)
+        artworkExtraction.withLock { if (!artworkFile(expectedKey).exists()) extractArtwork(id, item) }
+        val current = authorizedResolveItem(id) ?: return@runBlocking null
+        if (artworkKey(id, current) != expectedKey) return@runBlocking null
+        artworkFile(expectedKey).takeIf { it.isFile }?.inputStream()
     }
 
     /**
@@ -165,20 +179,13 @@ class LocalLibraryManager(context: Context) {
     suspend fun artworkUris(ids: Set<String>, selectedId: String?): Map<String, Uri> = withContext(Dispatchers.IO) {
         ids.forEach(LocalLibraryPolicy::requireId)
         val catalog = resolveCatalog()
-        val grantedUris = resolver.persistedUriPermissions.asSequence()
-            .filter { it.isReadPermission }.map { it.uri.toString() }.toSet()
-        val authorized = ids.mapNotNull { id ->
-            val item = catalog.items[id] ?: return@mapNotNull null
-            val root = catalog.roots[item.storageId] ?: return@mapNotNull null
-            if (!root.available || root.uri !in grantedUris || !LocalLibraryPolicy.isAudio(item.mimeType, item.name)) return@mapNotNull null
-            id to item
-        }.toMap()
+        val grants = grantedUris()
+        val authorized = ids.mapNotNull { id -> authorizedResolveItem(id, catalog, grants)?.let { id to it } }.toMap()
         selectedId?.takeIf { it in ids }?.let(authorized::get)?.let {
-            scheduleArtworkExtraction(selectedId, artworkKey(selectedId, it.modifiedMs, it.sizeBytes))
+            scheduleArtworkExtraction(selectedId, artworkKey(selectedId, it))
         }
         authorized.mapNotNull { (id, item) ->
-            val key = artworkKey(id, item.modifiedMs, item.sizeBytes)
-            artworkFile(key).takeIf { it.isFile }?.let { id to Uri.fromFile(it) }
+            artworkFile(artworkKey(id, item)).takeIf { it.isFile }?.let { id to Uri.fromFile(it) }
         }.toMap()
     }
 
@@ -221,27 +228,28 @@ class LocalLibraryManager(context: Context) {
     }
 
     private fun artworkKey(id: String, modifiedMs: Long, sizeBytes: Long) = LocalLibraryPolicy.id("$id:$modifiedMs:$sizeBytes")
+    private fun artworkKey(id: String, item: ResolveItem) = artworkKey(id, item.modifiedMs, item.sizeBytes)
     private fun artworkKey(item: JSONObject) = artworkKey(item.getString("id"), item.optLong("modifiedMs"), item.optLong("sizeBytes"))
     private fun artworkFile(key: String) = File(artworkDirectory, "$key.jpg")
-    private fun artworkFile(item: JSONObject) = artworkFile(artworkKey(item))
 
-    private fun extractArtwork(item: JSONObject) {
-        val file = artworkFile(item)
-        val missing = File(artworkDirectory, artworkKey(item) + ".missing")
+    private fun extractArtwork(id: String, item: ResolveItem) {
+        val key = artworkKey(id, item)
+        val file = artworkFile(key)
+        val missing = File(artworkDirectory, "$key.missing")
         if (file.exists() || missing.exists()) return
         val reader = MediaMetadataRetriever()
         try {
-            reader.setDataSource(app, Uri.parse(item.getString("documentUri")))
-            cacheArtwork(item, reader.embeddedPicture)
+            reader.setDataSource(app, Uri.parse(item.documentUri))
+            cacheArtwork(key, reader.embeddedPicture)
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { /* Provider failures are retryable on the next request. */ }
         finally { runCatching { reader.release() } }
     }
 
-    private fun cacheArtwork(item: JSONObject, picture: ByteArray?) {
+    private fun cacheArtwork(key: String, picture: ByteArray?) {
         artworkDirectory.mkdirs()
-        val file = artworkFile(item)
-        val missing = File(artworkDirectory, artworkKey(item) + ".missing")
+        val file = artworkFile(key)
+        val missing = File(artworkDirectory, "$key.missing")
         if (picture == null || picture.size > 20 * 1024 * 1024) { missing.createNewFile(); return }
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(picture, 0, picture.size, bounds)
@@ -282,9 +290,43 @@ class LocalLibraryManager(context: Context) {
         if (artworkFile(expectedKey).exists() || File(artworkDirectory, "$expectedKey.missing").exists()) return
         enrichmentScope.launch {
             artworkExtraction.withLock {
-                val current = authorizedItems()[id] ?: return@withLock
-                if (artworkKey(current) != expectedKey || artworkFile(current).exists()) return@withLock
-                extractArtwork(current)
+                val current = authorizedResolveItem(id) ?: return@withLock
+                if (artworkKey(id, current) != expectedKey || artworkFile(expectedKey).exists()) return@withLock
+                extractArtwork(id, current)
+            }
+        }
+    }
+
+    /** Warm only the rows most likely to be visible. Never walks the whole library proactively. */
+    private fun startArtworkWarmup() {
+        val catalog = resolveCatalog()
+        val revision = catalog.revision
+        synchronized(artworkWarmupLock) {
+            if (artworkWarmupRevision == revision) return
+            artworkWarmupRevision = revision
+        }
+        enrichmentScope.launch {
+            delay(500) // Keep app-open/list and playback work ahead of speculative artwork reads.
+            if (synchronized(lock) { playbackCatalogRevision != revision }) return@launch
+            val grants = grantedUris()
+            val candidates = LocalArtworkWarmupPolicy.select(
+                catalog.items.mapNotNull { (id, item) ->
+                    if (authorizedResolveItem(id, catalog, grants) == null) null
+                    else LocalArtworkWarmupCandidate(id, item.modifiedMs)
+                },
+            )
+            for (candidate in candidates) {
+                currentCoroutineContext().ensureActive()
+                if (synchronized(lock) { playbackCatalogRevision != revision }) return@launch
+                val item = authorizedResolveItem(candidate.id) ?: continue
+                val key = artworkKey(candidate.id, item)
+                if (artworkFile(key).exists() || File(artworkDirectory, "$key.missing").exists()) continue
+                artworkExtraction.withLock {
+                    val current = authorizedResolveItem(candidate.id) ?: return@withLock
+                    if (artworkKey(candidate.id, current) != key || artworkFile(key).exists()) return@withLock
+                    extractArtwork(candidate.id, current)
+                }
+                delay(75) // Yield between provider reads and give on-demand artwork priority.
             }
         }
     }
@@ -402,9 +444,13 @@ class LocalLibraryManager(context: Context) {
                         // Serialize the idle transition with callers scheduling new work.
                         synchronized(workerLock) { worker = null }
                         // Recheck under the mutation lock: add/list may have raced the idle transition.
-                        mutations.withLock {
-                            if (authorizedItems().values.any { it.optBoolean("metadataPending", false) }) startEnrichment()
+                        val pending = mutations.withLock {
+                            val current = read()
+                            val roots = current.getJSONArray("roots")
+                            (0 until roots.length()).any { roots.getJSONObject(it).optBoolean("needsScan", false) } ||
+                                authorizedItems().values.any { it.optBoolean("metadataPending", false) }
                         }
+                        if (pending) startEnrichment() else startArtworkWarmup()
                         return@launch
                     }
                     val enriched = batch.map { item ->
@@ -490,9 +536,11 @@ class LocalLibraryManager(context: Context) {
         private val lock = Any()
         private val mutations = Mutex()
         private val artworkExtraction = Mutex()
+        private val artworkWarmupLock = Any()
         private val workerLock = Any()
         private val enrichmentScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private var worker: Job? = null
         private var playbackCatalogRevision = 0L
+        private var artworkWarmupRevision = -1L
     }
 }
