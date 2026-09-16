@@ -32,6 +32,7 @@ import {
   QueueGlyph,
   VideoGlyph,
 } from '../../core/ui/AppIcons';
+import { MAX_MUSIC_QUEUE_ITEMS } from '../player/musicQueue';
 import { usePlayerStore } from '../player/PlayerContext';
 import { useOptionalPlayerOverlay } from '../player/PlayerOverlayContext';
 import {
@@ -194,16 +195,17 @@ function LibraryItemRowComponent({
     }
     if (item.type === 'audio') {
       if (musicQueue.length === 0) {
-        const queueSources: PlaybackSource[] = [];
+        const queueSources: PlaybackSource[] = [source];
+        let selectedSeen = false;
         for (const queueItem of queueItems) {
-          if (!isPlayableLibraryItem(queueItem) || queueItem.type !== 'audio') {
+          if (!isPlayableLibraryItem(queueItem) || queueItem.type !== 'audio') continue;
+          if (!selectedSeen) {
+            if (queueItem.id !== item.id) continue;
+            selectedSeen = true;
             continue;
           }
-          queueSources.push(
-            queueItem.id === item.id
-              ? source
-              : playbackSourceFromLibraryItem(queueItem),
-          );
+          queueSources.push(playbackSourceFromLibraryItem(queueItem));
+          if (queueSources.length >= MAX_MUSIC_QUEUE_ITEMS) break;
         }
         void playMusicQueue(queueSources, item.id);
       } else {

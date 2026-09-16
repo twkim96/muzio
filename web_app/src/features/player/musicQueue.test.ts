@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest';
 import type { PlaybackSource } from '../../core/playback/source/source';
 import {
   buildMusicQueue,
+  capMusicQueue,
   clearQueueTracks,
   explicitNextQueueIndex,
   moveQueueTrackNext,
@@ -40,6 +41,36 @@ describe('buildMusicQueue', () => {
 
     expect(queue.tracks.map((track) => track.mediaId)).toEqual(['a', 'b']);
     expect(queue.currentIndex).toBe(1);
+  });
+
+  test('caps a huge generated queue at 300 while keeping the selected track', () => {
+    const tracks = Array.from({ length: 15_000 }, (_, index) => audio(`audio-${index}`));
+    const queue = buildMusicQueue(tracks, 'audio-7500');
+    expect(queue.tracks).toHaveLength(300);
+    expect(queue.currentIndex).toBe(0);
+    expect(queue.tracks[0].mediaId).toBe('audio-7500');
+    expect(queue.tracks[299].mediaId).toBe('audio-7799');
+  });
+});
+
+
+describe('capMusicQueue', () => {
+  test('pins the playing row and evicts the oldest other row when full', () => {
+    const tracks = Array.from({ length: 301 }, (_, index) => audio(`audio-${index}`));
+    const queue = capMusicQueue(tracks, 0);
+    expect(queue.tracks).toHaveLength(300);
+    expect(queue.currentIndex).toBe(0);
+    expect(queue.tracks[0].mediaId).toBe('audio-0');
+    expect(queue.tracks[1].mediaId).toBe('audio-2');
+    expect(queue.tracks.at(-1)?.mediaId).toBe('audio-300');
+  });
+
+  test('keeps the newest rows when no track is actively playing', () => {
+    const tracks = Array.from({ length: 305 }, (_, index) => audio(`audio-${index}`));
+    const queue = capMusicQueue(tracks, -1);
+    expect(queue.tracks).toHaveLength(300);
+    expect(queue.currentIndex).toBe(0);
+    expect(queue.tracks[0].mediaId).toBe('audio-5');
   });
 });
 

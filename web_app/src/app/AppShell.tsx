@@ -27,6 +27,7 @@ import {
 } from '../core/playback/source/source';
 import type { LibraryState } from '../features/library/libraryStore';
 import { useLibraryLiveSync } from '../features/library/useLibraryLiveSync';
+import { MAX_MUSIC_QUEUE_ITEMS } from '../features/player/musicQueue';
 import { QueueDrawer } from '../features/player/QueueDrawer';
 import { usePlayerStore } from '../features/player/PlayerContext';
 import { usePlayerOverlay } from '../features/player/PlayerOverlayContext';
@@ -378,14 +379,18 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (!isPlayableLibraryItem(item)) return;
     if (item.type === 'audio') {
-      const audioSources: PlaybackSource[] = [];
+      const audioSources: PlaybackSource[] = [playbackSourceFromLibraryItem(item)];
+      let selectedSeen = false;
       for (const candidate of playlistItems) {
-        if (!isPlayableLibraryItem(candidate) || candidate.type !== 'audio') {
+        if (!isPlayableLibraryItem(candidate) || candidate.type !== 'audio') continue;
+        if (!selectedSeen) {
+          if (candidate.id !== item.id) continue;
+          selectedSeen = true;
           continue;
         }
         audioSources.push(playbackSourceFromLibraryItem(candidate));
+        if (audioSources.length >= MAX_MUSIC_QUEUE_ITEMS) break;
       }
-      if (audioSources.length === 0) return;
       void playMusicQueue(audioSources, item.id);
       return;
     }

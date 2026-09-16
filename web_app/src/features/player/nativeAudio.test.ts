@@ -7,7 +7,7 @@ import type { PlaybackSource } from '../../core/playback/source/source';
 const track = (id: string): PlaybackSource => ({ kind: 'remote', mediaId: id, queueEntryId: `q-${id}`, mediaType: 'audio', name: id, url: `/api/media/${id}/stream` });
 const a = track('a'); const b = track('b');
 const snapshot: NativePlaybackSnapshot = { source: a, status: { kind: 'playing' }, positionSec: 42, durationSec: 100, queue: [a, b], index: 0, repeatMode: 'all', volume: 0.4, muted: false, stopAfterCurrent: false, sleepTimerEndsAtMs: null, sleepTimerExpired: false };
-async function setup(initial = snapshot, capabilities?: NativeBridge['capabilities']) {
+async function setup(initial = snapshot, capabilities?: NativeBridge['capabilities'], platform?: NativeBridge['platform']) {
   let native = { ...initial };
   let listener: Parameters<NativeBridge['subscribe']>[0] = () => {};
   const request = vi.fn(async (command: string, payload?: object) => {
@@ -19,7 +19,7 @@ async function setup(initial = snapshot, capabilities?: NativeBridge['capabiliti
     if (command === 'playback.pause') native = { ...native, status: { kind: 'paused' } };
     return command === 'playback.snapshot' ? native : undefined;
   });
-  const bridge = { capabilities, request, subscribe: (fn: typeof listener) => { listener = fn; return () => {}; }, dispose: vi.fn() } as NativeBridge;
+  const bridge = { platform, capabilities, request, subscribe: (fn: typeof listener) => { listener = fn; return () => {}; }, dispose: vi.fn() } as NativeBridge;
   const store = createPlayerStore({ activityRepository: null, preferencesRepository: null, likedRepository: null });
   const dispose = await connectNativeAudio(store, bridge);
   request.mockClear();
@@ -180,6 +180,21 @@ it('selects loading immediately before bridge work and only plays the latest rap
   expect(store.getState().audio.source?.mediaId).toBe('a');
   expect(request.mock.calls.filter(([command]) => command === 'playback.play')).toHaveLength(1);
   expect(request.mock.calls.filter(([command]) => command === 'playback.queue')).toHaveLength(0);
+  dispose();
+});
+
+it('starts an Android local track before attaching the rest of its queue', async () => {
+  const localA: PlaybackSource = { ...a, mediaId: 'local:a', queueEntryId: 'q-local-a', location: 'local', url: '/__muzio_local/media/local%3Aa' };
+  const localB: PlaybackSource = { ...b, mediaId: 'local:b', queueEntryId: 'q-local-b', location: 'local', url: '/__muzio_local/media/local%3Ab' };
+  const { store, request, dispose } = await setup(snapshot, undefined, 'android');
+  await store.getState().playMusicQueue([localA, localB], 'local:a');
+  await drain();
+  const mutations = request.mock.calls.filter(([command]) => command !== 'playback.snapshot');
+  expect(mutations.map(([command]) => command)).toEqual(['playback.load', 'playback.play', 'playback.queue']);
+  expect((mutations[0][1] as { queue: PlaybackSource[]; index: number })).toMatchObject({ queue: [{ mediaId: 'local:a' }], index: 0 });
+  expect((mutations[2][1] as { queue: PlaybackSource[]; index: number })).toMatchObject({
+    queue: [{ mediaId: 'local:a' }, { mediaId: 'local:b' }], index: 0,
+  });
   dispose();
 });
 

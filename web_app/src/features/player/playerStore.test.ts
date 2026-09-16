@@ -769,6 +769,25 @@ describe('appendMusicQueue', () => {
     expect(store.getState().active).toBeNull();
     expect(store.getState().audio.source).toBeNull();
   });
+
+  test('caps explicit additions at 300 and evicts the oldest non-playing row', async () => {
+    const session = makeFakeSession();
+    const store = createPlayerStore({ createSession: () => session, createEngine: () => fakeEngine() });
+    store.getState().attachElement('audio', fakeElement());
+    const sources = Array.from({ length: 300 }, (_, index) => ({
+      ...audioSource,
+      mediaId: `audio-${index}`,
+      url: `/api/media/audio-${index}`,
+      name: `audio-${index}.mp3`,
+    }));
+    await store.getState().playMusicQueue(sources, 'audio-0');
+    store.getState().appendMusicQueue([{ ...audioSource, mediaId: 'audio-300', url: '/api/media/audio-300' }]);
+    const queue = store.getState().musicQueue;
+    expect(queue).toHaveLength(300);
+    expect(queue[store.getState().musicQueueIndex].mediaId).toBe('audio-0');
+    expect(queue.some(track => track.mediaId === 'audio-1')).toBe(false);
+    expect(queue.at(-1)?.mediaId).toBe('audio-300');
+  });
 });
 
 describe('playMusicQueue', () => {
@@ -797,7 +816,7 @@ describe('playMusicQueue', () => {
     expect(store.getState().recentlyPlayed[0].mediaId).toBe('a2');
   });
 
-  test('preserves exact order for a 15,000 item queue', async () => {
+  test('caps a 15,000 item generated queue at 300 from the selected track', async () => {
     const store = createPlayerStore();
     const sources = Array.from({ length: 15_000 }, (_, index) => ({
       ...audioSource,
@@ -808,10 +827,10 @@ describe('playMusicQueue', () => {
 
     await store.getState().playMusicQueue(sources, 'audio-7500');
 
-    expect(store.getState().musicQueueIndex).toBe(7500);
-    expect(store.getState().musicQueue.map((source) => source.mediaId)).toEqual(
-      sources.map((source) => source.mediaId),
-    );
+    expect(store.getState().musicQueue).toHaveLength(300);
+    expect(store.getState().musicQueueIndex).toBe(0);
+    expect(store.getState().musicQueue[0].mediaId).toBe('audio-7500');
+    expect(store.getState().musicQueue.at(-1)?.mediaId).toBe('audio-7799');
   });
 
   test('advances to the next queue track when audio ends', async () => {

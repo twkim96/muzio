@@ -46,6 +46,7 @@ import type { VideoOptimizationService } from './videoOptimizationService';
 import { restoreOriginalVideoSource } from './videoOptimizationService';
 import {
   buildMusicQueue,
+  capMusicQueue,
   clearQueueTracks,
   currentQueueTrack,
   explicitNextQueueIndex,
@@ -1501,11 +1502,34 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       appendMusicQueue(sources) {
         const entries = withQueueEntries(sources.filter(source => source.mediaType === 'audio').map(playbackSourceWithoutQueueEntry));
         if (entries.length === 0) return;
-        set(state => ({
-          musicQueue: [...state.musicQueue, ...entries],
-          musicQueueIndex: state.musicQueue.length === 0 ? 0 : state.musicQueueIndex,
-          shuffleBaseQueue: state.shuffle ? [...(state.shuffleBaseQueue ?? state.musicQueue), ...entries] : null,
-        }));
+        set(state => {
+          if (!state.shuffle) {
+            const capped = capMusicQueue(
+              [...state.musicQueue, ...entries],
+              state.musicQueue.length === 0 ? -1 : state.musicQueueIndex,
+            );
+            return {
+              musicQueue: capped.tracks,
+              musicQueueIndex: state.musicQueue.length === 0 ? 0 : capped.currentIndex,
+              shuffleBaseQueue: null,
+            };
+          }
+          const current = currentQueueTrack(state.musicQueue, state.musicQueueIndex);
+          const currentKey = current === null ? null : queueTrackKey(current);
+          const base = baseQueueSnapshot(state);
+          const cappedBase = capMusicQueue([...base.tracks, ...entries], base.currentIndex);
+          const keep = new Set(cappedBase.tracks.map(queueTrackKey));
+          const nextTracks = [
+            ...state.musicQueue.filter(track => keep.has(queueTrackKey(track))),
+            ...entries.filter(track => keep.has(queueTrackKey(track))),
+          ];
+          const currentIndex = currentKey === null ? 0 : findQueueTrackIndex(nextTracks, currentKey);
+          return {
+            musicQueue: nextTracks,
+            musicQueueIndex: currentIndex >= 0 ? currentIndex : 0,
+            shuffleBaseQueue: cappedBase.tracks,
+          };
+        });
       },
 
       async insertQueueItemAfterCurrentAndPlay(source) {
@@ -1526,12 +1550,21 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           base.currentIndex,
           entry,
         );
-        const current = currentQueueTrack(next.tracks, next.currentIndex);
+        const cappedBase = state.shuffle ? capMusicQueue(nextBase.tracks, nextBase.currentIndex) : null;
+        const capped = state.shuffle && cappedBase !== null
+          ? (() => {
+              const keep = new Set(cappedBase.tracks.map(queueTrackKey));
+              const tracks = next.tracks.filter(track => keep.has(queueTrackKey(track)));
+              const currentIndex = findQueueTrackIndex(tracks, queueTrackKey(entry));
+              return { tracks, currentIndex };
+            })()
+          : capMusicQueue(next.tracks, next.currentIndex);
+        const current = currentQueueTrack(capped.tracks, capped.currentIndex);
         if (current === null) return;
         set({
-          musicQueue: next.tracks,
-          musicQueueIndex: next.currentIndex,
-          shuffleBaseQueue: state.shuffle ? nextBase.tracks : null,
+          musicQueue: capped.tracks,
+          musicQueueIndex: capped.currentIndex,
+          shuffleBaseQueue: cappedBase?.tracks ?? null,
         });
         await playSourceOnSlot(current);
       },

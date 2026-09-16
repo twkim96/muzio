@@ -10,15 +10,43 @@ export interface MusicQueueSnapshot {
   stopAfterCurrent: boolean;
 }
 
+export const MAX_MUSIC_QUEUE_ITEMS = 300;
+
+export function capMusicQueue(
+  tracks: readonly PlaybackSource[],
+  currentIndex: number,
+  maxItems: number = MAX_MUSIC_QUEUE_ITEMS,
+): { tracks: PlaybackSource[]; currentIndex: number } {
+  if (tracks.length <= maxItems) return { tracks: [...tracks], currentIndex };
+  if (maxItems <= 0) return { tracks: [], currentIndex: -1 };
+  const removeCount = tracks.length - maxItems;
+  if (currentIndex < 0 || currentIndex >= tracks.length) {
+    return { tracks: tracks.slice(removeCount), currentIndex: 0 };
+  }
+  const boundedCurrent = currentIndex;
+  if (boundedCurrent >= removeCount) {
+    return { tracks: tracks.slice(removeCount), currentIndex: boundedCurrent - removeCount };
+  }
+  return {
+    tracks: [tracks[boundedCurrent], ...tracks.slice(removeCount + 1)],
+    currentIndex: 0,
+  };
+}
+
 export function buildMusicQueue(
   tracks: readonly PlaybackSource[],
   startMediaId: string,
 ): { tracks: PlaybackSource[]; currentIndex: number } {
   const audioTracks = tracks.filter((track) => track.mediaType === 'audio');
-  const index = audioTracks.findIndex((track) => track.mediaId === startMediaId);
+  const requestedIndex = audioTracks.findIndex((track) => track.mediaId === startMediaId);
+  const index = requestedIndex >= 0 ? requestedIndex : 0;
+  if (audioTracks.length <= MAX_MUSIC_QUEUE_ITEMS) {
+    return { tracks: audioTracks, currentIndex: index };
+  }
+  const start = Math.min(index, audioTracks.length - MAX_MUSIC_QUEUE_ITEMS);
   return {
-    tracks: audioTracks,
-    currentIndex: index >= 0 ? index : 0,
+    tracks: audioTracks.slice(start, start + MAX_MUSIC_QUEUE_ITEMS),
+    currentIndex: index - start,
   };
 }
 

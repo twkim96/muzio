@@ -30,6 +30,7 @@ export async function connectNativeAudio(store: PlayerStoreApi, bridge: NativeBr
   let selectionRevision = 0;
   let pendingQueueRevision = 0;
   let queuedQueueUpdate = false;
+  let deferredLocalQueue: { selectionRevision: number; queueRevision: number; queue: PlaybackSource[]; index: number } | null = null;
   // Leave the input task before serializing a potentially large native queue.
   // React can commit the selected/loading state before bridge preparation starts.
   const yieldToUi = () => new Promise<void>((resolve) => {
@@ -104,8 +105,8 @@ export async function connectNativeAudio(store: PlayerStoreApi, bridge: NativeBr
     subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     load(source) {
       const revision = ++selectionRevision;
-      // The load carries the complete queue, so a queue mutation from this
-      // same selection must not send it a second time first.
+      // This selection owns the queue snapshot. Android local playback may load
+      // only the selected row first, then attach the rest after playback starts.
       pendingQueueRevision += 1;
       queuedQueueUpdate = false;
       const current = store.getState();
@@ -115,10 +116,16 @@ export async function connectNativeAudio(store: PlayerStoreApi, bridge: NativeBr
       const nativeSource = matchesSelection ? { ...source, queueEntryId: selected.queueEntryId } : source;
       const queue = matchesSelection ? current.musicQueue.map((item, index) => index === current.musicQueueIndex ? nativeSource : item) : [nativeSource];
       const index = matchesSelection ? current.musicQueueIndex : 0;
+      const fastLocalLoad = (bridge.platform ?? 'android') === 'android' && nativeSource.location === 'local' && queue.length > 1;
+      const loadQueue = fastLocalLoad ? [nativeSource] : queue;
+      const loadIndex = fastLocalLoad ? 0 : index;
+      deferredLocalQueue = fastLocalLoad
+        ? { selectionRevision: revision, queueRevision: pendingQueueRevision, queue, index }
+        : null;
       state = { source: nativeSource, status: { kind: 'loading' }, positionSec: 0, durationSec: source.durationSec ?? 0 };
       listeners.forEach((listener) => listener(state));
       const fragment = /#t=([0-9.]+)/.exec(source.url);
-      pendingLoad = send('playback.load', { source: nativeSource, queue, index,
+      pendingLoad = send('playback.load', { source: nativeSource, queue: loadQueue, index: loadIndex,
         ...(fragment ? { positionSec: Number(fragment[1]) } : {}) });
       void pendingLoad.catch((error) => { if (revision === selectionRevision) report(error); });
     },
@@ -126,7 +133,15 @@ export async function connectNativeAudio(store: PlayerStoreApi, bridge: NativeBr
       const revision = selectionRevision;
       await pendingLoad;
       if (revision !== selectionRevision) return;
-      await send('playback.play');
+      const playCommand = send('playback.play');
+      const deferred = deferredLocalQueue;
+      if (deferred?.selectionRevision === revision && deferred.queueRevision === pendingQueueRevision) {
+        deferredLocalQueue = null;
+        // Queue expansion is serialized after play, but is registered now so
+        // reconciliation cannot briefly replace the web queue with the singleton load.
+        void send('playback.queue', { queue: deferred.queue, index: deferred.index }).catch(report);
+      }
+      await playCommand;
     },
     pause() { void send('playback.pause').catch(report); },
     seek(positionSec) { if (Number.isFinite(positionSec) && positionSec >= 0) void send('playback.seek', { positionSec }).catch(report); },

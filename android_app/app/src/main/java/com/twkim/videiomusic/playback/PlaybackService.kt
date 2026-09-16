@@ -208,7 +208,12 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         sync(sampleCurrent())
-        if (videoSession == null && (!player.playWhenReady || player.mediaItemCount == 0)) stopSelf()
+        releaseVideo(null)
+        player.pause()
+        player.stop()
+        player.clearMediaItems()
+        PlaybackRuntime.cancelSleepTimer()
+        stopSelf()
         super.onTaskRemoved(rootIntent)
     }
 
