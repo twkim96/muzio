@@ -35,24 +35,32 @@ class LocalLibraryManager(context: Context) {
 
     private val artworkDirectory = File(app.cacheDir, "local_music_artwork_v1")
 
-    suspend fun list(): JSONObject = withContext(Dispatchers.IO) { mutations.withLock {
-        val data = read()
+    suspend fun list(): JSONObject = withContext(Dispatchers.IO) {
+        var data = read()
+        // Only the one-time legacy migration needs the mutation lock. Normal list reads
+        // must not wait behind a long SAF folder scan: the last durable catalog is safe
+        // to show immediately while background work catches up.
         if (!data.optBoolean("incrementalScanMigrated", false)) {
-            val existingItems = data.getJSONArray("items")
-            val populatedRoots = (0 until existingItems.length()).map { existingItems.getJSONObject(it).getString("storageId") }.toSet()
-            val legacyRoots = data.getJSONArray("roots")
-            for (i in 0 until legacyRoots.length()) {
-                val root = legacyRoots.getJSONObject(i)
-                if (root.getString("id") !in populatedRoots && !root.has("needsScan")) root.put("needsScan", true)
+            data = mutations.withLock {
+                val current = read()
+                if (!current.optBoolean("incrementalScanMigrated", false)) {
+                    val existingItems = current.getJSONArray("items")
+                    val populatedRoots = (0 until existingItems.length()).map { existingItems.getJSONObject(it).getString("storageId") }.toSet()
+                    val legacyRoots = current.getJSONArray("roots")
+                    for (i in 0 until legacyRoots.length()) {
+                        val root = legacyRoots.getJSONObject(i)
+                        if (root.getString("id") !in populatedRoots && !root.has("needsScan")) root.put("needsScan", true)
+                    }
+                    current.put("incrementalScanMigrated", true)
+                    save(current)
+                }
+                current
             }
-            data.put("incrementalScanMigrated", true)
-            save(data)
         }
-        validateRoots(data)
-        val snapshot = publicSnapshot(data)
+        val snapshot = publicSnapshot(snapshotWithCurrentGrants(data))
         startEnrichment()
         snapshot
-    } }
+    }
 
     suspend fun add(uri: Uri): JSONObject = withContext(Dispatchers.IO) { mutations.withLock {
         require(uri.scheme == "content" && DocumentsContract.isTreeUri(uri)) { "Choose a document folder" }
@@ -129,29 +137,25 @@ class LocalLibraryManager(context: Context) {
     /** WebView calls this on its request worker; paths are derived solely from registry records. */
     fun openArtwork(id: String): java.io.InputStream? = runBlocking(Dispatchers.IO) {
         LocalLibraryPolicy.requireId(id)
-        val item = mutations.withLock { authorizedItems()[id] } ?: return@runBlocking null
+        val item = authorizedItems()[id] ?: return@runBlocking null
         artworkExtraction.withLock { if (!artworkFile(item).exists()) extractArtwork(item) }
-        mutations.withLock {
-            val current = authorizedItems()[id] ?: return@withLock null
-            if (artworkKey(current) != artworkKey(item)) return@withLock null
-            artworkFile(current).takeIf { it.isFile }?.inputStream()
-        }
+        val current = authorizedItems()[id] ?: return@runBlocking null
+        if (artworkKey(current) != artworkKey(item)) return@runBlocking null
+        artworkFile(current).takeIf { it.isFile }?.inputStream()
     }
 
-    /** Extract only the selected item; large queues never trigger a startup metadata rescan. */
+    /**
+     * Playback must never wait for MediaMetadataRetriever. Return already cached art
+     * immediately and let the selected track's extraction happen off the playback path.
+     */
     suspend fun artworkUris(ids: Set<String>, selectedId: String?): Map<String, Uri> = withContext(Dispatchers.IO) {
         ids.forEach(LocalLibraryPolicy::requireId)
-        val selected = mutations.withLock { selectedId?.takeIf { it in ids }?.let { authorizedItems()[it] } }
-        if (selected != null) artworkExtraction.withLock {
-            if (!artworkFile(selected).exists()) extractArtwork(selected)
-        }
-        mutations.withLock {
-            val authorized = authorizedItems()
-            ids.mapNotNull { id ->
-                val item = authorized[id] ?: return@mapNotNull null
-                artworkFile(item).takeIf { it.isFile }?.let { id to Uri.fromFile(it) }
-            }.toMap()
-        }
+        val authorized = authorizedItems()
+        selectedId?.takeIf { it in ids }?.let(authorized::get)?.let(::scheduleArtworkExtraction)
+        ids.mapNotNull { id ->
+            val item = authorized[id] ?: return@mapNotNull null
+            artworkFile(item).takeIf { it.isFile }?.let { id to Uri.fromFile(it) }
+        }.toMap()
     }
 
     private fun authorizedItems(): Map<String, JSONObject> {
@@ -205,19 +209,32 @@ class LocalLibraryManager(context: Context) {
         it.uri.toString() == root.getString("uri") && it.isReadPermission
     }
 
-    private fun validateRoots(data: JSONObject) {
+    /** Validate only the public snapshot so a read never waits for or overwrites an active scan. */
+    private fun snapshotWithCurrentGrants(data: JSONObject): JSONObject {
         val roots = data.getJSONArray("roots")
         val unavailable = mutableSetOf<String>()
         for (index in 0 until roots.length()) {
             val root = roots.getJSONObject(index)
             if (!hasGrant(root)) {
-                root.put("available", false).put("error", "Folder permission was revoked. Select the folder again.")
+                root.put("available", false).put("needsScan", false)
+                    .put("error", "Folder permission was revoked. Select the folder again.")
                 unavailable.add(root.getString("id"))
             }
         }
-        if (unavailable.isNotEmpty()) {
-            filterItems(data) { it.getString("storageId") !in unavailable }
-            save(data)
+        if (unavailable.isNotEmpty()) filterItems(data) { it.getString("storageId") !in unavailable }
+        return data
+    }
+
+    private fun scheduleArtworkExtraction(item: JSONObject) {
+        val id = item.getString("id")
+        val expectedKey = artworkKey(item)
+        if (artworkFile(item).exists() || File(artworkDirectory, "$expectedKey.missing").exists()) return
+        enrichmentScope.launch {
+            artworkExtraction.withLock {
+                val current = authorizedItems()[id] ?: return@withLock
+                if (artworkKey(current) != expectedKey || artworkFile(current).exists()) return@withLock
+                extractArtwork(current)
+            }
         }
     }
 

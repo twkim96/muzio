@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { afterEach, expect, test, vi } from 'vitest';
 import { configureAndroidShell } from '../../core/platform/androidShell';
 import { createLibraryStore } from './libraryStore';
-import { createLocalAwareLibraryStore, startLocalLibraryProgressSync, useNativeLocalLibrary } from './nativeLocalLibrary';
+import { createLocalAwareLibraryStore, hydrateNativeLocalLibraryCache, startLocalLibraryProgressSync, useNativeLocalLibrary } from './nativeLocalLibrary';
 import type { LibraryItem } from '../../core/api/libraryClient';
 import { remoteSourceFromLibraryItem, buildStreamingUrl } from '../../core/playback/source/source';
 
@@ -39,11 +39,25 @@ test('local source uses opaque native id route and retains resume fragment witho
   expect(buildStreamingUrl('local:one', { startSec: 12 })).toBe('/__muzio_local/media/local%3Aone#t=12');
 });
 
+test('hydrates the last native catalog synchronously before a fresh native list returns', async () => {
+  const root = { id: 'device-root', name: 'Phone', uri: 'local:device-root', available: true };
+  configureAndroidShell({ request: vi.fn().mockResolvedValue({ roots: [root], items: [localItem], enrichment: { pending: 0, total: 1 } }) });
+  await useNativeLocalLibrary.getState().run('list');
+  useNativeLocalLibrary.setState({ roots: [], items: [], enrichment: undefined, busy: false, error: '' });
+
+  hydrateNativeLocalLibraryCache();
+
+  expect(useNativeLocalLibrary.getState()).toMatchObject({ roots: [root], items: [localItem], enrichment: { pending: 0, total: 1 } });
+  const network = createLibraryStore({ type: 'audio', fetcher: vi.fn() });
+  expect(createLocalAwareLibraryStore(network).getState().result).toMatchObject({ kind: 'ok', items: [localItem] });
+});
+
 let stopSync: (() => void) | undefined;
 afterEach(() => {
   stopSync?.(); stopSync = undefined;
   configureAndroidShell(null);
   useNativeLocalLibrary.setState({ roots: [], items: [], enrichment: undefined, busy: false, error: '' });
+  localStorage.removeItem('muzio.localLibrary.snapshot.v1');
   vi.useRealTimers();
 });
 test('publishes a large playable filename catalog before metadata and stops polling after completion', async () => {

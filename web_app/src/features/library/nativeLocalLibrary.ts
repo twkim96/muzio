@@ -11,6 +11,39 @@ interface LocalMusicState extends LocalMusicSnapshot {
   run(command: 'list' | 'add' | 'refresh' | 'remove', payload?: object, background?: boolean): Promise<void>;
 }
 
+const LOCAL_LIBRARY_CACHE_KEY = 'muzio.localLibrary.snapshot.v1';
+
+function playableLocalItems(items: LibraryItem[]) {
+  return items.filter((item) => item.type === 'audio' && item.location === 'local' && item.id.startsWith('local:'));
+}
+
+function cacheLocalSnapshot(snapshot: LocalMusicSnapshot) {
+  try {
+    localStorage.setItem(LOCAL_LIBRARY_CACHE_KEY, JSON.stringify({
+      roots: snapshot.roots,
+      items: playableLocalItems(snapshot.items),
+      enrichment: snapshot.enrichment,
+    }));
+  } catch {
+    // Native remains authoritative if web storage is unavailable or full.
+  }
+}
+
+/** Hydrate the last native catalog synchronously so the first app paint can show local songs. */
+export function hydrateNativeLocalLibraryCache() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LOCAL_LIBRARY_CACHE_KEY) ?? 'null') as Partial<LocalMusicSnapshot> | null;
+    if (!parsed || !Array.isArray(parsed.roots) || !Array.isArray(parsed.items)) return;
+    const roots = parsed.roots.filter((root): root is LocalMusicRoot => Boolean(root && typeof root.id === 'string' && typeof root.name === 'string'));
+    const items = playableLocalItems(parsed.items.filter((item): item is LibraryItem => Boolean(item && typeof item.id === 'string')));
+    const enrichment = parsed.enrichment && Number.isFinite(parsed.enrichment.pending) && Number.isFinite(parsed.enrichment.total)
+      ? parsed.enrichment : undefined;
+    useNativeLocalLibrary.setState({ roots, items, enrichment, busy: false, error: '' });
+  } catch {
+    // Ignore a stale/corrupt cache; the immediate native list call will replace it.
+  }
+}
+
 export const useNativeLocalLibrary = create<LocalMusicState>((set, get) => {
   let generation = 0;
   let polling = false;
@@ -26,8 +59,9 @@ export const useNativeLocalLibrary = create<LocalMusicState>((set, get) => {
         const snapshot = await bridge.request<LocalMusicSnapshot>(`localLibrary.${command}`, payload);
         // A late background read must never restore a folder removed in the meantime.
         if (generation !== requestGeneration || androidShellBridge() !== bridge) return;
-        set({ roots: snapshot.roots, enrichment: snapshot.enrichment, error: '',
-          items: snapshot.items.filter((item) => item.type === 'audio' && item.location === 'local' && item.id.startsWith('local:')) });
+        const items = playableLocalItems(snapshot.items);
+        cacheLocalSnapshot({ roots: snapshot.roots, items, enrichment: snapshot.enrichment });
+        set({ roots: snapshot.roots, enrichment: snapshot.enrichment, error: '', items });
       } catch (error) {
         if (generation === requestGeneration && androidShellBridge() === bridge) {
           set({ error: error instanceof Error ? error.message : String(error) });

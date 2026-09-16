@@ -30,7 +30,7 @@ import { videoOptimizationService } from './features/player/videoOptimizationSer
 
 import { createNativeBridge } from './core/platform/nativeBridge';
 import { configureAndroidShell, migrateNativePreferences, supportsNativeCapability } from './core/platform/androidShell';
-import { createLocalAwareLibraryStore, startLocalLibraryProgressSync, useNativeLocalLibrary } from './features/library/nativeLocalLibrary';
+import { createLocalAwareLibraryStore, hydrateNativeLocalLibraryCache, startLocalLibraryProgressSync, useNativeLocalLibrary } from './features/library/nativeLocalLibrary';
 import { AndroidServerSetup } from './core/platform/AndroidServerSetup';
 import { connectNativeVideoSession } from './features/player/nativeVideoSession';
 import { connectNativeAudio } from './features/player/nativeAudio';
@@ -74,6 +74,7 @@ async function startApp() {
     image: createLibraryStore({ type: 'image' }),
   };
   if (supportsNativeCapability('localLibrary', bridge)) {
+    hydrateNativeLocalLibraryCache();
     libraryStores.audio = createLocalAwareLibraryStore(libraryStores.audio);
     void useNativeLocalLibrary.getState().run('list');
     const stopLocalProgressSync = startLocalLibraryProgressSync();
