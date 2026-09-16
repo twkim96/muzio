@@ -259,8 +259,8 @@
 				"SDKROOT" = "iphoneos";
 				"SWIFT_VERSION" = "5.0";
 				"CODE_SIGN_STYLE" = "Automatic";
-				"MARKETING_VERSION" = "1.4.7";
-				"CURRENT_PROJECT_VERSION" = "2";
+				"MARKETING_VERSION" = "1.4.8";
+				"CURRENT_PROJECT_VERSION" = "3";
 				"FRAMEWORK_SEARCH_PATHS" = "$(inherited) \"$(PROJECT_DIR)/ThirdParty/VLCiOS\"";
 				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @executable_path/../Frameworks";
 				"IPHONEOS_DEPLOYMENT_TARGET" = "16.0";
@@ -282,8 +282,8 @@
 				"SDKROOT" = "iphoneos";
 				"SWIFT_VERSION" = "5.0";
 				"CODE_SIGN_STYLE" = "Automatic";
-				"MARKETING_VERSION" = "1.4.7";
-				"CURRENT_PROJECT_VERSION" = "2";
+				"MARKETING_VERSION" = "1.4.8";
+				"CURRENT_PROJECT_VERSION" = "3";
 				"FRAMEWORK_SEARCH_PATHS" = "$(inherited) \"$(PROJECT_DIR)/ThirdParty/VLCiOS\"";
 				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @executable_path/../Frameworks";
 				"IPHONEOS_DEPLOYMENT_TARGET" = "16.0";
@@ -441,8 +441,8 @@
 				"SDKROOT" = "macosx";
 				"SWIFT_VERSION" = "5.0";
 				"CODE_SIGN_STYLE" = "Automatic";
-				"MARKETING_VERSION" = "1.4.7";
-				"CURRENT_PROJECT_VERSION" = "2";
+				"MARKETING_VERSION" = "1.4.8";
+				"CURRENT_PROJECT_VERSION" = "3";
 				"FRAMEWORK_SEARCH_PATHS" = "$(inherited) \"$(PROJECT_DIR)/ThirdParty\"";
 				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @executable_path/../Frameworks";
 				"MACOSX_DEPLOYMENT_TARGET" = "13.0";
@@ -462,8 +462,8 @@
 				"SDKROOT" = "macosx";
 				"SWIFT_VERSION" = "5.0";
 				"CODE_SIGN_STYLE" = "Automatic";
-				"MARKETING_VERSION" = "1.4.7";
-				"CURRENT_PROJECT_VERSION" = "2";
+				"MARKETING_VERSION" = "1.4.8";
+				"CURRENT_PROJECT_VERSION" = "3";
 				"FRAMEWORK_SEARCH_PATHS" = "$(inherited) \"$(PROJECT_DIR)/ThirdParty\"";
 				"LD_RUNPATH_SEARCH_PATHS" = "$(inherited) @executable_path/Frameworks @executable_path/../Frameworks";
 				"MACOSX_DEPLOYMENT_TARGET" = "13.0";

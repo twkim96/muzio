@@ -1,7 +1,7 @@
 # Shared web UI host validation — 2026-09-06
 
-> 현재 후속 상태(2026-09-10 정리):1.4.7/vc15 APK 패키징·데이터 유지 설치·Activity 실행 완료.
-> 운영 서버 DNS 해석 실패로 서버 연결·동기화 실기기 수용은 미완료다.
+> 현재 후속 상태(2026-09-16 정리):1.4.8/vc16 APK 패키징·데이터 유지 설치·Activity 실행 완료.
+> 공용 웹 1.4.8-r1이 APK에 포함된 것을 확인했다. 서버 연결·동기화 및 장시간 재생 수용은 별도 실기기 확인 대상이다.
 > 아래 초기 호스트/1.4.6 및9/9 검증은 당시 이력이다.
 > 1.4.7 알림 큐 연결 및 공용 셔플 버튼 수정은 컴파일·관련 검사까지 완료했고,
 > 해당 변경을 포함한 새 APK는 9/9 패키징·설치·실행 완료. 실제 버튼 동작 검증은 남아 있다.
@@ -302,3 +302,10 @@ entries describe their original runs. This is not the1.4.7 release closeout.
 - WebView 영상의 메타데이터/시간/상태를 서비스의 Media3 세션에 연결하고, 재생/일시정지·앞뒤10초·탐색 명령을 현재 영상에 전달한다. 음악 세션 전환, 이전 페이지 해제 차단, 배경/잠금 시 WebView 유지 포함.
 - `:app:testDebugUnitTest -x :app:buildSharedWeb` 최종 성공. 영향 Kotlin 컴파일 및29테스트(소유권 회귀2개 포함) 통과. 로그 `/tmp/muzio-system-android-complete.log`. 공용 웹119테스트 및 TypeScript/Vite 빌드 통과.
 - 배포 APK 패키징·설치 없음. `adb devices -l` 연결 기기 없음. 잠금화면·알림의 실제 버튼 배치/명령, PiP 닫기, 장시간 배경 유지 및 음악↔영상 전환은 실기기 미검증. 기존 r5 APK 설치는 이번 기능 적용을 의미하지 않는다.
+
+## 1.4.8 playback stability release — 2026-09-16
+
+- 표시 버전을 `1.4.8`, versionCode `16`으로 올리고 공용 웹 `1.4.8-r1`을 APK에 포함했다. 웹 production build와 Android `:app:testDebugUnitTest :app:assembleDebug`가 성공했다.
+- 연결된 Samsung SM-S936N에 `adb install -r`로 업데이트 설치했고 기존 앱 데이터를 삭제하지 않았다. 설치 후 `versionName=1.4.8`, `versionCode=16`, 앱 프로세스 실행을 확인했다.
+- 패키징 APK는 `android_app/app/build/outputs/apk/debug/app-debug.apk`; SHA-256 `a69f0aac1361318358109401de9450314dc492eb58631be0b2bde5fe45c596f4`. APK 내부 서비스워커도 `muzio-shell-v1.4.8-r1`임을 확인했다.
+- 실제 개인 로컬 음악의 장시간 재생, Bluetooth/잠금화면 조작, 영상 PiP 및 서버 동기화는 이 패키징 단계에서 자동 수용으로 간주하지 않는다.

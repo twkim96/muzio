@@ -1,8 +1,8 @@
-# Muzio for iPhone, iPad and Mac — 1.4.7
+# Muzio for iPhone, iPad and Mac — 1.4.8
 
 Shared Swift source hosts the existing React UI in WKWebView and connects audio
-to AVPlayer. In 1.4.7, video pixels use VLCKit (Mac 3.7.3; iOS 4.0.0-a24)
-with the existing web controls; the released 1.4.6 package still uses HTML video.
+to AVPlayer. Version 1.4.8 keeps the VLCKit video path introduced in 1.4.7
+(Mac 3.7.3; iOS 4.0.0-a24) with the existing web controls.
 iOS/iPadOS16+ and macOS13+ targets live in `Muzio.xcodeproj`.
 Current acceptance (updated 2026-09-09): Mac VLC playback is confirmed in the normal
 `dist/apple/Muzio.app` launch target. The corrected VLC4 build is installed on iPad,
@@ -91,7 +91,7 @@ Its icon is generated from the existing web icon without artwork changes.
 3. For a physical device choose your signing Team and a suitable bundle identifier
    in Signing & Capabilities. No account, certificate or provisioning profile is
    embedded in the repository.
-4. Choose a simulator/device and Build/Run. Connect to a reachable Muzio1.4.7 server.
+4. Choose a simulator/device and Build/Run. Connect to a reachable Muzio 1.4.8 server.
 
 ```sh
 xcodebuild -project ios_app/Muzio.xcodeproj -scheme Muzio-iOS \
@@ -135,7 +135,7 @@ References: [WKWebView](https://developer.apple.com/documentation/webkit/wkwebvi
 
 Shared web changes target web, Android and Apple together. Mobile features target
 both native hosts unless an OS/API limitation is documented; missing implementation
-is tracked separately. All user-visible platform versions are 1.4.7 (Apple build2).
+is tracked separately. All user-visible platform versions are 1.4.8 (Apple build 3).
 
 ## Historical shared HTML video playback (released 1.4.6)
 

@@ -1,10 +1,12 @@
-# Apple app acceptance — 1.4.7
+# Apple app acceptance — 1.4.8
 
-## Current status — consolidated 2026-09-10 KST
+## Current status — consolidated 2026-09-16 KST
+
+- Source/version metadata is now `1.4.8` / build `3` to match web and Android. This version bump did not package or install a new Apple app; the physical-device acceptance evidence below remains from the 1.4.7 cycle unless explicitly dated otherwise.
 
 - iPad: final VLC4 startup fix compiled, installed in place, and user confirmed video plus sound (September 8). Basic playback is confirmed; distinct-media A→B→A, prolonged playback, fullscreen/interruption combinations and automatic PiP remain pending. iPhone has no equivalent device acceptance yet.
 - Mac: regular `dist/apple/Muzio.app` launch target now contains the VLC build. Actual A playback with increasing frame/audio counters is confirmed. Prior VLC ABA evidence is recorded below; the final installed build was checked with A, not a fresh ABA timing run. Mac PiP is excluded by user request.
-- Current engine: Mac VLCKit 3.7.3, iOS VLCKit 4.0.0-a24. Shared controls now use server UI1.4.7-r1; release display1.4.7/build2. Earlier device playback evidence below used1.4.6 and does not establish1.4.7 device acceptance.
+- Current engine: Mac VLCKit 3.7.3, iOS VLCKit 4.0.0-a24. Source display metadata is now 1.4.8/build3; the last packaged/installed Apple acceptance remains 1.4.7/build2. Earlier device playback evidence below used1.4.6 and does not establish later device acceptance.
 - Final native builds and real iOS simulator playback regression passed. The earlier PiP test used a fake window controller; it is not real video/PiP acceptance. The real playback regression and final device response appear in the last section.
 - 1.4.7 packages and server deployment are complete; no commit/push. Artifacts and hashes: `../dist/releases/1.4.7-20260910/manifest.json`. iPad update installed, but launch was rejected because the device is locked. Physical sync acceptance remains pending.
 

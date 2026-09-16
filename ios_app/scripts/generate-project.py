@@ -36,7 +36,7 @@ for label,sdk,plist,extra in [('Muzio-iOS','iphoneos','Info.plist',{'IPHONEOS_DE
     product=add(label+'product','PBXFileReference',explicitFileType='wrapper.application',includeInIndex=0,path='Muzio.app',sourceTree='BUILT_PRODUCTS_DIR')
     objects[products]['children'].append(product)
     framework_search_path='$(inherited) "$(PROJECT_DIR)/ThirdParty/VLCiOS"' if sdk=='iphoneos' else '$(inherited) "$(PROJECT_DIR)/ThirdParty"'
-    settings={'PRODUCT_NAME':'Muzio','PRODUCT_BUNDLE_IDENTIFIER':'com.twkim.muzio.apple','INFOPLIST_FILE':plist,'GENERATE_INFOPLIST_FILE':'NO','SDKROOT':sdk,'SWIFT_VERSION':'5.0','CODE_SIGN_STYLE':'Automatic','MARKETING_VERSION':'1.4.7','CURRENT_PROJECT_VERSION':'2','FRAMEWORK_SEARCH_PATHS':framework_search_path,'LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @executable_path/../Frameworks',**extra}
+    settings={'PRODUCT_NAME':'Muzio','PRODUCT_BUNDLE_IDENTIFIER':'com.twkim.muzio.apple','INFOPLIST_FILE':plist,'GENERATE_INFOPLIST_FILE':'NO','SDKROOT':sdk,'SWIFT_VERSION':'5.0','CODE_SIGN_STYLE':'Automatic','MARKETING_VERSION':'1.4.8','CURRENT_PROJECT_VERSION':'3','FRAMEWORK_SEARCH_PATHS':framework_search_path,'LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks @executable_path/../Frameworks',**extra}
     phases=[phase,framework_phase]
     if sdk=='iphoneos':
         settings['ASSETCATALOG_COMPILER_APPICON_NAME']='AppIcon'

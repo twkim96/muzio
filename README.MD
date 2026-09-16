@@ -1,4 +1,4 @@
-# Muzio 1.4.7
+# Muzio 1.4.8
 
 Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 브라우저에서 탐색하고 재생하는 경량 self-hosted 미디어 앱입니다.
@@ -14,7 +14,7 @@ Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 | Item | Current contract |
 | --- | --- |
 | Product/service name | `Muzio` |
-| Version | `1.4.7` |
+| Version | `1.4.8` |
 | Primary client | React + TypeScript web app |
 | Backend | Go `1.22`, CGO-free |
 | Normal runtime | Go server가 API, media, `web_app/dist`를 한 origin에서 제공 |
@@ -87,13 +87,12 @@ Android 설정에서 로컬 음악 폴더를 추가하면 네트워크 음악과
 목록 선표시와 메타데이터/썸네일 후속 갱신을 지원합니다. 위젯·오프라인 화면의
 콜드 실행·재생 큐의 전체 프로세스 복구는 아직 지원하지 않습니다.
 
-개발 중인 `1.4.7`은 웹 컨트롤을 유지하면서 Apple 영상에 VLC를 연결합니다.
-Mac은 VLCKit 3.7.3, iPhone/iPad는 4.0.0-a24를 사용합니다. Mac 일반 실행 앱의
-영상 재생과 수정본 iPad의 기본 영상·소리 출력을 확인했습니다. iPad의 실제
-A→B→A·장시간·자동 PiP, iPhone 및 Android 후속 패치의 실기기 검증은 남아 있습니다.
-표시 버전은 웹·Android·iOS·macOS 모두1.4.7입니다. 검증·배포 및 남은 실기기 확인은 [1.4.7 변경 기록](update_1.4.7.md)을 따릅니다.
-[현재 개발·검증 상태](update_1.4.7.md)와 [Apple 빌드·지원 범위](ios_app/README.md)를
-참조하세요. 이전 릴리스의 산출물·검증 기록은 해당 update 문서에 보존합니다.
+`1.4.8`은 `1.4.7`의 VLC·공유 웹 기반을 유지하면서 Android 로컬 음악 시작 지연,
+대형 큐 처리, 로딩 중 Pause/영상 전환 경합, 로컬 앨범아트 캐시와 재생 종료 시
+진행상태 저장을 안정화합니다. 표시 버전은 웹·Android·iOS·macOS 모두 `1.4.8`이며,
+Android는 versionCode 16, Apple은 build 3입니다. `1.4.7`의 상세 기능·검증 이력은
+[1.4.7 변경 기록](update_1.4.7.md)에 보존하고, 현재 Apple 지원 범위는
+[Apple 빌드·지원 범위](ios_app/README.md)를 참조하세요.
 
 ## Source Of Truth
 
