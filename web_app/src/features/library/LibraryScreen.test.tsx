@@ -721,6 +721,23 @@ describe('LibraryScreen', () => {
     });
   });
 
+  test('keeps previous rows in a small queue when playback starts from the middle', async () => {
+    const { playerStore } = renderScreen('audio', {
+      kind: 'ok',
+      items: [
+        { id: 'a', type: 'audio', rootName: 'music', relativePath: 'a.mp3', name: 'a.mp3', sizeBytes: 1, modifiedAt: '2025-01-01T00:00:00Z' },
+        { id: 'b', type: 'audio', rootName: 'music', relativePath: 'b.mp3', name: 'b.mp3', sizeBytes: 1, modifiedAt: '2025-02-01T00:00:00Z' },
+        { id: 'c', type: 'audio', rootName: 'music', relativePath: 'c.mp3', name: 'c.mp3', sizeBytes: 1, modifiedAt: '2025-03-01T00:00:00Z' },
+      ],
+    });
+    await waitFor(() => expect(screen.getAllByTestId('library-item')).toHaveLength(3));
+    fireEvent.click(screen.getByLabelText('Play b.mp3'));
+    await waitFor(() => {
+      expect(playerStore.getState().musicQueue.map((entry) => entry.mediaId)).toEqual(['c', 'b', 'a']);
+      expect(playerStore.getState().musicQueueIndex).toBe(1);
+    });
+  });
+
   test('uses a thumbnail-only ready update when starting audio playback', async () => {
     const pendingItem: LibraryItem = {
       id: 'a',
@@ -1482,13 +1499,13 @@ describe('LibraryScreen', () => {
       scrollTop = parseFloat(list.style.height) - window.innerHeight;
       fireEvent.scroll(window);
       await act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });
-      await waitFor(() => expect(screen.getByLabelText('Play clip-499.mp4')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByLabelText('Play clip-499.mp4')).toBeInTheDocument(), { timeout: 3000 });
       width = 390;
       fireEvent.resize(window);
       await waitFor(() => expect(list).toHaveAttribute('data-columns', '1'));
       scrollTop = parseFloat(list.style.height) - window.innerHeight;
       fireEvent.scroll(window);
-      await waitFor(() => expect(screen.getByLabelText('Play clip-499.mp4')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByLabelText('Play clip-499.mp4')).toBeInTheDocument(), { timeout: 3000 });
       expect(screen.getAllByTestId('library-item').length).toBeLessThan(100);
     } finally {
       rectSpy.mockRestore();

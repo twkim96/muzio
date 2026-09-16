@@ -16,10 +16,10 @@ describe('native preference migration', () => {
   });
   test('does not acknowledge quota failure and retry retains successful writes', async () => {
     const native = bridge();
-    const write = Storage.prototype.setItem;
-    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+    const write = localStorage.setItem.bind(localStorage);
+    const spy = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
       if (key === 'music.playlists.v1') throw new DOMException('Quota exceeded', 'QuotaExceededError');
-      write.call(this, key, value);
+      write(key, value);
     });
     await expect(migrateNativePreferences(native)).rejects.toThrow('Quota exceeded');
     expect(native.request).not.toHaveBeenCalledWith('shell.finishMigration');

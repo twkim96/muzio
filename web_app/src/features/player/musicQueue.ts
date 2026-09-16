@@ -12,6 +12,25 @@ export interface MusicQueueSnapshot {
 
 export const MAX_MUSIC_QUEUE_ITEMS = 300;
 
+export function windowMusicQueue<T>(
+  tracks: readonly T[],
+  currentIndex: number,
+  maxItems: number = MAX_MUSIC_QUEUE_ITEMS,
+): { tracks: T[]; currentIndex: number } {
+  if (maxItems <= 0 || tracks.length === 0) return { tracks: [], currentIndex: -1 };
+  if (tracks.length <= maxItems) {
+    const index = currentIndex >= 0 && currentIndex < tracks.length ? currentIndex : 0;
+    return { tracks: [...tracks], currentIndex: index };
+  }
+  const index = currentIndex >= 0 && currentIndex < tracks.length ? currentIndex : 0;
+  const before = Math.floor((maxItems - 1) / 2);
+  const start = Math.min(Math.max(0, index - before), tracks.length - maxItems);
+  return {
+    tracks: tracks.slice(start, start + maxItems),
+    currentIndex: index - start,
+  };
+}
+
 export function capMusicQueue(
   tracks: readonly PlaybackSource[],
   currentIndex: number,
@@ -39,15 +58,7 @@ export function buildMusicQueue(
 ): { tracks: PlaybackSource[]; currentIndex: number } {
   const audioTracks = tracks.filter((track) => track.mediaType === 'audio');
   const requestedIndex = audioTracks.findIndex((track) => track.mediaId === startMediaId);
-  const index = requestedIndex >= 0 ? requestedIndex : 0;
-  if (audioTracks.length <= MAX_MUSIC_QUEUE_ITEMS) {
-    return { tracks: audioTracks, currentIndex: index };
-  }
-  const start = Math.min(index, audioTracks.length - MAX_MUSIC_QUEUE_ITEMS);
-  return {
-    tracks: audioTracks.slice(start, start + MAX_MUSIC_QUEUE_ITEMS),
-    currentIndex: index - start,
-  };
+  return windowMusicQueue(audioTracks, requestedIndex >= 0 ? requestedIndex : 0);
 }
 
 export function queueTrackKey(track: PlaybackSource): string {

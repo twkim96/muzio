@@ -227,3 +227,67 @@ it('uses a valid native queue index when only adding to an empty queue', async (
   expect(request.mock.calls[0][1]).toMatchObject({ index: 0, queue: [{ mediaId: 'a' }] });
   dispose();
 });
+
+it('does not revive audio when pause wins while a native load is still pending', async () => {
+  const { store, request, dispose } = await setup();
+  const normal = request.getMockImplementation()!;
+  let releaseLoad: (() => void) | undefined;
+  request.mockImplementation((command, payload) => {
+    if (command !== 'playback.load') return normal(command, payload);
+    return new Promise((resolve) => {
+      releaseLoad = () => { void Promise.resolve(normal(command, payload)).then(resolve); };
+    });
+  });
+  const playing = store.getState().playQueueTrack('q-b');
+  await vi.waitFor(() => expect(releaseLoad).toBeTypeOf('function'));
+  store.getState().pauseActive();
+  releaseLoad!();
+  await playing;
+  await drain();
+  const commands = request.mock.calls.map(([command]) => command);
+  expect(commands).toContain('playback.pause');
+  expect(commands).not.toContain('playback.play');
+  expect(store.getState().audio.status.kind).not.toBe('playing');
+  dispose();
+});
+
+it('does not revive pending audio after the user switches to video', async () => {
+  const { store, request, dispose } = await setup();
+  const normal = request.getMockImplementation()!;
+  let releaseLoad: (() => void) | undefined;
+  request.mockImplementation((command, payload) => {
+    if (command !== 'playback.load') return normal(command, payload);
+    return new Promise((resolve) => {
+      releaseLoad = () => { void Promise.resolve(normal(command, payload)).then(resolve); };
+    });
+  });
+  const audioPlay = store.getState().playQueueTrack('q-b');
+  await vi.waitFor(() => expect(releaseLoad).toBeTypeOf('function'));
+  const videoPlay = store.getState().playSource({ ...b, mediaType: 'video' });
+  releaseLoad!();
+  await Promise.all([audioPlay, videoPlay]);
+  await drain();
+  expect(request.mock.calls.map(([command]) => command)).not.toContain('playback.play');
+  expect(store.getState().active).toBe('video');
+  dispose();
+});
+
+it('caps an oversized native restore and writes the normalized queue back to the service', async () => {
+  const queue = Array.from({ length: 1_000 }, (_, index) => track(`restore-${index}`));
+  const selected = queue[500];
+  const { store, request, dispose } = await setup({
+    ...snapshot,
+    source: selected,
+    queue,
+    index: 500,
+    status: { kind: 'paused' },
+  });
+  await drain();
+  expect(store.getState().musicQueue).toHaveLength(300);
+  expect(store.getState().musicQueueIndex).toBe(149);
+  expect(store.getState().musicQueue[149].mediaId).toBe('restore-500');
+  const normalization = request.mock.calls.find(([command]) => command === 'playback.queue')?.[1] as { queue: PlaybackSource[]; index: number } | undefined;
+  expect(normalization?.queue).toHaveLength(300);
+  expect(normalization?.index).toBe(149);
+  dispose();
+});

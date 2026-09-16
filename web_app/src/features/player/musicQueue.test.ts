@@ -47,9 +47,10 @@ describe('buildMusicQueue', () => {
     const tracks = Array.from({ length: 15_000 }, (_, index) => audio(`audio-${index}`));
     const queue = buildMusicQueue(tracks, 'audio-7500');
     expect(queue.tracks).toHaveLength(300);
-    expect(queue.currentIndex).toBe(0);
-    expect(queue.tracks[0].mediaId).toBe('audio-7500');
-    expect(queue.tracks[299].mediaId).toBe('audio-7799');
+    expect(queue.currentIndex).toBe(149);
+    expect(queue.tracks[0].mediaId).toBe('audio-7351');
+    expect(queue.tracks[queue.currentIndex].mediaId).toBe('audio-7500');
+    expect(queue.tracks[299].mediaId).toBe('audio-7650');
   });
 });
 

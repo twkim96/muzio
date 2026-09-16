@@ -2,7 +2,7 @@ import { contentIdentityForPlaybackSource } from '../../core/media/contentIdenti
 import { createNativeBridge, type NativeBridge } from '../../core/platform/nativeBridge';
 import type { PlaybackSession, PlaybackState, SessionListener } from '../../core/playback/session/session';
 import type { PlaybackSource } from '../../core/playback/source/source';
-import type { RepeatMode } from './musicQueue';
+import { windowMusicQueue, type RepeatMode } from './musicQueue';
 import type { PlayerState, PlayerStoreApi } from './playerStore';
 
 export interface NativePlaybackSnapshot extends PlaybackState {
@@ -28,8 +28,10 @@ export async function connectNativeAudio(store: PlayerStoreApi, bridge: NativeBr
   let commandRevision = 0;
   let eventRevision = 0;
   let selectionRevision = 0;
+  let playIntentRevision = 0;
   let pendingQueueRevision = 0;
   let queuedQueueUpdate = false;
+  let nativeQueueNormalizationPending = false;
   let deferredLocalQueue: { selectionRevision: number; queueRevision: number; queue: PlaybackSource[]; index: number } | null = null;
   // Leave the input task before serializing a potentially large native queue.
   // React can commit the selected/loading state before bridge preparation starts.
@@ -41,11 +43,12 @@ export async function connectNativeAudio(store: PlayerStoreApi, bridge: NativeBr
       requestAnimationFrame(() => setTimeout(() => { clearTimeout(fallback); resolve(); }, 0));
     } else setTimeout(resolve, 0);
   });
-  const send = (command: string, payload?: object): Promise<unknown> => {
+  const send = (command: string, payload?: object, shouldSend?: () => boolean): Promise<unknown> => {
     pendingCommands += 1;
     commandRevision += 1;
     const operation = commands.then(async () => {
       await yieldToUi();
+      if (shouldSend && !shouldSend()) return undefined;
       if (bridge.capabilities?.notificationLikes && (command === 'playback.load' || command === 'playback.queue')) {
         const data = payload as { source?: PlaybackSource; queue?: PlaybackSource[] };
         const withIdentity = (source: PlaybackSource) => ({ ...source, notificationLikeKey: contentIdentityForPlaybackSource(source).key });
@@ -72,6 +75,7 @@ export async function connectNativeAudio(store: PlayerStoreApi, bridge: NativeBr
   });
   const apply = (snapshot: NativePlaybackSnapshot) => {
     if (disposed) return;
+    const normalizedQueue = snapshot.queue ? windowMusicQueue(snapshot.queue, snapshot.index) : null;
     applying = true;
     try {
       if (snapshot.status.kind === 'playing' && store.getState().active === 'video') store.getState().pauseActive();
@@ -80,7 +84,7 @@ export async function connectNativeAudio(store: PlayerStoreApi, bridge: NativeBr
       const ownsTimer = store.getState().active !== 'video';
       const remainingSec = Math.max(0, Math.ceil(((snapshot.sleepTimerEndsAtMs ?? 0) - Date.now()) / 1000));
       store.setState({
-        ...(snapshot.queue ? { musicQueue: snapshot.queue } : {}), musicQueueIndex: snapshot.index,
+        ...(normalizedQueue ? { musicQueue: normalizedQueue.tracks } : {}), musicQueueIndex: normalizedQueue?.currentIndex ?? snapshot.index,
         repeatMode: snapshot.repeatMode, volume: snapshot.volume, muted: snapshot.muted,
         stopAfterCurrent: snapshot.stopAfterCurrent,
         ...(ownsTimer ? { sleepTimer: snapshot.sleepTimerExpired ? { kind: 'expired' } : snapshot.sleepTimerEndsAtMs === null ? { kind: 'off' }
@@ -89,6 +93,16 @@ export async function connectNativeAudio(store: PlayerStoreApi, bridge: NativeBr
       });
       listeners.forEach((listener) => listener(state));
     } finally { applying = false; }
+    if (snapshot.queue && normalizedQueue && normalizedQueue.tracks.length < snapshot.queue.length && !nativeQueueNormalizationPending) {
+      nativeQueueNormalizationPending = true;
+      pendingQueueRevision += 1;
+      queueMicrotask(() => {
+        if (disposed) { nativeQueueNormalizationPending = false; return; }
+        void send('playback.queue', { queue: normalizedQueue.tracks, index: normalizedQueue.currentIndex })
+          .catch(report)
+          .finally(() => { nativeQueueNormalizationPending = false; });
+      });
+    }
   };
   // Responses acknowledge ordered native mutations. Fetch only after the command
   // drain, and never let an older response overwrite a newer command or event.
@@ -131,9 +145,12 @@ export async function connectNativeAudio(store: PlayerStoreApi, bridge: NativeBr
     },
     async play() {
       const revision = selectionRevision;
+      const intentRevision = ++playIntentRevision;
       await pendingLoad;
       if (revision !== selectionRevision) return;
-      const playCommand = send('playback.play');
+      const playCommand = send('playback.play', undefined, () =>
+        revision === selectionRevision && intentRevision === playIntentRevision,
+      );
       const deferred = deferredLocalQueue;
       if (deferred?.selectionRevision === revision && deferred.queueRevision === pendingQueueRevision) {
         deferredLocalQueue = null;
@@ -143,11 +160,11 @@ export async function connectNativeAudio(store: PlayerStoreApi, bridge: NativeBr
       }
       await playCommand;
     },
-    pause() { void send('playback.pause').catch(report); },
+    pause() { playIntentRevision += 1; void send('playback.pause').catch(report); },
     seek(positionSec) { if (Number.isFinite(positionSec) && positionSec >= 0) void send('playback.seek', { positionSec }).catch(report); },
     dispose() { listeners.clear(); },
   };
-  store.getState().attachNativeAudio(session, async () => { await send('playback.pause'); });
+  store.getState().attachNativeAudio(session, async () => { playIntentRevision += 1; await send('playback.pause'); });
   let receivedEvent = false;
   const unsubscribeBridge = bridge.subscribe((event) => {
     if (event.type === 'playback' && event.state) {

@@ -42,6 +42,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * Owns the single app-wide player. Keeping it in a MediaSessionService makes
@@ -207,7 +208,7 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
         if (controllerInfo.packageName == packageName) mediaSession else videoSession ?: mediaSession
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        sync(sampleCurrent())
+        persistFinalProgress(sampleCurrent())
         releaseVideo(null)
         player.pause()
         player.stop()
@@ -219,7 +220,7 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
 
     override fun onDestroy() {
         releaseVideo(null)
-        sync(sampleCurrent())
+        persistFinalProgress(sampleCurrent())
         progressLoop?.cancel()
         likePreferences.unregisterOnSharedPreferenceChangeListener(likePreferenceListener)
         player.removeListener(playerListener)
@@ -425,31 +426,43 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
         )
     }
 
+    private suspend fun persistLocalProgress(sample: ProgressSample) {
+        libraryPreferencesStore.updateActivityProgress(
+            contentKey = sample.contentKey,
+            mediaId = sample.mediaId,
+            positionSec = sample.positionSec,
+            durationSec = sample.durationSec,
+            completed = sample.completed,
+        )
+    }
+
+    private suspend fun pushRemoteProgress(sample: ProgressSample) {
+        val targetBaseUrl = sample.baseUrl.takeIf { it.startsWith("http://") || it.startsWith("https://") } ?: return
+        api.putProgress(
+            baseUrl = targetBaseUrl,
+            mediaId = sample.mediaId,
+            positionSec = sample.positionSec,
+            durationSec = sample.durationSec,
+            completed = sample.completed,
+            source = sample.source,
+        )
+    }
+
     private fun sync(sample: ProgressSample?) {
         sample ?: return
-        val targetBaseUrl = sample.baseUrl.takeIf { it.startsWith("http://") || it.startsWith("https://") }
         lastSyncedAtMs = System.currentTimeMillis()
         scope.launch(Dispatchers.IO) {
-            if (targetBaseUrl != null) runCatching {
-                api.putProgress(
-                    baseUrl = targetBaseUrl,
-                    mediaId = sample.mediaId,
-                    positionSec = sample.positionSec,
-                    durationSec = sample.durationSec,
-                    completed = sample.completed,
-                    source = sample.source,
-                )
-            }
-            runCatching {
-                libraryPreferencesStore.updateActivityProgress(
-                    contentKey = sample.contentKey,
-                    mediaId = sample.mediaId,
-                    positionSec = sample.positionSec,
-                    durationSec = sample.durationSec,
-                    completed = sample.completed,
-                )
-            }
+            runCatching { pushRemoteProgress(sample) }
+            runCatching { persistLocalProgress(sample) }
         }
+    }
+
+    /** Task removal tears the service down immediately, so commit the local resume point first. */
+    private fun persistFinalProgress(sample: ProgressSample?) {
+        sample ?: return
+        lastSyncedAtMs = System.currentTimeMillis()
+        runBlocking(Dispatchers.IO) { runCatching { persistLocalProgress(sample) } }
+        // Periodic remote sync is best-effort; task removal must not wait on the network.
     }
 
     private fun recordPlay(item: MediaItem) {

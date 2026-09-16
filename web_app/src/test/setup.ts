@@ -41,7 +41,7 @@ if (
     configurable: true,
     value: storage,
   });
-  if (window !== globalThis) {
+  if (typeof window !== 'undefined' && window !== globalThis) {
     Object.defineProperty(window, 'localStorage', {
       configurable: true,
       value: storage,

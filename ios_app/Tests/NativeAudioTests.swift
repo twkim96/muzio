@@ -179,7 +179,28 @@ struct NativeAudioTests {
             _ = try localCommand("load", ["source": authorized])
             localEngine.shutdown()
             try expect(releases == 5, "Shutdown did not release local lease")
-            print("PASS NativeAudioPlayer: canonical sources, paused resume, play/seek/pause, duplicate reorder, settings, native sleep timer, clear, authorized local playback, artwork, durable likes and lease lifecycle")
+
+            var retryAttempts = 0
+            let retryEngine = NativeAudioPlayer(origin: origin, resolveLocal: { id in
+                guard id == "local:retry" else { throw TestFailure(message: "Unexpected retry ID") }
+                retryAttempts += 1
+                if retryAttempts == 1 { throw TestFailure(message: "Transient local access failure") }
+                return NativeAudioLocalAccess(url: file, release: {})
+            }) { _ in }
+            var retrySource = source("retry")
+            retrySource["location"] = "local"; retrySource["mediaId"] = "local:retry"
+            retrySource["url"] = "file:///private/untrusted-retry.wav"
+            func retryCommand(_ name: String, _ payload: [String: Any] = [:]) throws -> [String: Any] {
+                try retryEngine.handle(command: "playback." + name, payload: payload)
+            }
+            let initialRetry = try retryCommand("load", ["source": retrySource])
+            try expect(status(initialRetry) == "error", "Transient retry fixture did not fail its first load")
+            _ = try retryCommand("play")
+            try await wait("failed local item retries on play") { position(try retryCommand("snapshot")) > 0.1 }
+            try expect(retryAttempts == 2, "Play did not re-resolve a failed local item")
+            retryEngine.shutdown()
+
+            print("PASS NativeAudioPlayer: canonical sources, paused resume, play/seek/pause, duplicate reorder, settings, native sleep timer, clear, authorized local playback, retry, artwork, durable likes and lease lifecycle")
         } catch {
             FileHandle.standardError.write(Data("FAIL \(error)\n".utf8))
             exit(1)

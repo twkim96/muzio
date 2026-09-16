@@ -32,7 +32,7 @@ import {
   QueueGlyph,
   VideoGlyph,
 } from '../../core/ui/AppIcons';
-import { MAX_MUSIC_QUEUE_ITEMS } from '../player/musicQueue';
+import { windowMusicQueue } from '../player/musicQueue';
 import { usePlayerStore } from '../player/PlayerContext';
 import { useOptionalPlayerOverlay } from '../player/PlayerOverlayContext';
 import {
@@ -195,18 +195,15 @@ function LibraryItemRowComponent({
     }
     if (item.type === 'audio') {
       if (musicQueue.length === 0) {
-        const queueSources: PlaybackSource[] = [source];
-        let selectedSeen = false;
-        for (const queueItem of queueItems) {
-          if (!isPlayableLibraryItem(queueItem) || queueItem.type !== 'audio') continue;
-          if (!selectedSeen) {
-            if (queueItem.id !== item.id) continue;
-            selectedSeen = true;
-            continue;
-          }
-          queueSources.push(playbackSourceFromLibraryItem(queueItem));
-          if (queueSources.length >= MAX_MUSIC_QUEUE_ITEMS) break;
-        }
+        const audioItems = queueItems.filter(
+          (queueItem): queueItem is LibraryItem & { type: 'audio' } =>
+            isPlayableLibraryItem(queueItem) && queueItem.type === 'audio',
+        );
+        const selectedIndex = audioItems.findIndex((queueItem) => queueItem.id === item.id);
+        const windowed = windowMusicQueue(audioItems, selectedIndex >= 0 ? selectedIndex : 0);
+        const queueSources: PlaybackSource[] = windowed.tracks.map((queueItem) =>
+          queueItem.id === item.id ? source : playbackSourceFromLibraryItem(queueItem),
+        );
         void playMusicQueue(queueSources, item.id);
       } else {
         void insertQueueItemAfterCurrentAndPlay(source);

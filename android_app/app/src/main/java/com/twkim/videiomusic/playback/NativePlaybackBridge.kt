@@ -80,7 +80,7 @@ class NativePlaybackBridge(
                 payload.optJSONArray("queue")?.let { entries ->
                     for (i in 0 until entries.length()) entries.getJSONObject(i).takeIf { it.optString("location") == "local" }?.let { localIds.add(it.getString("mediaId")) }
                 }
-                val localUris = if (localIds.isEmpty()) emptyMap() else localLibrary.resolveAll(localIds)
+                val localUris = if (localIds.isEmpty()) emptyMap() else localLibrary.resolveAvailable(localIds)
                 val localArtwork = if (localIds.isEmpty()) emptyMap() else localLibrary.artworkUris(
                     localIds, payload.optJSONObject("source")?.optString("mediaId"))
                 when (command) {
@@ -131,22 +131,50 @@ class NativePlaybackBridge(
         val resolved = JSONObject(source.toString()).apply {
             selected.queueEntryId?.let { put("queueEntryId", it) }
         }
-        val items = (0 until queue.length()).map { mediaItem(if (it == index) resolved else queue.getJSONObject(it), localUris, localArtwork) }
+        require(isPlayableQueueSource(resolved, localUris)) {
+            "Local track is no longer in an authorized folder. Refresh local folders."
+        }
+        val playable = (0 until queue.length())
+            .map { if (it == index) resolved else queue.getJSONObject(it) }
+            .filter { isPlayableQueueSource(it, localUris) }
+        val selectedIdentity = identity(resolved)
+        val playableIndex = playable.indexOfFirst { identity(it) == selectedIdentity }
+        require(playableIndex >= 0) { "Selected source is no longer playable" }
+        val items = playable.map { mediaItem(it, localUris, localArtwork) }
         player.pause()
-        player.setMediaItems(items, index, if (payload.has("positionSec")) seconds(payload, "positionSec") else 0L)
+        player.setMediaItems(items, playableIndex, if (payload.has("positionSec")) seconds(payload, "positionSec") else 0L)
         player.prepare()
     }
 
     private fun updateQueue(player: MediaController, payload: JSONObject, localUris: Map<String, Uri>, localArtwork: Map<String, Uri>) {
         val entries = payload.getJSONArray("queue")
-        val next = items(entries, localUris, localArtwork)
-        if (next.isEmpty()) { player.pause(); player.stop(); player.clearMediaItems(); return }
-        val existingIndex = NativePlaybackPolicy.retainedIndex(
-            source(player.currentMediaItem)?.let(::identity),
-            (0 until entries.length()).map { identity(entries.getJSONObject(it)) },
-        )
-        val index = if (existingIndex >= 0) existingIndex else payload.optInt("index", 0)
-        require(index in next.indices) { "Invalid queue index" }
+        val raw = (0 until entries.length()).map { entries.getJSONObject(it) }
+        if (raw.isEmpty()) { player.pause(); player.stop(); player.clearMediaItems(); return }
+        val currentItem = player.currentMediaItem
+        val currentIdentity = source(currentItem)?.let(::identity)
+        val playable = raw.filter { entry ->
+            val retainedCurrent = currentIdentity != null && identity(entry) == currentIdentity
+            retainedCurrent || isPlayableQueueSource(entry, localUris)
+        }
+        if (playable.isEmpty()) { player.pause(); player.stop(); player.clearMediaItems(); return }
+        val existingIndex = NativePlaybackPolicy.retainedIndex(currentIdentity, playable.map(::identity))
+        val index = if (existingIndex >= 0) existingIndex else {
+            val requestedIndex = payload.optInt("index", 0)
+            require(requestedIndex in raw.indices) { "Invalid queue index" }
+            val requested = raw[requestedIndex]
+            val mapped = playable.indexOfFirst { identity(it) == identity(requested) }
+            require(mapped >= 0) {
+                if (requested.optString("location") == "local")
+                    "Local track is no longer in an authorized folder. Refresh local folders."
+                else "Selected source is no longer playable"
+            }
+            mapped
+        }
+        val next = playable.map { entry ->
+            if (existingIndex >= 0 && currentItem != null && currentIdentity != null && identity(entry) == currentIdentity)
+                currentItem
+            else mediaItem(entry, localUris, localArtwork)
+        }
         if (existingIndex >= 0) {
             // Keep the current MediaItem object and playback buffer; replace only its neighbours.
             val current = player.currentMediaItemIndex
@@ -190,7 +218,8 @@ class NativePlaybackBridge(
         }
     }
 
-    private fun items(queue: JSONArray, localUris: Map<String, Uri>, localArtwork: Map<String, Uri>): List<MediaItem> = (0 until queue.length()).map { mediaItem(queue.getJSONObject(it), localUris, localArtwork) }
+    private fun isPlayableQueueSource(source: JSONObject, localUris: Map<String, Uri>): Boolean =
+        source.optString("location") != "local" || localUris.containsKey(source.getString("mediaId"))
 
     private fun mediaItem(source: JSONObject, localUris: Map<String, Uri>, localArtwork: Map<String, Uri>): MediaItem {
         require(source.getString("kind") == "remote" && source.getString("mediaType") == "audio") { "Only remote audio is supported" }

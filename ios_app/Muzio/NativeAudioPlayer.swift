@@ -219,6 +219,10 @@ final class NativeAudioPlayer: NSObject {
         access?.release()
     }
     private func failPlayback(_ message: String) {
+        if pendingPosition == nil {
+            let position = player.currentTime().seconds
+            if position.isFinite && position > 0 { pendingPosition = position }
+        }
         failure = message
         pause()
         player.replaceCurrentItem(with: nil)
@@ -280,7 +284,12 @@ final class NativeAudioPlayer: NSObject {
         try session.setActive(true)
         #endif
         acquireAudioOwnership()
+        let retryPosition = pendingPosition ?? 0
         wantsPlay = true; resumeAfterInterruption = false
+        if failure != nil || player.currentItem == nil {
+            select(position: retryPosition, autoplay: true)
+            return
+        }
         if ended { seek(0) }
         if player.currentItem?.status == .readyToPlay && pendingPosition == nil { player.play() }
     }
@@ -295,9 +304,9 @@ final class NativeAudioPlayer: NSObject {
         let token = generation
         player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
             Task { @MainActor in
-                guard let self, self.generation == token, !self.disposed, finished, self.seekRevision == revision, self.pendingPosition == seconds else { return }
+                guard let self, self.generation == token, !self.disposed, self.seekRevision == revision, self.pendingPosition == seconds else { return }
                 self.pendingPosition = nil
-                self.expireSleepTimerIfNeeded()
+                if finished { self.expireSleepTimerIfNeeded() }
                 if self.wantsPlay { self.player.play() }
                 self.publish()
             }

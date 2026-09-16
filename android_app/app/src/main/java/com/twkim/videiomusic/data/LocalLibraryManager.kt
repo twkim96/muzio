@@ -145,20 +145,27 @@ class LocalLibraryManager(context: Context) {
 
     /** Called off the main thread before constructing a Media3 item. Never trusts a web URI. */
     suspend fun resolveAll(mediaIds: Set<String>): Map<String, Uri> = withContext(Dispatchers.IO) {
-        if (mediaIds.isEmpty()) return@withContext emptyMap()
+        val resolved = resolveAvailableNow(mediaIds)
+        require(resolved.keys.containsAll(mediaIds)) {
+            "Local track is no longer in an authorized folder. Refresh local folders."
+        }
+        resolved
+    }
+
+    /** Resolve the authorized subset so one stale queue row cannot block a valid selected track. */
+    suspend fun resolveAvailable(mediaIds: Set<String>): Map<String, Uri> = withContext(Dispatchers.IO) {
+        resolveAvailableNow(mediaIds)
+    }
+
+    private fun resolveAvailableNow(mediaIds: Set<String>): Map<String, Uri> {
+        if (mediaIds.isEmpty()) return emptyMap()
         mediaIds.forEach(LocalLibraryPolicy::requireId)
         val catalog = resolveCatalog()
         val grants = grantedUris()
-        mediaIds.associateWith { id ->
-            val item = catalog.items[id]
-                ?: error("Local track is no longer in an authorized folder. Refresh local folders.")
-            val root = catalog.roots[item.storageId]
-            require(root != null && root.available && root.uri in grants) {
-                "Local folder unavailable. Select or refresh the folder again."
-            }
-            require(LocalLibraryPolicy.isAudio(item.mimeType, item.name)) { "Only local audio is supported" }
-            Uri.parse(item.documentUri)
-        }
+        return mediaIds.mapNotNull { id ->
+            val item = authorizedResolveItem(id, catalog, grants) ?: return@mapNotNull null
+            id to Uri.parse(item.documentUri)
+        }.toMap()
     }
 
     /** WebView calls this on its request worker; paths are derived solely from registry records. */
@@ -166,10 +173,15 @@ class LocalLibraryManager(context: Context) {
         LocalLibraryPolicy.requireId(id)
         val item = authorizedResolveItem(id) ?: return@runBlocking null
         val expectedKey = artworkKey(id, item)
-        artworkExtraction.withLock { if (!artworkFile(expectedKey).exists()) extractArtwork(id, item) }
+        val cached = artworkFile(expectedKey)
+        if (cached.isFile) return@runBlocking cached.inputStream()
+        if (File(artworkDirectory, "$expectedKey.missing").isFile) return@runBlocking null
+        artworkExtraction.withLock {
+            if (!cached.isFile && !File(artworkDirectory, "$expectedKey.missing").isFile) extractArtwork(id, item)
+        }
         val current = authorizedResolveItem(id) ?: return@runBlocking null
         if (artworkKey(id, current) != expectedKey) return@runBlocking null
-        artworkFile(expectedKey).takeIf { it.isFile }?.inputStream()
+        cached.takeIf { it.isFile }?.inputStream()
     }
 
     /**

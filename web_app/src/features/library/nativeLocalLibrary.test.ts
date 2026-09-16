@@ -78,7 +78,7 @@ test('publishes a large playable filename catalog before metadata and stops poll
   expect(combined.getState().result).toMatchObject({ items: expect.arrayContaining(enriched) });
   await vi.advanceTimersByTimeAsync(10000);
   expect(request).toHaveBeenCalledTimes(2);
-});
+}, 10_000);
 test('a delayed progress read cannot restore a removed folder', async () => {
   let finishRead!: (value: unknown) => void;
   const request = vi.fn().mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve; }))

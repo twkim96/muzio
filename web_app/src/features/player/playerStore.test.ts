@@ -828,9 +828,10 @@ describe('playMusicQueue', () => {
     await store.getState().playMusicQueue(sources, 'audio-7500');
 
     expect(store.getState().musicQueue).toHaveLength(300);
-    expect(store.getState().musicQueueIndex).toBe(0);
-    expect(store.getState().musicQueue[0].mediaId).toBe('audio-7500');
-    expect(store.getState().musicQueue.at(-1)?.mediaId).toBe('audio-7799');
+    expect(store.getState().musicQueueIndex).toBe(149);
+    expect(store.getState().musicQueue[0].mediaId).toBe('audio-7351');
+    expect(store.getState().musicQueue[149].mediaId).toBe('audio-7500');
+    expect(store.getState().musicQueue.at(-1)?.mediaId).toBe('audio-7650');
   });
 
   test('advances to the next queue track when audio ends', async () => {
