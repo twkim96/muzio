@@ -1,3 +1,4 @@
+import { UserSound } from '@phosphor-icons/react/dist/csr/UserSound';
 import { libraryRootLabel } from '../../core/media/libraryRootLabel';
 import { Plus } from '@phosphor-icons/react/dist/csr/Plus';
 import { X } from '@phosphor-icons/react/dist/csr/X';
@@ -74,6 +75,7 @@ function LibraryItemRowComponent({
   selectionCount = 0,
   onAddSelection,
   onQueueSelection,
+  onArtistSelection,
   onClearSelection,
   style,
   thumbnailCard = false,
@@ -89,6 +91,7 @@ function LibraryItemRowComponent({
   selectionCount?: number;
   onAddSelection?: () => void;
   onQueueSelection?: () => void;
+  onArtistSelection?: () => void;
   onClearSelection?: () => void;
   style?: CSSProperties;
   thumbnailCard?: boolean;
@@ -299,6 +302,8 @@ function LibraryItemRowComponent({
           className="muzio-selection-round" onClick={onAddSelection}><Plus aria-hidden className="h-5 w-5" /></button>
         {onQueueSelection && <button type="button" data-testid="selection-add-to-queue" aria-label="Add selected items to queue" title="큐에 추가"
           className="muzio-selection-round" onClick={onQueueSelection}><QueueGlyph aria-hidden className="h-5 w-5" /></button>}
+        {selectionCount === 1 && onArtistSelection && <button type="button" aria-label="Filter by Artist" title="아티스트로 필터"
+          className="muzio-selection-round" onClick={onArtistSelection}><UserSound aria-hidden className="h-5 w-5" /></button>}
         <button type="button" aria-label="Clear selection" className="muzio-selection-round"
           onClick={onClearSelection}><X aria-hidden className="h-5 w-5" /></button>
       </div>}
@@ -498,6 +503,7 @@ export function rowPropsEqual(
     previous.selectionCount === next.selectionCount &&
     previous.onAddSelection === next.onAddSelection &&
     previous.onQueueSelection === next.onQueueSelection &&
+    previous.onArtistSelection === next.onArtistSelection &&
     previous.onClearSelection === next.onClearSelection &&
     previous.queueItems === next.queueItems &&
     previous.onLongPress === next.onLongPress &&

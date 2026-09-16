@@ -207,6 +207,7 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
     () => rawItems.filter((item) => selectedIds.has(item.id)),
     [rawItems, selectedIds],
   );
+  const selectedArtist = selectedIds.size === 1 && selectedItems.length === 1 ? selectedItems[0].metadata?.artist?.trim() : undefined;
   const selectSort = (key: LibrarySortKey) => {
     setSort((current) => ({
       key,
@@ -340,6 +341,12 @@ export function LibraryScreen({ type }: { type: LibraryMediaType }) {
           appendMusicQueue([...ordered, ...remaining.values()].filter(isPlayableLibraryItem).map(playbackSourceFromLibraryItem));
           clearSelection();
         } : undefined}
+        onArtistSelection={selectedArtist ? () => {
+          updateCurrentPreferences(current => ({ ...current, query: '', filters: {
+            ...EMPTY_LIBRARY_FILTERS, artists: [selectedArtist.normalize('NFKC').toLocaleLowerCase().trim()],
+          } }));
+          clearSelection();
+        } : undefined}
         onClearSelection={clearSelection}
       />
       {addModalItems !== null && (
@@ -396,6 +403,7 @@ function LibraryBody({
   selectionAnchorId,
   onAddSelection,
   onQueueSelection,
+  onArtistSelection,
   onClearSelection,
 }: {
   type: LibraryMediaType;
@@ -411,6 +419,7 @@ function LibraryBody({
   selectionAnchorId?: string;
   onAddSelection: () => void;
   onQueueSelection?: () => void;
+  onArtistSelection?: () => void;
   onClearSelection: () => void;
 }) {
   const rawItems =
@@ -462,6 +471,7 @@ function LibraryBody({
             selectionMode={selectionMode}
             selectionAnchorId={selectionAnchorId}
             onQueueSelection={onQueueSelection}
+            onArtistSelection={onArtistSelection}
             onAddSelection={onAddSelection}
             onClearSelection={onClearSelection}
           />

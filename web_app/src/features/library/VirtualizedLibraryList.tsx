@@ -30,6 +30,7 @@ export function VirtualizedLibraryList({
   selectionAnchorId,
   onAddSelection,
   onQueueSelection,
+  onArtistSelection,
   onClearSelection,
 }: {
   items: readonly LibraryItem[];
@@ -41,6 +42,7 @@ export function VirtualizedLibraryList({
   selectionAnchorId?: string;
   onAddSelection?: () => void;
   onQueueSelection?: () => void;
+  onArtistSelection?: () => void;
   onClearSelection?: () => void;
 }) {
   const listRef = useRef<HTMLUListElement | null>(null);
@@ -164,6 +166,7 @@ export function VirtualizedLibraryList({
             showSelectionActions={selectionMode && item.id === selectionAnchorId}
             selectionCount={item.id === selectionAnchorId ? selectedIds.size : 0}
             onQueueSelection={onQueueSelection}
+            onArtistSelection={onArtistSelection}
             onAddSelection={onAddSelection}
             onClearSelection={onClearSelection}
             style={{

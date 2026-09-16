@@ -1265,6 +1265,37 @@ describe('LibraryScreen', () => {
     } finally { vi.useRealTimers(); }
   });
 
+  test.each(['audio', 'video'] as const)('single %s selection offers an artist icon and multiple selection hides it', async (type) => {
+    const items: LibraryItem[] = ['one', 'two', 'missing'].map((id, index) => ({
+      id, type, name: `${id}.file`, rootName: 'Media', relativePath: `${id}.file`, sizeBytes: 100, modifiedAt: '2026-09-16',
+      metadata: { title: id, artist: index === 0 ? 'Artist A' : index === 1 ? 'Artist B' : '   ' },
+    }));
+    const result: LibraryFetchResult = { kind: 'ok', items };
+    const empty: LibraryFetchResult = { kind: 'ok', items: [] };
+    renderScreen(type, type === 'audio' ? result : empty, type === 'video' ? result : empty, empty);
+    await waitFor(() => expect(screen.getAllByTestId('library-item')).toHaveLength(3));
+    const target = (id: string) => screen.getByLabelText(`Play ${id}.file`);
+    vi.useFakeTimers();
+    try {
+      firePointer(target('one'), 'pointerdown', { pointerType: 'touch', clientX: 120, clientY: 240 });
+      act(() => { vi.advanceTimersByTime(800); });
+      fireEvent.click(target('one')); // Suppress the release click after long press.
+      expect(screen.getByRole('button', { name: 'Filter by Artist' }).textContent).toBe('');
+      fireEvent.click(target('two'));
+      expect(screen.queryByRole('button', { name: 'Filter by Artist' })).not.toBeInTheDocument();
+      fireEvent.click(target('two'));
+      fireEvent.click(screen.getByRole('button', { name: 'Filter by Artist' }));
+      expect(screen.getByRole('button', { name: 'Remove artist Artist A' })).toBeInTheDocument();
+      expect(screen.queryByTestId('selection-actions')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(`Play two.file`)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Remove artist Artist A' }));
+      firePointer(target('missing'), 'pointerdown', { pointerType: 'touch', clientX: 120, clientY: 240 });
+      act(() => { vi.advanceTimersByTime(800); });
+      expect(screen.getByTestId('selection-actions')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Filter by Artist' })).not.toBeInTheDocument();
+    } finally { vi.useRealTimers(); }
+  });
+
   test('long press selection mode batch adds items to a custom playlist', async () => {
     renderScreen('audio', {
       kind: 'ok',
