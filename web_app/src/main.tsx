@@ -85,7 +85,7 @@ async function startApp() {
   const progressService = createProgressService(progressRepository);
   const audioResumeCache = createAudioResumeCacheService();
   void audioResumeCache.initialize();
-  const playerStore = createPlayerStore({ progressService, audioResumeCache, videoOptimization: videoOptimizationService, nativePlaybackHistory: bridge?.capabilities?.playbackHistory === true });
+  const playerStore = createPlayerStore({ progressService, audioResumeCache, videoOptimization: videoOptimizationService, nativePlaybackHistory: supportsNativeCapability('playbackHistory', bridge) });
 
   const refreshSyncedLikes = () => playerStore.setState({
     likedMediaIds: JSON.parse(localStorage.getItem('music.likes.v1') ?? '[]'),

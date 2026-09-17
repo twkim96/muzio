@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createPlayerStore } from '../../features/player/playerStore';
 import { createLocalStoragePlaybackActivityRepository } from '../storage/playbackActivityRepository';
 import { createLocalStorageProgressRepository } from '../storage/progressRepository';
+import { createSyncedProgressRepository } from '../storage/progressSyncRepository';
 import type { NativeBridge } from './nativeBridge';
 import { connectNativePlaybackHistory, mergeNativePlaybackHistory } from './nativePlaybackHistory';
 
@@ -14,6 +15,26 @@ function setup() {
   return { store, progress: createLocalStorageProgressRepository() };
 }
 describe('native playback history', () => {
+  it('routes remote progress to the server but keeps local progress on this device', () => {
+    const { store } = setup();
+    const local = createLocalStorageProgressRepository();
+    const put = vi.fn(async () => {});
+    const progress = createSyncedProgressRepository(local, { list: async () => [], put, delete: async () => {} });
+    const localEntry = {
+      ...entry,
+      id: 'local-revision',
+      source: { ...source, mediaId: 'local:track', location: 'local' as const, rootName: 'Phone', relativePath: 'Music/Song.mp3' },
+    };
+    mergeNativePlaybackHistory(store, { pending: [localEntry] }, progress);
+    expect(local.read('local:track')).toMatchObject({ positionSec: 40, durationSec: 100 });
+    expect(put).not.toHaveBeenCalled();
+
+    const remoteEntry = { ...entry, id: 'remote-revision', updatedAtMs: 3000,
+      source: { ...source, rootName: 'Server Music', relativePath: 'Album/Song.mp3' } };
+    mergeNativePlaybackHistory(store, { pending: [remoteEntry] }, progress);
+    expect(local.read('track')).toMatchObject({ positionSec: 40, durationSec: 100 });
+    expect(put).toHaveBeenCalledWith('track', expect.objectContaining({ positionSec: 40, durationSec: 100 }));
+  });
   it('replays an acknowledged session after reload without counting it again', () => {
     const { store, progress } = setup();
     expect(mergeNativePlaybackHistory(store, { pending: [entry] }, progress)).toEqual(['revision1']);
@@ -36,6 +57,44 @@ describe('native playback history', () => {
     expect(store.getState().activityRecords[0].playCount).toBe(205);
     expect(store.getState().activityRecords[0].events).toHaveLength(200);
   });
+});
+
+it('keeps Android local progress in the native outbox after importing it to device storage', async () => {
+  const { store, progress } = setup();
+  const localEntry = {
+    ...entry,
+    id: 'local-revision',
+    source: { ...source, mediaId: 'local:track', location: 'local' as const, rootName: 'Phone', relativePath: 'Music/Song.mp3' },
+  };
+  const request = vi.fn(async (command: string) => command === 'playback.history'
+    ? { pending: [localEntry], retainLocal: true }
+    : {});
+  // Current Android hosts predate explicit capability metadata, so fallback support is intentional.
+  const bridge = { request, subscribe: () => () => {} } as unknown as NativeBridge;
+  const disconnect = connectNativePlaybackHistory(store, bridge, progress);
+  await vi.waitFor(() => expect(progress.read('local:track')?.positionSec).toBe(40));
+  expect(request).toHaveBeenCalledWith('playback.history');
+  expect(request).not.toHaveBeenCalledWith('playback.ackHistory', expect.anything());
+  disconnect();
+});
+
+it('keeps remote native history until the server accepts the progress update', async () => {
+  const { store } = setup();
+  const local = createLocalStorageProgressRepository();
+  const put = vi.fn()
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockRejectedValueOnce(new Error('offline'))
+    .mockResolvedValue(undefined);
+  const progress = createSyncedProgressRepository(local, { list: async () => [], put, delete: async () => {} });
+  const request = vi.fn(async (command: string) => command === 'playback.history' ? { pending: [entry] } : {});
+  const bridge = { platform: 'android' as const, request, subscribe: () => () => {} } as unknown as NativeBridge;
+  const disconnect = connectNativePlaybackHistory(store, bridge, progress);
+  await disconnect.ready;
+  expect(request).not.toHaveBeenCalledWith('playback.ackHistory', expect.anything());
+  window.dispatchEvent(new Event('muzio-resume'));
+  await vi.waitFor(() => expect(request).toHaveBeenCalledWith('playback.ackHistory', { ids: ['revision1'] }));
+  expect(put.mock.calls.length).toBeGreaterThanOrEqual(3);
+  disconnect();
 });
 
 it('does not acknowledge outbox entries when browser persistence fails', async () => {

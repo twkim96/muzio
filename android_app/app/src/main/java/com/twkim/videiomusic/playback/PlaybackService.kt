@@ -43,6 +43,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import java.util.UUID
 
 /**
  * Owns the single app-wide player. Keeping it in a MediaSessionService makes
@@ -54,6 +55,7 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val api = MuzioApi()
     private lateinit var libraryPreferencesStore: LibraryPreferencesStore
+    private lateinit var playbackHistory: AndroidPlaybackHistory
     private lateinit var notificationLikes: NotificationLikeStore
     private lateinit var likePreferences: SharedPreferences
     private lateinit var openQueue: PendingIntent
@@ -105,10 +107,14 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
     private var lastSample: ProgressSample? = null
     private var lastSyncedAtMs = 0L
     private var progressLoop: Job? = null
+    private var historySessionId = ""
+    private var historySourceKey = ""
+    private var historyStartedAtMs = 0L
 
     override fun onCreate() {
         super.onCreate()
         libraryPreferencesStore = LibraryPreferencesStore(applicationContext)
+        playbackHistory = AndroidPlaybackHistory(applicationContext)
         notificationLikes = NotificationLikeStore(applicationContext)
         likePreferences = getSharedPreferences(NotificationLikeStore.PREFERENCES_NAME, Context.MODE_PRIVATE)
         likePreferences.registerOnSharedPreferenceChangeListener(likePreferenceListener)
@@ -254,7 +260,14 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
             ) {
                 player.pause()
             }
-            mediaItem?.let(::recordPlay)
+            if (mediaItem == null) {
+                historySessionId = ""
+                historySourceKey = ""
+            } else {
+                val forceNewSession = reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
+                    reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT
+                if (beginHistorySession(mediaItem, forceNewSession)) recordPlay(mediaItem)
+            }
             lastSample = sampleCurrent()
             refreshNotificationButtons()
         }
@@ -409,11 +422,33 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
         }
     }
 
+    private fun beginHistorySession(item: MediaItem, force: Boolean = false): Boolean {
+        val sourceJson = item.mediaMetadata.extras?.getString(EXTRA_WEB_SOURCE).orEmpty()
+        val queueEntryId = runCatching { org.json.JSONObject(sourceJson).optString("queueEntryId") }.getOrDefault("")
+        val key = "${item.mediaId}|$queueEntryId"
+        if (!force && historySessionId.isNotBlank() && historySourceKey == key) return false
+        historySourceKey = key
+        historySessionId = UUID.randomUUID().toString()
+        historyStartedAtMs = maxOf(System.currentTimeMillis(), historyStartedAtMs + 1)
+        return true
+    }
+
+    private fun ensureHistorySession(item: MediaItem) {
+        val sourceJson = item.mediaMetadata.extras?.getString(EXTRA_WEB_SOURCE).orEmpty()
+        val queueEntryId = runCatching { org.json.JSONObject(sourceJson).optString("queueEntryId") }.getOrDefault("")
+        val key = "${item.mediaId}|$queueEntryId"
+        if (historySessionId.isBlank() || historySourceKey != key) beginHistorySession(item)
+    }
+
     private fun sampleCurrent(completed: Boolean = false): ProgressSample? {
         val item = player.currentMediaItem ?: return null
-        val durationMs = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: return null
+        val webSourceJson = item.mediaMetadata.extras?.getString(EXTRA_WEB_SOURCE).orEmpty()
+        val sourceDurationMs = runCatching { org.json.JSONObject(webSourceJson).optDouble("durationSec") }
+            .getOrNull()?.takeIf { it.isFinite() && it > 0 }?.let { (it * 1_000.0).toLong() }
+        val durationMs = player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: sourceDurationMs ?: return null
         val positionMs = player.currentPosition.coerceAtLeast(0L)
         if (positionMs <= 0L) return null
+        ensureHistorySession(item)
         return ProgressSample(
             mediaId = item.mediaId,
             positionSec = positionMs / 1_000.0,
@@ -423,6 +458,9 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
             contentKey = item.mediaMetadata.extras?.getString(EXTRA_CONTENT_KEY).orEmpty(),
             baseUrl = item.mediaMetadata.extras?.getString(EXTRA_SERVER_ORIGIN)
                 ?: item.localConfiguration?.uri?.let { uri -> "${uri.scheme}://${uri.encodedAuthority}" }.orEmpty(),
+            webSourceJson = webSourceJson,
+            historySessionId = historySessionId,
+            historyStartedAtMs = historyStartedAtMs,
         )
     }
 
@@ -448,10 +486,22 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
         )
     }
 
+    private fun persistPlaybackHistory(sample: ProgressSample) {
+        playbackHistory.record(
+            session = sample.historySessionId,
+            sourceJson = sample.webSourceJson,
+            positionSec = sample.positionSec,
+            durationSec = sample.durationSec,
+            completed = sample.completed,
+            startedAtMs = sample.historyStartedAtMs,
+        )
+    }
+
     private fun sync(sample: ProgressSample?) {
         sample ?: return
         lastSyncedAtMs = System.currentTimeMillis()
         scope.launch(Dispatchers.IO) {
+            runCatching { persistPlaybackHistory(sample) }
             runCatching { pushRemoteProgress(sample) }
             runCatching { persistLocalProgress(sample) }
         }
@@ -461,7 +511,10 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
     private fun persistFinalProgress(sample: ProgressSample?) {
         sample ?: return
         lastSyncedAtMs = System.currentTimeMillis()
-        runBlocking(Dispatchers.IO) { runCatching { persistLocalProgress(sample) } }
+        runBlocking(Dispatchers.IO) {
+            runCatching { persistPlaybackHistory(sample) }
+            runCatching { persistLocalProgress(sample) }
+        }
         // Periodic remote sync is best-effort; task removal must not wait on the network.
     }
 
@@ -492,6 +545,9 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
         val source: ProgressSource?,
         val contentKey: String,
         val baseUrl: String,
+        val webSourceJson: String,
+        val historySessionId: String,
+        val historyStartedAtMs: Long,
     )
 
     companion object {

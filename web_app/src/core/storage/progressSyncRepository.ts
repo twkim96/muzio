@@ -17,6 +17,8 @@ export interface ProgressSyncClient {
 
 export interface SyncedProgressRepository extends ProgressRepository {
   syncFromRemote(): Promise<void>;
+  /** Push one locally durable record and report whether the server accepted it. */
+  syncOne(mediaId: string): Promise<boolean>;
 }
 
 export function createDefaultProgressSyncClient(): ProgressSyncClient {
@@ -68,6 +70,17 @@ export function createSyncedProgressRepository(
     },
     mostRecent() {
       return local.mostRecent();
+    },
+    async syncOne(mediaId) {
+      if (mediaId.startsWith('local:')) return true;
+      const record = local.read(mediaId);
+      if (record === null) return false;
+      try {
+        await client.put(mediaId, record);
+        return true;
+      } catch {
+        return false;
+      }
     },
     async syncFromRemote() {
       let records: RemoteProgressRecord[];

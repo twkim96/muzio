@@ -1,13 +1,15 @@
 import type { NativeBridge } from './nativeBridge';
+import { supportsNativeCapability } from './androidShell';
 import type { PlayerStoreApi } from '../../features/player/playerStore';
 import type { PlaybackSource } from '../playback/source/source';
 import { contentIdentityForPlaybackSource } from '../media/contentIdentity';
 import type { PlaybackActivityDocument, PlaybackActivityRecord } from '../storage/playbackActivityRepository';
 import type { ProgressRepository } from '../storage/progressRepository';
+import type { SyncedProgressRepository } from '../storage/progressSyncRepository';
 
 type Entry = { id: string; source: PlaybackSource; positionSec: number; durationSec: number;
   completed: boolean; updatedAtMs: number; startedAtMs: number };
-type Snapshot = { pending: Entry[] };
+type Snapshot = { pending: Entry[]; retainLocal?: boolean };
 
 /** Import through the store's own repository so its cached activity stays coherent. */
 export function mergeNativePlaybackHistory(store: PlayerStoreApi, snapshot: Snapshot, progress?: ProgressRepository): string[] {
@@ -59,25 +61,42 @@ function validEntry(entry: Entry): boolean {
 }
 
 export function connectNativePlaybackHistory(store: PlayerStoreApi, bridge: NativeBridge | null, progress?: ProgressRepository) {
-  if (!bridge?.capabilities?.playbackHistory) return Object.assign(() => {}, { ready: Promise.resolve() });
+  if (!bridge || !supportsNativeCapability('playbackHistory', bridge)) return Object.assign(() => {}, { ready: Promise.resolve() });
   let disposed = false;
   let running = false;
+  const importedRetained = new Set<string>();
   const reconcile = async () => {
     if (disposed || running) return;
     running = true;
     try {
       const snapshot = await bridge.request<Snapshot>('playback.history');
       if (disposed) return;
-      const ids = mergeNativePlaybackHistory(store, snapshot, progress);
+      const pending = snapshot.retainLocal
+        ? snapshot.pending.filter(entry => !importedRetained.has(entry.id))
+        : snapshot.pending;
+      const ids = mergeNativePlaybackHistory(store, { ...snapshot, pending }, progress);
       // Repository writes are best effort. Never discard the native copy when
       // browser storage is unavailable or full, even if its in-memory state changed.
       const persistedActivity = window.localStorage.getItem('music.activity.v1');
       if (persistedActivity !== JSON.stringify(JSON.parse(store.getState().exportPlaybackActivity()))) return;
       const persistedProgress = JSON.parse(window.localStorage.getItem('playback.progress.v1') ?? '{}') as Record<string, { lastPlayedAt?: string }>;
-      const durableIds = ids.filter(id => {
+      const durable = (id: string) => {
         const entry = snapshot.pending.find(candidate => candidate.id === id);
         return !progress || (!!entry && Date.parse(persistedProgress[entry.source.mediaId]?.lastPlayedAt ?? '') >= Math.floor(entry.updatedAtMs));
-      });
+      };
+      if (snapshot.retainLocal) {
+        ids.filter(id => snapshot.pending.find(entry => entry.id === id)?.source.mediaId.startsWith('local:') && durable(id))
+          .forEach(id => importedRetained.add(id));
+      }
+      const durableIds: string[] = [];
+      const syncOne = (progress as Partial<SyncedProgressRepository> | undefined)?.syncOne;
+      for (const id of ids) {
+        const entry = snapshot.pending.find(candidate => candidate.id === id);
+        if (!entry || !durable(id)) continue;
+        if (snapshot.retainLocal && entry.source.mediaId.startsWith('local:')) continue;
+        if (!entry.source.mediaId.startsWith('local:') && syncOne && !(await syncOne.call(progress, entry.source.mediaId))) continue;
+        durableIds.push(id);
+      }
       if (durableIds.length) await bridge.request('playback.ackHistory', { ids: durableIds });
     } catch { /* The durable outbox retries on the next resume or native event. */ }
     finally { running = false; }

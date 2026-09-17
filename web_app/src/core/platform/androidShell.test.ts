@@ -46,9 +46,11 @@ test('native capabilities retain legacy Android features and exclude iOS local m
   const request = vi.fn();
   expect(supportsNativeCapability('localLibrary', { request })).toBe(true);
   expect(supportsNativeCapability('nativeAudio', { request })).toBe(true);
+  expect(supportsNativeCapability('playbackHistory', { request })).toBe(true);
   const ios = { platform: 'ios' as const, capabilities: { localLibrary: false, nativeAudio: true }, request };
   expect(supportsNativeCapability('localLibrary', ios)).toBe(false);
   expect(supportsNativeCapability('nativeAudio', ios)).toBe(true);
+  expect(supportsNativeCapability('playbackHistory', ios)).toBe(false);
   expect(supportsNativeCapability('localLibrary', { platform: 'ios', request })).toBe(false);
   expect(supportsNativeCapability('localLibrary', { platform: 'macos', request })).toBe(false);
   expect(supportsNativeCapability('nativeAudio', { platform: 'macos', request })).toBe(true);

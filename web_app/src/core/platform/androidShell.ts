@@ -27,7 +27,8 @@ export function androidShellBridge() { return shellBridge; }
 export function supportsNativeCapability(capability: keyof NativeCapabilities, bridge = shellBridge): boolean {
   if (!bridge) return false;
   return bridge.capabilities?.[capability] ?? (capability === 'nativeAudio' ||
-    (capability === 'localLibrary' && (bridge.platform === undefined || bridge.platform === 'android')));
+    ((capability === 'localLibrary' || capability === 'playbackHistory') &&
+      (bridge.platform === undefined || bridge.platform === 'android')));
 }
 
 const migrationKeys = ['music.likes.v1', 'music.playlists.v1', 'music.activity.v1'] as const;

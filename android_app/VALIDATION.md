@@ -309,3 +309,10 @@ entries describe their original runs. This is not the1.4.7 release closeout.
 - 연결된 Samsung SM-S936N에 `adb install -r`로 업데이트 설치했고 기존 앱 데이터를 삭제하지 않았다. 설치 후 `versionName=1.4.8`, `versionCode=16`, 앱 프로세스 실행을 확인했다.
 - 패키징 APK는 `android_app/app/build/outputs/apk/debug/app-debug.apk`; SHA-256 `a69f0aac1361318358109401de9450314dc492eb58631be0b2bde5fe45c596f4`. APK 내부 서비스워커도 `muzio-shell-v1.4.8-r1`임을 확인했다.
 - 실제 개인 로컬 음악의 장시간 재생, Bluetooth/잠금화면 조작, 영상 PiP 및 서버 동기화는 이 패키징 단계에서 자동 수용으로 간주하지 않는다.
+
+### Android 음악 진행률 저장 복구 — 2026-09-17
+
+- Android native audio가 웹 progress repository를 우회하던 경로를 durable native outbox로 연결했다. 외부 음악은 WebView progress sync가 서버 PUT 성공을 확인한 뒤에만 outbox를 지우며, 실패 시 다음 resume/재생 이벤트에 재시도한다. `local:` 음악은 서버로 전송하지 않고 최신 항목을 native outbox에 유지한 채 기기 progress storage로 복원한다.
+- ExoPlayer가 아직 duration을 보고하지 않는 경우 web source의 `durationSec`를 fallback으로 사용한다. 같은 곡에 큐 이웃만 붙는 `PLAYLIST_CHANGED`는 새 재생 session으로 중복 집계하지 않는다.
+- 공용 웹 전체 `80 files / 792 tests` 통과, production build 통과, Android `:app:testDebugUnitTest :app:assembleDebug` 성공. 외부 서버 PUT 실패 후 outbox 보존/재시도와 local-only 저장 분기를 회귀 테스트로 고정했다.
+- SM-S936N에 `adb install -r` 성공, `1.4.8/versionCode16` 및 프로세스 실행 확인. APK SHA-256 `cb20187a39a20615dc71f6abe7af6db61ae799a1c17f3c937b1c9ec9c524006a`, 포함된 공용 웹 shell은 `1.4.8-r2`. 실제 개인 곡을 재생해 서버/기기 진행률이 바뀌는 수동 수용은 사용자 확인 대상으로 남긴다.

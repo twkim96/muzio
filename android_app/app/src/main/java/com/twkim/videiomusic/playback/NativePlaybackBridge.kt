@@ -26,6 +26,7 @@ class NativePlaybackBridge(
     private val emit: (JSONObject) -> Unit,
 ) {
     private val notificationLikes = NotificationLikeStore(context.applicationContext)
+    private val playbackHistory = AndroidPlaybackHistory(context.applicationContext)
     private val localLibrary = com.twkim.videiomusic.data.LocalLibraryManager(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var origin = serverOrigin(serverBaseUrl)
@@ -70,6 +71,12 @@ class NativePlaybackBridge(
         scope.launch {
             val result = runCatching {
                 val player = withTimeout(15_000) { ready.await() }
+                if (command == "playback.history") return@runCatching playbackHistory.snapshot()
+                if (command == "playback.ackHistory") {
+                    val values = payload.optJSONArray("ids") ?: JSONArray()
+                    val ids = (0 until values.length()).map { values.getString(it) }.toSet()
+                    return@runCatching playbackHistory.acknowledge(ids)
+                }
                 if (command == "playback.videoSession") {
                     PlaybackRuntime.updateVideo(videoOwner, payload) { action -> emit(JSONObject().put("type", "videoSessionAction").put("state", action)) }
                     return@runCatching JSONObject()
