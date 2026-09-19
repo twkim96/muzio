@@ -179,7 +179,7 @@ export function VideoWatchScreen({
           >
             <div
               data-testid="video-viewport-shell"
-              className="sticky top-[var(--video-watch-top)] z-20 self-start bg-black lg:relative lg:top-auto lg:z-auto"
+              className="min-w-0 sticky top-[var(--video-watch-top)] z-20 self-start bg-black lg:relative lg:top-auto lg:z-auto"
             >
               <VideoViewport
                 className={`w-full touch-none overflow-hidden rounded-none bg-black ${
@@ -192,13 +192,13 @@ export function VideoWatchScreen({
             </div>
             <section
               data-testid="video-info"
-              className={`px-4 ${theaterMode ? 'sm:px-8' : '-mt-5 sm:px-0 lg:mt-0'}`}
+              className={`min-w-0 px-4 ${theaterMode ? 'sm:px-8' : '-mt-5 sm:px-0 lg:mt-0'}`}
               aria-label="Video information"
             >
               <div ref={summaryRef} data-testid="video-summary" className="pt-4">
                 <h1
                   data-testid="video-player-title"
-                  className="break-words text-xl font-semibold leading-7 tracking-normal text-[var(--color-fg)] sm:text-2xl sm:leading-8"
+                  className="[overflow-wrap:anywhere] text-xl font-semibold leading-7 tracking-normal text-[var(--color-fg)] sm:text-2xl sm:leading-8"
                   title={title}
                 >
                   {title}

@@ -40,3 +40,6 @@ ios_app/**/*.p12
 ios_app/ThirdParty/**
 !ios_app/ThirdParty/
 !ios_app/ThirdParty/README.md
+
+# Keep Finder metadata ignored after the iOS allowlist.
+ios_app/**/.DS_Store
