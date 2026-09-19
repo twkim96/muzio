@@ -45,6 +45,8 @@ export interface RemotePlaybackSource {
   /** Forward-slash relative path inside the root. Optional, see above. */
   relativePath?: string;
   /** Direct source retained while an immutable optimization sidecar is used. */
+  audioResumeOriginalUrl?: string;
+  audioResumeOriginalMimeType?: string;
   optimizationOriginalUrl?: string;
   optimizationOriginalMimeType?: string;
   optimizationKind?: 'faststart-mp4' | 'hls-fmp4';

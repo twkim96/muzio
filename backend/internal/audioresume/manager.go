@@ -2,12 +2,14 @@ package audioresume
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,6 +37,7 @@ type Remuxer interface {
 type Status struct {
 	State           string `json:"state"`
 	MediaID         string `json:"mediaId,omitempty"`
+	CacheKey        string `json:"cacheKey,omitempty"`
 	URL             string `json:"url,omitempty"`
 	BuildingMediaID string `json:"buildingMediaId,omitempty"`
 }
@@ -51,7 +54,6 @@ type candidate struct {
 	sourcePath string
 	size       int64
 	modTime    time.Time
-	fileName   string
 }
 
 type Manager struct {
@@ -139,7 +141,10 @@ func (m *Manager) Request(item library.Media) (Status, error) {
 	m.wg.Add(1)
 	m.mu.Unlock()
 
-	go m.build(ctx, generation, c)
+	go func() {
+		defer cancel()
+		m.build(ctx, generation, c)
+	}()
 	return status, nil
 }
 
@@ -192,22 +197,34 @@ func (m *Manager) build(ctx context.Context, generation uint64, c candidate) {
 		return
 	}
 
-	finalPath := filepath.Join(m.cacheDir, c.fileName)
-	if err := os.Rename(tempPath, finalPath); err != nil {
+	// Every publication has its own path, including repeated builds of the same source.
+	var version [16]byte
+	if _, err := rand.Read(version[:]); err != nil {
 		m.finishFailure(generation, c.item.ID, err)
 		return
 	}
+	fileName := cachePrefix(c.item.ID) + hex.EncodeToString(version[:]) + ".m4a"
+	finalPath := filepath.Join(m.cacheDir, fileName)
 	next := &cacheEntry{
 		MediaID:       c.item.ID,
 		SourceSize:    c.size,
 		SourceModTime: c.modTime,
-		FileName:      c.fileName,
+		FileName:      fileName,
 	}
 
 	m.mu.Lock()
 	if generation != m.generation || m.buildingID != c.item.ID {
 		m.mu.Unlock()
-		_ = os.Remove(finalPath)
+		return
+	}
+	if ctx.Err() != nil {
+		m.mu.Unlock()
+		m.finishFailure(generation, c.item.ID, ctx.Err())
+		return
+	}
+	if err := os.Rename(tempPath, finalPath); err != nil {
+		m.mu.Unlock()
+		m.finishFailure(generation, c.item.ID, err)
 		return
 	}
 	if err := writeEntry(m.cacheDir, next); err != nil {
@@ -222,12 +239,14 @@ func (m *Manager) build(ctx context.Context, generation uint64, c candidate) {
 	m.current = next
 	m.buildingID = ""
 	m.cancel = nil
-	m.mu.Unlock()
-
-	if previous != nil && previous.FileName != next.FileName {
-		_ = os.Remove(filepath.Join(m.cacheDir, previous.FileName))
+	// Retired bytes remain available for at least 24 hours after replacement.
+	if previous != nil {
+		now := time.Now()
+		_ = os.Chtimes(filepath.Join(m.cacheDir, previous.FileName), now, now)
 	}
 	m.cleanupCacheFiles(next.FileName)
+	m.mu.Unlock()
+
 	m.logger.Info("audio resume cache ready", "id", c.item.ID, "bytes", fileSize(finalPath))
 }
 
@@ -260,13 +279,11 @@ func (m *Manager) candidateFor(item library.Media) (candidate, error) {
 	if !info.Mode().IsRegular() {
 		return candidate{}, errors.New("audio resume cache source is not a regular file")
 	}
-	fingerprint := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d", item.ID, info.Size(), info.ModTime().UnixNano())))
 	return candidate{
 		item:       item,
 		sourcePath: path,
 		size:       info.Size(),
 		modTime:    info.ModTime(),
-		fileName:   "audio-" + hex.EncodeToString(fingerprint[:8]) + ".m4a",
 	}, nil
 }
 
@@ -275,7 +292,8 @@ func (m *Manager) statusLocked() Status {
 	if m.current != nil && regularFile(filepath.Join(m.cacheDir, m.current.FileName)) {
 		status.State = "ready"
 		status.MediaID = m.current.MediaID
-		status.URL = "/api/audio-resume-cache/media/" + m.current.MediaID
+		status.CacheKey = m.current.FileName
+		status.URL = "/api/audio-resume-cache/media/" + url.PathEscape(m.current.MediaID) + "?v=" + url.QueryEscape(status.CacheKey)
 	}
 	if status.State == "empty" && m.buildingID != "" {
 		status.State = "building"
@@ -288,6 +306,13 @@ func (m *Manager) cleanupStaleFiles() {
 	if m.current != nil {
 		keep = m.current.FileName
 	}
+	// Startup is the only time no remux task owns temporary files.
+	entries, _ := os.ReadDir(m.cacheDir)
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), ".remux-") {
+			_ = os.Remove(filepath.Join(m.cacheDir, entry.Name()))
+		}
+	}
 	m.cleanupCacheFiles(keep)
 }
 
@@ -298,8 +323,11 @@ func (m *Manager) cleanupCacheFiles(keep string) {
 		if entry.IsDir() || name == stateFileName || name == stateBackupFileName || name == keep {
 			continue
 		}
-		if strings.HasPrefix(name, ".remux-") || strings.HasSuffix(name, ".m4a") {
-			_ = os.Remove(filepath.Join(m.cacheDir, name))
+		if strings.HasSuffix(name, ".m4a") {
+			info, err := entry.Info()
+			if err == nil && time.Since(info.ModTime()) > 24*time.Hour {
+				_ = os.Remove(filepath.Join(m.cacheDir, name))
+			}
 		}
 	}
 }
@@ -394,4 +422,24 @@ func fileSize(path string) int64 {
 		return 0
 	}
 	return info.Size()
+}
+
+func cachePrefix(mediaID string) string {
+	sum := sha256.Sum256([]byte(mediaID))
+	return "audio-" + hex.EncodeToString(sum[:]) + "-"
+}
+
+// ReadyVersion never substitutes another representation at an existing URL.
+func (m *Manager) ReadyVersion(mediaID, key string) (string, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if key == "" || filepath.Base(key) != key || !strings.HasSuffix(key, ".m4a") {
+		return "", false
+	}
+	current := m.current != nil && m.current.MediaID == mediaID && m.current.FileName == key
+	if !current && !strings.HasPrefix(key, cachePrefix(mediaID)) {
+		return "", false
+	}
+	path := filepath.Join(m.cacheDir, key)
+	return path, regularFile(path)
 }

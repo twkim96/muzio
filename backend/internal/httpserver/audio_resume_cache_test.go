@@ -29,6 +29,10 @@ func (c *fakeAudioResumeCache) Ready(library.Media) (string, bool) {
 	return c.path, c.ready
 }
 
+func (c *fakeAudioResumeCache) ReadyVersion(_ string, key string) (string, bool) {
+	return c.path, c.ready && key == "cached.m4a"
+}
+
 func (c *fakeAudioResumeCache) Status() audioresume.Status { return c.status }
 
 type audioResumeCacheLister struct {
@@ -45,6 +49,7 @@ func TestAudioResumeCacheStatusAndRequestRoutes(t *testing.T) {
 	cache := &fakeAudioResumeCache{status: audioresume.Status{
 		State:           "ready",
 		MediaID:         "old",
+		CacheKey:        "cached.m4a",
 		BuildingMediaID: "aac1",
 	}}
 	lister := &audioResumeCacheLister{
@@ -67,7 +72,7 @@ func TestAudioResumeCacheStatusAndRequestRoutes(t *testing.T) {
 	if err := json.NewDecoder(recorder.Body).Decode(&status); err != nil {
 		t.Fatal(err)
 	}
-	if status.URL != "/api/audio-resume-cache/media/old" || status.BuildingMediaID != "aac1" {
+	if status.URL != "/api/audio-resume-cache/media/old?v=cached.m4a" || status.BuildingMediaID != "aac1" {
 		t.Fatalf("status = %#v", status)
 	}
 }
@@ -91,7 +96,7 @@ func TestAudioResumeCacheMediaSupportsRangeAndSkipsGzip(t *testing.T) {
 		cache:      cache,
 	}
 	handler := NewHandler(testLogger(), lister, nil)
-	request := httptest.NewRequest(http.MethodGet, "/api/audio-resume-cache/media/aac1", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/audio-resume-cache/media/aac1?v=cached.m4a", nil)
 	request.Header.Set("Range", "bytes=4-6")
 	request.Header.Set("Accept-Encoding", "gzip")
 	recorder := httptest.NewRecorder()
@@ -108,7 +113,7 @@ func TestAudioResumeCacheMediaSupportsRangeAndSkipsGzip(t *testing.T) {
 	}
 }
 
-func TestAudioResumeCacheMediaFallsBackToOriginalStream(t *testing.T) {
+func TestAudioResumeCacheMediaNeverFallsBackToOriginalStream(t *testing.T) {
 	item := library.Media{ID: "aac1", Type: library.MediaTypeAudio, Name: "long.aac"}
 	cache := &fakeAudioResumeCache{}
 	lister := &audioResumeCacheLister{
@@ -121,11 +126,12 @@ func TestAudioResumeCacheMediaFallsBackToOriginalStream(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	handler := NewHandler(testLogger(), lister, fallback)
-	request := httptest.NewRequest(http.MethodGet, "/api/audio-resume-cache/media/aac1", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/audio-resume-cache/media/aac1?v=cached.m4a", nil)
+	request.Header.Set("Range", "bytes=4-6")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusNoContent || observedPath != "/api/media/aac1" {
+	if recorder.Code != http.StatusGone || observedPath != "" {
 		t.Fatalf("fallback status=%d path=%q", recorder.Code, observedPath)
 	}
 }

@@ -1,6 +1,6 @@
 importScripts('/video-index-cache.js');
 const videoIndexCache = self.MuzioVideoIndexCache.create();
-const CACHE_NAME = 'muzio-shell-v1.4.8-r3';
+const CACHE_NAME = 'muzio-shell-v1.4.8-r4';
 const APP_SHELL = [
   '/',
   '/index.html',

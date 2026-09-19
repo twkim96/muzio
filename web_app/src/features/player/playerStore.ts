@@ -29,6 +29,7 @@ import {
 } from '../../core/storage/likedTracksRepository';
 import {
   createLocalStoragePlaybackActivityRepository,
+  activityRecordKey,
   type PlaybackActivityRecord,
   type PlaybackActivityRepository,
   type PlaybackActivitySource,
@@ -197,6 +198,7 @@ export interface PlaybackTarget {
 }
 
 interface MountSlot {
+  activeQueueEntryId?: string;
   session: PlaybackSession | null;
   engine: PlaybackEngine | null;
   unsubscribe: (() => void) | null;
@@ -746,7 +748,9 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           elementAlive &&
           currentState?.status.kind !== 'ended' &&
           samePlaybackMedia(currentState?.source ?? null, playbackSource) &&
+          (source.queueEntryId === undefined || slot.activeQueueEntryId === source.queueEntryId) &&
           (!get().nativeAudio || currentState?.source?.queueEntryId === playbackSource.queueEntryId);
+        slot.activeQueueEntryId = source.queueEntryId;
         if (slot.session !== null && shouldFlushCurrent && !sameActiveAudio) {
           slot.progressAttachment?.flush();
           syncActivityProgress(targetKind, slot.session.getState(), true);
@@ -930,7 +934,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       const source = activitySourceFromPlaybackSource(state.source);
       const last = lastActivityProgress[kind];
       if (
-        last.contentKey === source.contentKey &&
+        last.contentKey === activityRecordKey(source) &&
         last.positionSec === state.positionSec &&
         last.durationSec === state.durationSec &&
         last.completed === completed
@@ -941,7 +945,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
       if (
         !force &&
         !terminal &&
-        last.contentKey === source.contentKey &&
+        last.contentKey === activityRecordKey(source) &&
         writtenAtMs - last.writtenAtMs < activityProgressThrottleMs
       ) {
         return;
@@ -955,7 +959,7 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
         },
       );
       lastActivityProgress[kind] = {
-        contentKey: source.contentKey,
+        contentKey: activityRecordKey(source),
         writtenAtMs,
         positionSec: state.positionSec,
         durationSec: state.durationSec,
@@ -985,6 +989,21 @@ export function createPlayerStore(options: PlayerStoreOptions = {}) {
           nextState.positionSec >= 30
         ) {
           audioResumeCache.prepare(nextState.source.mediaId);
+        }
+        if (kind === 'audio' && nextState.status.kind === 'error' &&
+            nextState.source?.audioResumeOriginalUrl !== undefined && slot.session !== null) {
+          const { audioResumeOriginalUrl, audioResumeOriginalMimeType, ...original } = nextState.source;
+          const positionSec = nextState.userSeekTargetSec ?? (nextState.positionSec || mediaFragmentStartSec(nextState.source));
+          const fallback = {
+            ...original,
+            url: audioResumeOriginalUrl.split('#')[0] + (positionSec > 0 ? `#t=${positionSec}` : ''),
+            mimeType: audioResumeOriginalMimeType,
+          };
+          // Load a distinct representation and restore time, never reuse cache byte offsets.
+          slot.session.load(fallback);
+          if (positionSec > 0) slot.session.seek(positionSec);
+          void slot.session.play().catch(() => {});
+          return;
         }
         if (
           kind === 'video' &&

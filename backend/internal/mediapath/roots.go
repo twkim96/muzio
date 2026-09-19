@@ -12,8 +12,9 @@ import (
 
 // Root identifies a configured media folder by a stable name and an absolute path.
 type Root struct {
-	Name string
-	Path string
+	Name      string
+	Path      string
+	mountPath string
 }
 
 // Roots is the registry of normalized media roots used by library and streaming.
@@ -55,7 +56,7 @@ func NewRoots(paths []string) (*Roots, error) {
 		seenPaths[cleaned] = struct{}{}
 
 		name := makeRootName(cleaned)
-		root := Root{Name: name, Path: cleaned}
+		root := Root{Name: name, Path: cleaned, mountPath: rootMountPath(cleaned)}
 		r.list = append(r.list, root)
 		r.byName[name] = root
 	}
@@ -87,7 +88,7 @@ func (r *Roots) RootAvailable(name string) bool {
 		return false
 	}
 	info, err := os.Stat(root.Path)
-	return err == nil && info.IsDir()
+	return err == nil && info.IsDir() && mountAvailable(root.mountPath)
 }
 
 func makeRootName(absPath string) string {

@@ -99,8 +99,11 @@ func TestManagerReplacesTheSingleReadyEntryOnlyAfterNewRemuxCompletes(t *testing
 	if _, ready := manager.Ready(second); !ready {
 		t.Fatal("second cache was not ready")
 	}
-	if _, err := os.Stat(firstCache); !os.IsNotExist(err) {
-		t.Fatalf("previous cache still exists: %v", err)
+	if _, err := os.Stat(firstCache); err != nil {
+		t.Fatalf("retired cache disappeared: %v", err)
+	}
+	if path, ok := manager.ReadyVersion(first.ID, filepath.Base(firstCache)); !ok || path != firstCache {
+		t.Fatal("old version no longer addressable")
 	}
 }
 
@@ -204,4 +207,93 @@ func waitForStatus(t *testing.T, manager *Manager, predicate func(Status) bool) 
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatalf("status did not converge: %#v", manager.Status())
+}
+
+type lateRemuxer struct {
+	started chan string
+	release chan struct{}
+}
+
+func (r *lateRemuxer) Remux(_ context.Context, source, output string) error {
+	if err := os.WriteFile(output, []byte(filepath.Base(source)), 0600); err != nil {
+		return err
+	}
+	r.started <- output
+	if filepath.Base(source) == "old.aac" {
+		<-r.release
+	}
+	return nil // Deliberately emulate an encoder completing after cancellation.
+}
+
+func TestCancelledBuildCannotRemoveActiveTemporaryOrPublishedFiles(t *testing.T) {
+	root := t.TempDir()
+	oldPath, newPath := filepath.Join(root, "old.aac"), filepath.Join(root, "new.aac")
+	for _, path := range []string{oldPath, newPath} {
+		if err := os.WriteFile(path, []byte("source"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	remuxer := &lateRemuxer{started: make(chan string, 2), release: make(chan struct{})}
+	manager, err := NewManager(Options{CacheDir: filepath.Join(root, "cache"), Resolver: mapResolver{"old.aac": oldPath, "new.aac": newPath}, Remuxer: remuxer})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	defer close(remuxer.release)
+	old := mediaForFile(t, "old", "old.aac", oldPath)
+	next := mediaForFile(t, "new", "new.aac", newPath)
+	if _, err := manager.Request(old); err != nil {
+		t.Fatal(err)
+	}
+	temporary := <-remuxer.started
+	if _, err := manager.Request(next); err != nil {
+		t.Fatal(err)
+	}
+	<-remuxer.started
+	waitForStatus(t, manager, func(s Status) bool { return s.MediaID == "new" })
+	if _, err := os.Stat(temporary); err != nil {
+		t.Fatalf("new publication removed another worker's temporary file: %v", err)
+	}
+	current := manager.Status()
+	// Explicitly finish the stale generation after publication, then wait without sleeps.
+	remuxer.release <- struct{}{}
+	manager.wg.Wait()
+	if manager.Status().CacheKey != current.CacheKey {
+		t.Fatal("stale build replaced current version")
+	}
+	if _, ok := manager.ReadyVersion("new", current.CacheKey); !ok {
+		t.Fatal("stale completion deleted current bytes")
+	}
+	if _, err := os.Stat(temporary); !os.IsNotExist(err) {
+		t.Fatalf("worker did not remove its own temporary output: %v", err)
+	}
+	if _, ok := manager.ReadyVersion("old", current.CacheKey); ok {
+		t.Fatal("version accepted for wrong media")
+	}
+}
+
+func TestCleanupKeepsCurrentAndRecentVersionsButExpiresRetiredBytes(t *testing.T) {
+	dir := t.TempDir()
+	staleTime := time.Now().Add(-25 * time.Hour)
+	for _, name := range []string{"current.m4a", "retired.m4a", "recent.m4a", ".remux-active.m4a.tmp"} {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("bytes"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if name != "recent.m4a" {
+			if err := os.Chtimes(path, staleTime, staleTime); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	manager := &Manager{cacheDir: dir}
+	manager.cleanupCacheFiles("current.m4a")
+	for _, name := range []string{"current.m4a", "recent.m4a", ".remux-active.m4a.tmp"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Fatalf("removed protected file %s: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "retired.m4a")); !os.IsNotExist(err) {
+		t.Fatalf("retired bytes were not collected: %v", err)
+	}
 }

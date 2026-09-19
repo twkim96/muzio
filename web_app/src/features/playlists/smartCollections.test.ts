@@ -106,11 +106,13 @@ describe('buildSmartCollections', () => {
       likedKeys: ['audio:title:b'],
       activityRecords: [
         record('audio:artist:lamp:title:rainy-night', {
+          mediaId: 'a',
           playCount: 2,
           lastPlayedAt: '2026-06-01T11:00:00.000Z',
           events: [{ playedAt: '2026-06-01T11:00:00.000Z', weekday: 1, hour: 20 }],
         }),
         record('audio:title:c', {
+          mediaId: 'c',
           playCount: 5,
           lastPlayedAt: '2026-06-02T11:00:00.000Z',
           lastPositionSec: 20,
@@ -154,4 +156,12 @@ describe('buildSmartCollections', () => {
       '최근 시청한 영상',
     ]);
   });
+});
+
+test('recent activity resolves the recorded episode rather than the first matching title', () => {
+  const episodes = ['e1', 'e2'].map(id => ({ ...item(id, `${id}.mp4`, 'video'), metadata: { title: 'Show' } }));
+  const collections = buildSmartCollections({ items: episodes, likedKeys: [], activityRecords: [
+    record('video:title:show', { mediaId: 'e2', mediaType: 'video', playCount: 1, lastPlayedAt: '2026-09-19T00:00:00Z' }),
+  ] });
+  expect(collections.find(collection => collection.id === 'recently-watching')?.items.map(item => item.id)).toEqual(['e2']);
 });

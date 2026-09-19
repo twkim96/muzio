@@ -502,8 +502,8 @@ class PlaybackService : MediaSessionService(), PlaybackRuntimeActions {
         lastSyncedAtMs = System.currentTimeMillis()
         scope.launch(Dispatchers.IO) {
             runCatching { persistPlaybackHistory(sample) }
-            runCatching { pushRemoteProgress(sample) }
             runCatching { persistLocalProgress(sample) }
+            runCatching { pushRemoteProgress(sample) }
         }
     }
 

@@ -1,3 +1,4 @@
+import { activityRecordKey } from '../../core/storage/playbackActivityRepository';
 import type { LibraryItem } from '../../core/api/libraryClient';
 import { contentKeysForLibraryItem } from '../../core/media/contentIdentity';
 import type { PlaybackActivityRecord } from '../../core/storage/playbackActivityRepository';
@@ -141,6 +142,7 @@ export function mapItemsByContentKey(
 ): Map<string, LibraryItem> {
   const map = new Map<string, LibraryItem>();
   for (const item of items) {
+    map.set(activityRecordKey({ mediaType: item.type, mediaId: item.id }), item);
     for (const key of contentKeysForLibraryItem(item)) {
       if (!map.has(key)) map.set(key, item);
     }
@@ -153,7 +155,7 @@ function recordsToItems(
   byKey: ReadonlyMap<string, LibraryItem>,
 ): LibraryItem[] {
   return records
-    .map((record) => byKey.get(record.contentKey))
+    .map((record) => byKey.get(activityRecordKey(record)))
     .filter((item): item is LibraryItem => item !== undefined);
 }
 

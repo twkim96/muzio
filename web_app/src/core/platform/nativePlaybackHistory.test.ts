@@ -101,7 +101,7 @@ it('does not acknowledge outbox entries when browser persistence fails', async (
   const { store, progress } = setup();
   const request = vi.fn(async (command: string) => command === 'playback.history' ? { pending: [entry] } : {});
   const bridge = { capabilities: { playbackHistory: true }, request, subscribe: () => () => {} } as unknown as NativeBridge;
-  const failure = vi.spyOn(localStorage, 'setItem').mockImplementation(() => { throw new Error('quota'); });
+  const failure = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota'); });
   const disconnect = connectNativePlaybackHistory(store, bridge, progress);
   await vi.waitFor(() => expect(store.getState().activityRecords).toHaveLength(1));
   expect(request).not.toHaveBeenCalledWith('playback.ackHistory', expect.anything());

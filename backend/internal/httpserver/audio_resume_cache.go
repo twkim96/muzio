@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"muzio/backend/internal/audioresume"
@@ -14,7 +15,7 @@ import (
 
 type AudioResumeCache interface {
 	Request(library.Media) (audioresume.Status, error)
-	Ready(library.Media) (string, bool)
+	ReadyVersion(string, string) (string, bool)
 	Status() audioresume.Status
 }
 
@@ -30,7 +31,11 @@ func audioResumeCacheStatusHandler(cache AudioResumeCache) http.HandlerFunc {
 			return
 		}
 		status := cache.Status()
-		status.URL = audioResumeCacheURL(status.MediaID)
+		if status.CacheKey != "" {
+			status.URL = audioResumeCacheURL(status.MediaID) + "?v=" + url.QueryEscape(status.CacheKey)
+		} else {
+			status.URL = ""
+		}
 		writeJSON(w, http.StatusOK, status)
 	}
 }
@@ -65,7 +70,11 @@ func audioResumeCacheRequestHandler(getter LibraryGetter, cache AudioResumeCache
 			http.Error(w, "audio resume cache unavailable", http.StatusInternalServerError)
 			return
 		}
-		status.URL = audioResumeCacheURL(status.MediaID)
+		if status.CacheKey != "" {
+			status.URL = audioResumeCacheURL(status.MediaID) + "?v=" + url.QueryEscape(status.CacheKey)
+		} else {
+			status.URL = ""
+		}
 		writeJSON(w, http.StatusAccepted, status)
 	}
 }
@@ -73,7 +82,6 @@ func audioResumeCacheRequestHandler(getter LibraryGetter, cache AudioResumeCache
 func audioResumeCacheMediaHandler(
 	getter LibraryGetter,
 	cache AudioResumeCache,
-	fallback http.Handler,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -95,15 +103,10 @@ func audioResumeCacheMediaHandler(
 			http.Error(w, "audio resume cache unavailable", http.StatusInternalServerError)
 			return
 		}
-		path, ready := cache.Ready(item)
+		path, ready := cache.ReadyVersion(id, r.URL.Query().Get("v"))
 		if !ready {
-			if fallback == nil {
-				http.NotFound(w, r)
-				return
-			}
-			clone := r.Clone(r.Context())
-			clone.URL.Path = "/api/media/" + url.PathEscape(id)
-			fallback.ServeHTTP(w, clone)
+			// A cache miss must never reinterpret M4A byte ranges as raw AAC bytes.
+			http.Error(w, "audio resume cache expired; reload original media URL", http.StatusGone)
 			return
 		}
 		file, err := os.Open(path)
@@ -119,7 +122,7 @@ func audioResumeCacheMediaHandler(
 		}
 		w.Header().Set("Content-Type", "audio/mp4")
 		w.Header().Set("Cache-Control", "private, no-transform")
-		w.Header().Set("ETag", fmt.Sprintf(`W/"resume-%s-%x-%x"`, item.ID, info.Size(), info.ModTime().UnixNano()))
+		w.Header().Set("ETag", fmt.Sprintf(`"resume-%s"`, filepath.Base(path)))
 		http.ServeContent(w, r, item.Name+".m4a", info.ModTime(), file)
 	}
 }

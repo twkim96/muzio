@@ -18,14 +18,16 @@ describe('audioResumeCacheService', () => {
       fetchStatus: async () => ({
         state: 'ready',
         mediaId: 'aac-1',
-        url: '/api/audio-resume-cache/media/aac-1',
+        url: '/api/audio-resume-cache/media/aac-1?v=version1',
       }),
     });
     await service.initialize();
 
     expect(service.resolve(resumedAAC)).toEqual({
       ...resumedAAC,
-      url: '/api/audio-resume-cache/media/aac-1#t=120.5',
+      audioResumeOriginalUrl: resumedAAC.url,
+      audioResumeOriginalMimeType: resumedAAC.mimeType,
+      url: '/api/audio-resume-cache/media/aac-1?v=version1#t=120.5',
       mimeType: 'audio/mp4',
     });
     expect(

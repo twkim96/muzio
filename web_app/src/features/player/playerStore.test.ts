@@ -2220,3 +2220,45 @@ test('temporary HLS preserves the external URL through playback and seek without
   expect(resolve).toHaveBeenCalledTimes(1);
   store.getState().detachElement('video');
 });
+
+test('starts another occurrence of the same audio file while preserving resume on the current entry', async () => {
+  const session = makeFakeSession();
+  const store = createPlayerStore({ createSession: () => session, createEngine: () => fakeEngine() });
+  store.getState().attachElement('audio', fakeElement());
+  await store.getState().playMusicQueue([audioSource, audioSource], audioSource.mediaId);
+  session.setState({ ...session.getState(), status: { kind: 'playing' }, positionSec: 60 });
+  const loads = session.calls.load.mock.calls.length;
+  await store.getState().playQueueTrack(store.getState().musicQueue[1].queueEntryId!);
+  expect(session.calls.load).toHaveBeenCalledTimes(loads + 1);
+  await store.getState().playQueueTrack(store.getState().musicQueue[1].queueEntryId!);
+  expect(session.calls.load).toHaveBeenCalledTimes(loads + 1);
+});
+
+test('restores the inserted queue occurrence after disabling shuffle from the last original track', async () => {
+  const session = makeFakeSession();
+  const store = createPlayerStore({ createSession: () => session, createEngine: () => fakeEngine(), random: () => 0 });
+  store.getState().attachElement('audio', fakeElement());
+  const tracks = ['a', 'b', 'c'].map(mediaId => ({ ...audioSource, mediaId, url: `/api/media/${mediaId}` }));
+  await store.getState().playMusicQueue(tracks, 'c');
+  store.getState().toggleShuffle();
+  await store.getState().insertQueueItemAfterCurrentAndPlay({ ...audioSource, mediaId: 'x', url: '/api/media/x' });
+  const selected = store.getState().musicQueue[store.getState().musicQueueIndex];
+  store.getState().toggleShuffle();
+  expect(store.getState().musicQueue[store.getState().musicQueueIndex].queueEntryId).toBe(selected.queueEntryId);
+  expect(store.getState().audio.source?.mediaId).toBe('x');
+});
+
+test('reloads the original AAC URL at the current time when an immutable resume cache expires', async () => {
+  const session = makeFakeSession();
+  const source = { ...audioSource, name: 'song.aac', mimeType: 'audio/aac', url: '/api/media/a1#t=40' };
+  const store = createPlayerStore({ createSession: () => session, createEngine: () => fakeEngine(),
+    audioResumeCache: { initialize: async () => {}, prepare: () => {}, resolve: current => ({ ...current,
+      url: '/api/audio-resume-cache/media/a1?v=old#t=40', mimeType: 'audio/mp4',
+      audioResumeOriginalUrl: current.url, audioResumeOriginalMimeType: current.mimeType }) } });
+  store.getState().attachElement('audio', fakeElement());
+  await store.getState().playSource(source);
+  session.setState({ ...session.getState(), positionSec: 90, status: { kind: 'error', message: 'gone' } });
+  expect(session.calls.load).toHaveBeenLastCalledWith(expect.objectContaining({ url: '/api/media/a1#t=90', mimeType: 'audio/aac' }));
+  expect(session.calls.seek).toHaveBeenLastCalledWith(90);
+  expect(session.getState().source?.audioResumeOriginalUrl).toBeUndefined();
+});

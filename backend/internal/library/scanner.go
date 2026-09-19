@@ -172,6 +172,12 @@ func scanRootResultsContext(
 		}
 		result := RootScanResult{Root: root}
 		startedAt := time.Now()
+		if !roots.RootAvailable(root.Name) {
+			result.Unavailable = true
+			result.Err = fmt.Errorf("media root unavailable: %s", root.Path)
+			results = append(results, result)
+			continue
+		}
 		info, err := os.Stat(root.Path)
 		if err != nil {
 			result.Err = err
@@ -221,6 +227,11 @@ func scanRootResultsContext(
 		)
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return results, err
+		}
+		if !roots.RootAvailable(root.Name) {
+			complete = false
+			result.Unavailable = true
+			err = fmt.Errorf("media root disconnected during scan: %s", root.Path)
 		}
 		result.Items = rootItems
 		result.Complete = complete

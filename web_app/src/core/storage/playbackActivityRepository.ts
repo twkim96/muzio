@@ -56,14 +56,14 @@ export function createLocalStoragePlaybackActivityRepository(
 ): PlaybackActivityRepository {
   const targetStorage = storage ?? defaultLocalStorage();
   let document = readDocument(targetStorage);
-  let recordsByContentKey = indexRecords(document.records);
+  let recordsByMedia = indexRecords(document.records);
 
   const rebuildIndex = () => {
-    recordsByContentKey = indexRecords(document.records);
+    recordsByMedia = indexRecords(document.records);
   };
 
-  const write = (activeContentKey: string): boolean => {
-    const pruned = enforceRetention(document, activeContentKey);
+  const write = (activeRecordKey: string): boolean => {
+    const pruned = enforceRetention(document, activeRecordKey);
     if (pruned) rebuildIndex();
     if (targetStorage === null) return pruned;
     try {
@@ -80,7 +80,7 @@ export function createLocalStoragePlaybackActivityRepository(
       return cloneRecords(document.records);
     },
     recordPlay(source, atMs = Date.now()) {
-      const record = ensureRecord(document, recordsByContentKey, source);
+      const record = ensureRecord(document, recordsByMedia, source);
       const playedAt = new Date(atMs);
       record.playCount += 1;
       record.lastPlayedAt = playedAt.toISOString();
@@ -95,12 +95,12 @@ export function createLocalStoragePlaybackActivityRepository(
         },
         ...record.events,
       ].slice(0, MAX_EVENTS_PER_TRACK);
-      write(source.contentKey);
+      write(activityRecordKey(source));
       return cloneRecords(document.records);
     },
     updateProgress(source, patch) {
-      const existing = recordsByContentKey.get(source.contentKey);
-      const record = ensureRecord(document, recordsByContentKey, source);
+      const existing = recordsByMedia.get(activityRecordKey(source));
+      const record = ensureRecord(document, recordsByMedia, source);
       const wasCompleted = record.completed;
       record.mediaId = source.mediaId;
       record.name = source.name;
@@ -108,7 +108,7 @@ export function createLocalStoragePlaybackActivityRepository(
       record.lastPositionSec = sanitizeSeconds(patch.positionSec);
       record.durationSec = sanitizeSeconds(patch.durationSec);
       record.completed = patch.completed || isEffectivelyComplete(record);
-      const pruned = write(source.contentKey);
+      const pruned = write(activityRecordKey(source));
       return existing === undefined || (!wasCompleted && record.completed) || pruned;
     },
     exportData() {
@@ -125,10 +125,10 @@ export function createLocalStoragePlaybackActivityRepository(
 
 function ensureRecord(
   document: PlaybackActivityDocument,
-  recordsByContentKey: Map<string, PlaybackActivityRecord>,
+  recordsByMedia: Map<string, PlaybackActivityRecord>,
   source: PlaybackActivitySource,
 ): PlaybackActivityRecord {
-  let record = recordsByContentKey.get(source.contentKey);
+  let record = recordsByMedia.get(activityRecordKey(source));
   if (record !== undefined) return record;
   record = {
     ...source,
@@ -140,7 +140,7 @@ function ensureRecord(
     events: [],
   };
   document.records.push(record);
-  recordsByContentKey.set(record.contentKey, record);
+  recordsByMedia.set(activityRecordKey(record), record);
   return record;
 }
 
@@ -161,8 +161,8 @@ function normalizeDocument(data: unknown): PlaybackActivityDocument {
   const records: PlaybackActivityRecord[] = [];
   for (const raw of data.records) {
     const record = normalizeRecord(raw);
-    if (record === null || seen.has(record.contentKey)) continue;
-    seen.add(record.contentKey);
+    if (record === null || seen.has(activityRecordKey(record))) continue;
+    seen.add(activityRecordKey(record));
     records.push(record);
   }
   return { version: 1, records };
@@ -260,18 +260,18 @@ function cloneRecords(
 function indexRecords(
   records: readonly PlaybackActivityRecord[],
 ): Map<string, PlaybackActivityRecord> {
-  return new Map(records.map((record) => [record.contentKey, record]));
+  return new Map(records.map((record) => [activityRecordKey(record), record]));
 }
 
 function enforceRetention(
   document: PlaybackActivityDocument,
-  activeContentKey: string,
+  activeRecordKey: string,
 ): boolean {
   let length = serializedDocumentLength(document.records);
   if (length <= MAX_ACTIVITY_DOCUMENT_CHARS) return false;
 
   const candidates = document.records
-    .filter((record) => record.contentKey !== activeContentKey)
+    .filter((record) => activityRecordKey(record) !== activeRecordKey)
     .map((record) => ({
       record,
       serializedLength: JSON.stringify(record).length + 1,
@@ -287,12 +287,12 @@ function enforceRetention(
   const removed = new Set<string>();
   for (const candidate of candidates) {
     if (length <= MAX_ACTIVITY_DOCUMENT_CHARS) break;
-    removed.add(candidate.record.contentKey);
+    removed.add(activityRecordKey(candidate.record));
     length -= candidate.serializedLength;
   }
   if (removed.size === 0) return false;
   document.records = document.records.filter(
-    (record) => !removed.has(record.contentKey),
+    (record) => !removed.has(activityRecordKey(record)),
   );
   return true;
 }
@@ -321,4 +321,9 @@ function defaultLocalStorage(): Storage | null {
   } catch {
     return null;
   }
+}
+
+/** Titles remain grouping metadata; progress belongs to one concrete file. */
+export function activityRecordKey(source: Pick<PlaybackActivitySource, 'mediaType' | 'mediaId'>): string {
+  return JSON.stringify([source.mediaType, source.mediaId]);
 }

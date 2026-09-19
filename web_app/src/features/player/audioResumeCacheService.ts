@@ -104,6 +104,8 @@ export function createAudioResumeCacheService(
       if (fragment === '') return source;
       return {
         ...source,
+        audioResumeOriginalUrl: source.url,
+        audioResumeOriginalMimeType: source.mimeType,
         url: `${cachedURL}${fragment}`,
         mimeType: 'audio/mp4',
       };

@@ -147,7 +147,7 @@ class LibraryPreferencesStore(private val context: Context) {
         if (contentKey.isBlank()) return
         context.libraryPreferencesDataStore.edit { values ->
             val records = parseActivity(values[activityKey]).toMutableList()
-            val index = records.indexOfFirst { it.contentKey == contentKey }
+            val index = records.indexOfFirst { it.mediaId == mediaId && it.mediaType == mediaType }
             val previous = records.getOrNull(index)
             val now = ZonedDateTime.now()
             val playedAt = now.toInstant().toString()
@@ -185,7 +185,7 @@ class LibraryPreferencesStore(private val context: Context) {
         if (contentKey.isBlank()) return
         context.libraryPreferencesDataStore.edit { values ->
             val records = parseActivity(values[activityKey]).toMutableList()
-            val index = records.indexOfFirst { it.contentKey == contentKey }
+            val index = records.indexOfFirst { it.mediaId == mediaId }
             if (index < 0) return@edit
             val current = records[index]
             records[index] = current.copy(

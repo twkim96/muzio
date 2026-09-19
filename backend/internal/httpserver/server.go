@@ -61,7 +61,7 @@ func NewHandlerWithWeb(logger *slog.Logger, lister LibraryLister, streamHandler 
 		if provider, ok := lister.(AudioResumeCacheProvider); ok {
 			if cache := provider.AudioResumeCache(); cache != nil {
 				mux.Handle("/api/audio-resume-cache", audioResumeCacheStatusHandler(cache))
-				mux.Handle("/api/audio-resume-cache/media/", audioResumeCacheMediaHandler(getter, cache, streamHandler))
+				mux.Handle("/api/audio-resume-cache/media/", audioResumeCacheMediaHandler(getter, cache))
 				mux.Handle("/api/audio-resume-cache/", audioResumeCacheRequestHandler(getter, cache))
 			}
 		}

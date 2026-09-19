@@ -1,3 +1,4 @@
+import { activityRecordKey } from '../storage/playbackActivityRepository';
 import type { NativeBridge } from './nativeBridge';
 import { supportsNativeCapability } from './androidShell';
 import type { PlayerStoreApi } from '../../features/player/playerStore';
@@ -14,16 +15,16 @@ type Snapshot = { pending: Entry[]; retainLocal?: boolean };
 /** Import through the store's own repository so its cached activity stays coherent. */
 export function mergeNativePlaybackHistory(store: PlayerStoreApi, snapshot: Snapshot, progress?: ProgressRepository): string[] {
   const document = JSON.parse(store.getState().exportPlaybackActivity()) as PlaybackActivityDocument;
-  const records = new Map(document.records.map(record => [record.contentKey, record]));
+  const records = new Map(document.records.map(record => [activityRecordKey(record), record]));
   const acknowledged: string[] = [];
   for (const entry of [...(snapshot.pending ?? [])].filter(validEntry).sort((a, b) => a.startedAtMs - b.startedAtMs || a.updatedAtMs - b.updatedAtMs)) {
     const identity = contentIdentityForPlaybackSource(entry.source);
-    let record = records.get(identity.key);
+    let record = records.get(activityRecordKey(entry.source));
     if (!record) {
       record = { contentKey: identity.key, mediaId: entry.source.mediaId, mediaType: entry.source.mediaType,
         name: entry.source.name, artist: identity.artist, playCount: 0, lastPlayedAt: null,
         lastPositionSec: 0, durationSec: 0, completed: false, events: [] } satisfies PlaybackActivityRecord;
-      records.set(identity.key, record);
+      records.set(activityRecordKey(entry.source), record);
     }
     if (entry.startedAtMs > (record.nativeHistoryStartedAtMs ?? 0)) {
       const date = new Date(entry.startedAtMs);

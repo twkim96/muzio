@@ -180,3 +180,21 @@ describe('createLocalStoragePlaybackActivityRepository', () => {
     expect(repo.list().length).toBeLessThan(records.length);
   });
 });
+
+test('keeps episode progress separate despite identical display identity, including legacy imports', () => {
+  const storage = new MemoryStorage();
+  const repo = createLocalStoragePlaybackActivityRepository(storage);
+  const first = { ...source, mediaType: 'video' as const, contentKey: 'video:title:show', mediaId: 'episode1' };
+  const second = { ...first, mediaId: 'episode2' };
+  repo.recordPlay(first);
+  repo.updateProgress(first, { positionSec: 99, durationSec: 100, completed: true });
+  const reloaded = createLocalStoragePlaybackActivityRepository(storage);
+  reloaded.recordPlay(second);
+  reloaded.updateProgress(second, { positionSec: 20, durationSec: 100, completed: false });
+  expect(reloaded.list()).toEqual([
+    expect.objectContaining({ mediaId: 'episode1', playCount: 1, lastPositionSec: 99, completed: true }),
+    expect.objectContaining({ mediaId: 'episode2', playCount: 1, lastPositionSec: 20, completed: false }),
+  ]);
+  repo.importData(reloaded.exportData());
+  expect(repo.list()).toHaveLength(2);
+});

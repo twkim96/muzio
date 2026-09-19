@@ -30,8 +30,8 @@ Muzio는 개인 MacBook, mini PC, Linux/NAS의 음악, 비디오, 이미지를
 `1.4.2`는 end-`moov` MP4/MOV의 `+faststart`와 함께, 큰 front-`moov`를 가진
 H.264/AAC 영상의 HLS/fMP4 package를 사용자가 명시적으로 요청했을 때만
 stream-copy sidecar로 준비합니다. 원본 파일은 수정하지 않으며, 검증된 단일
-ready slot과 불변 `cacheKey` URL만 재생에 사용합니다. HTTP/2, 진단, direct
-Range 재생과 기존 AAC resume cache 계약은 그대로 유지됩니다.
+ready slot과 불변 `cacheKey` URL만 재생에 사용합니다. HTTP/2, 진단,
+원본 Range 재생을 유지합니다. AAC resume cache는 아래의 불변 버전 URL 계약을 사용합니다.
 Ready 선택은 브라우저에 한 slot만 지속되어 앱 재시작 뒤 첫 재생에도 사용할 수
 있고, library row focus/pointer 진입 시 상태를 사전 갱신합니다.
 
@@ -412,7 +412,7 @@ values.
 | `GET /api/fallback/{id}` | Direct/remux/transcode plan status |
 | `GET /api/audio-resume-cache` | Latest AAC resume-cache status |
 | `PUT /api/audio-resume-cache/{id}` | Queue the latest AAC cache candidate |
-| `GET/HEAD /api/audio-resume-cache/media/{id}` | Range-friendly cached M4A stream |
+| `GET/HEAD /api/audio-resume-cache/media/{id}?v={cacheKey}` | Range-friendly cached M4A stream |
 | `GET /api/video-optimization/{id}` | Faststart eligibility, space, build, and ready status |
 | `GET /api/video-optimization/{id}?kind=hls-fmp4` | HLS eligibility, GOP, package, and ready status |
 | `PUT /api/video-optimization/{id}` | Explicitly prepare one faststart sidecar |
@@ -492,3 +492,31 @@ go test ./internal/library -run '^$' \
 공유하며 HLS별 1.5GiB 한도만 적용한다. 저장 시간 제한은 없다. 재생 요청과
 1분 간격 시청 신호로 유지하고, 모든 시청 신호가 20분 이상 끊겼을 때 정리한다.
 [확장 연동 계약과 플랫폼 동작](web_app/docs/temporary-hls-playback.md)을 참고한다.
+
+### Playback identity and cache lifetime
+
+- AAC status returns an immutable, versioned M4A URL. Each build owns its temporary
+  output and publication checks its generation before renaming. Only the latest
+  cache is recommended; replaced files remain available for at least 24 hours
+  after replacement. Expired files are cleaned on publication or startup. This
+  retention window is not an active-playback lease or a byte-size quota.
+- Missing/versionless cache URLs return HTTP 410, never original AAC bytes. The
+  shared web player reloads the separate original URL and restores playback time
+  after a cache error. Older clients must refresh to obtain versioned URLs.
+- Activity counts/progress are keyed by media type and media ID. `contentKey`
+  remains title/artist grouping metadata for likes and playlists. Legacy activity
+  stays with its recorded media ID; it is never copied to every matching episode.
+  Previously merged history cannot be reconstructed. File moves that change the
+  media ID do not automatically inherit per-file activity.
+- On macOS/Linux, roots remember the enclosing mount point discovered at
+  registration and check that it remains mounted before/after scanning and during
+  streaming availability checks. Ordinary empty folders remain valid. macOS
+  `/Volumes/<volume>` is recognized even at offline startup. Linux roots first
+  registered while unmounted, same-device bind mounts, and other server OSes still
+  need explicit mount configuration/identity support; directory existence alone
+  cannot identify those cases. Physical NAS/disk disconnect acceptance is separate
+  from the synthetic mount-state regression tests.
+- Android periodically saves local history/progress before network sync. Final
+  shutdown already waits for local persistence; the service does not wait for the
+  network during destruction. Android receives shared web changes at the next APK
+  packaging, while Apple hosts load the server UI.
